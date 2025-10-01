@@ -1,3 +1,5 @@
+➡️ Versión interna (tecnología & ejecución): [README-interno.md](./README-interno.app-movil.md)
+
 # 📱 App Móvil — Denuncias San Bernardo
 > Aplicación oficial orientada a **ciudadanía** e **inspectores** para **reportar** y **gestionar** denuncias de seguridad y convivencia en la comuna de San Bernardo.
 
