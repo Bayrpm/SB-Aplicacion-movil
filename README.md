@@ -79,5 +79,5 @@ Equipo responsable del desarrollo y la mejora continua del proyecto.
 
 ## Contacto
 - **Municipalidad de San Bernardo — Dirección de Seguridad Pública**  
-- **Canal de soporte**: _[agregar correo/URL oficial]_  
+- **Canal de soporte**: _XXXXX_  
 - **Enlaces de descarga** (se publicarán cuando estén disponibles)
