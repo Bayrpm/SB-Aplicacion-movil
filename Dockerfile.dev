@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.7-labs
+FROM node:20-bullseye
+
+ENV DEBIAN_FRONTEND=noninteractive
+# Hot reload dentro de Docker
+ENV CHOKIDAR_USEPOLLING=true
+# Evita prompts de Expo y telemetría en CI/containers
+ENV EXPO_NO_INTERACTIVE=1
+ENV EXPO_NO_TELEMETRY=1
+# NPM más tolerante a redes inestables durante el build
+ENV NPM_CONFIG_FETCH_RETRIES=5
+ENV NPM_CONFIG_FETCH_RETRY_FACTOR=2
+ENV NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=10000
+ENV NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=60000
+ENV NPM_CONFIG_AUDIT=false
+ENV NPM_CONFIG_FUND=false
+
+WORKDIR /app
+
+# Copiamos solo manifiestos para cachear dependencias
+COPY package*.json ./
+
+# Usa caché de npm (BuildKit), menos propenso a fallos intermitentes
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --quiet || npm install --quiet
+
+# Herramientas globales y túnel listo (sin prompts)
+RUN npm i -g expo-cli eas-cli @expo/ngrok@^4.1.0
+
+# Copia el resto del código
+COPY . .
+
+# Puertos típicos de Expo/Metro
+EXPOSE 8081 19000 19001 19002
+
+# Usuario no root
+RUN useradd -ms /bin/bash devuser
+USER devuser
+
+# Usa túnel por defecto (evita dolores de cabeza en Docker Desktop)
+CMD ["npx", "expo", "start", "--tunnel"]

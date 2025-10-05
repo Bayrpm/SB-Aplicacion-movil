@@ -1,0 +1,27 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: expo-app
+    # Monta tu código para hot-reload
+    volumes:
+      - .:/app
+      # Evita que node_modules del host pisen los del contenedor
+      - /app/node_modules
+    # Puertos necesarios para Expo
+    ports:
+      - "8081:8081" # Metro
+      - "19000:19000" # Expo (classic)
+      - "19001:19001" # DevTools/Manifest
+      - "19002:19002" # Web UI (si aplica)
+    environment:
+      # variables que uses en la app
+      - EXPO_NO_TELEMETRY=1
+      - CHOKIDAR_USEPOLLING=true
+      # Si usas .env, puedes inyectarlas con env_file:
+    env_file:
+      - .env
+      - .env.local
+    # Para Windows/Mac con Docker Desktop, el túnel suele ser lo más robusto
+    command: ["npx", "expo", "start", "--tunnel"]
