@@ -1,24 +1,39 @@
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+// Update the import path if the correct location is '@/components/TextInput'
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { signInUser } from '../api/auth.api';
+
+export function signInUserHandler(email: string, password: string) {
+  return signInUser(email, password);
+
+}
 
 export default function SignInScreen() {
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+
   return (
     <ThemedView style={styles.container}>
       <View style={styles.content}>
-        <ThemedText style={styles.emoji}>🔐</ThemedText>
-        <ThemedText style={styles.title}>Iniciar Sesión</ThemedText>
-        <ThemedText style={styles.subtitle}>Próximamente</ThemedText>
-        
-        <View style={styles.infoBox}>
-          <ThemedText style={styles.infoText}>
-            Esta funcionalidad será implementada pronto.
-          </ThemedText>
-          <ThemedText style={styles.infoTextSmall}>
-            Por ahora, puedes registrarte como nuevo usuario.
-          </ThemedText>
-        </View>
+        <ThemedText style={styles.title}>Correo electronico</ThemedText>
+        <TextInput
+          placeholder="Ingresa tu correo electronico"
+          value={email}
+          onChangeText={setEmail}
+        />
+
+        <ThemedText style={styles.title}>Contraseña</ThemedText>
+        <TextInput
+          placeholder="Ingresa tu contraseña"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        <TouchableOpacity onPress={() => signInUserHandler(email, password)}>
+          <ThemedText>Iniciar sesión</ThemedText>
+        </TouchableOpacity>
       </View>
     </ThemedView>
   );
