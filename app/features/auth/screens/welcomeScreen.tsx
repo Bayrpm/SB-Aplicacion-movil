@@ -1,96 +1,104 @@
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import BaseAuthLayout from '../components/BaseAuthLayout';
+
+const { width, height } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  
+  // Cálculos para botones
+  const cardPadding = Math.max(24, Math.round(0.03 * height));
+  const buttonW = 0.84 * width - cardPadding * 2;
+  const buttonH = Math.max(56, Math.min(70, 0.07 * height));
+
+  // Animación simple
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    // Animación más simple y rápida
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  // Resetear animación cuando vuelves a esta pantalla
+  useFocusEffect(
+    React.useCallback(() => {
+      // Restaurar opacidad completa de los botones
+      fadeAnim.setValue(1);
+    }, [fadeAnim])
+  );
+
+  const handleNavigation = (route: string) => {
+    // Animación suave y cómoda para botones
+    Animated.timing(fadeAnim, {
+      toValue: 0.7,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(() => {
+      // Navegación después de la animación suave
+      router.push(route as any);
+    });
+  };
 
   return (
-    <ThemedView style={styles.container}>
-      <View style={styles.content}>
-        <ThemedText style={styles.title}>Bienvenido</ThemedText>
-        <ThemedText style={styles.subtitle}>
-          Sistema de Denuncias{'\n'}San Bernardo
-        </ThemedText>
-
-        <View style={styles.buttonsContainer}>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => router.push('/(auth)/signIn' as any)}
-          >
-            <ThemedText style={styles.primaryButtonText}>Iniciar sesión</ThemedText>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => router.push('/(auth)/signUp' as any)}
-          >
-            <ThemedText style={styles.secondaryButtonText}>Registrarse</ThemedText>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ThemedView>
+    <BaseAuthLayout title="Bienvenido" showLogo={true}>
+      <Animated.View 
+        style={[
+          styles.buttonGroup,
+          { opacity: fadeAnim }
+        ]}
+      >
+        <TouchableOpacity
+          style={[styles.pillButton, { height: buttonH, width: buttonW }]}
+          onPress={() => handleNavigation('/(auth)/signIn')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.pillButtonText}>Iniciar sesión</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.pillButton, { height: buttonH, width: buttonW }]}
+          onPress={() => handleNavigation('/(auth)/signUp')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.pillButtonText}>Registrarse</Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </BaseAuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  buttonGroup: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 20,
+  },
+  pillButton: {
+    backgroundColor: '#0A4A90',
+    borderRadius: 999,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-  },
-  content: {
-    width: '100%',
-    maxWidth: 400,
-    padding: 24,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 18,
-    opacity: 0.7,
-    marginBottom: 64,
-    textAlign: 'center',
-    lineHeight: 26,
-  },
-  buttonsContainer: {
-    width: '100%',
-    gap: 16,
-  },
-  primaryButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    padding: 18,
-    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  primaryButtonText: {
+  pillButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#007AFF',
-    borderRadius: 12,
-    padding: 18,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    color: '#007AFF',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: Math.max(18, Math.min(20, 0.024 * height)),
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    fontFamily:
+      Platform.OS === 'ios'
+        ? 'Nunito-Bold'
+        : Platform.OS === 'android'
+        ? 'Nunito-Bold'
+        : 'Quicksand-Bold',
   },
 });

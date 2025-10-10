@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { Alert, StyleSheet, TouchableOpacity } from 'react-native';
 
-import { useAuth } from '@/app/contexts/authContext';
+import { useAuth } from '@/app/features/auth';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
