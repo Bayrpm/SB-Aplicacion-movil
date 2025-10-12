@@ -1,6 +1,7 @@
 export interface CitizenProfile {
   usuarioId: string;
   nombre?: string;
+  apellido?: string;
   email?: string;
   telefono?: string;
   createdAt?: string;
@@ -8,6 +9,7 @@ export interface CitizenProfile {
 
 export interface RegistrationStep1Data {
   nombre: string;
+  apellido: string;
 }
 
 export interface RegistrationStep2Data {
@@ -16,11 +18,7 @@ export interface RegistrationStep2Data {
 
 export interface RegistrationStep3Data {
   email: string;
-}
-
-export interface RegistrationStep4Data {
   password: string;
-  confirmPassword: string;
 }
 
 export interface CompleteRegistrationData 

@@ -1,7 +1,24 @@
 import { supabase } from '@/app/shared/lib/supabase';
 import { useState } from 'react';
 import { Alert } from 'react-native';
-import type { CitizenProfile } from '../types';
+/**
+ * Verifica si un email ya está registrado verificando en la tabla de perfiles
+ */
+export async function checkEmailExists(email: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('perfiles_ciudadanos')
+    .select('email')
+    .eq('email', email.toLowerCase())
+    .limit(1);
+
+  if (error) {
+    console.warn('Error verificando email:', error);
+    return false; // En caso de error, permitir continuar
+  }
+
+  return data && data.length > 0;
+}
+
 /**
  * Registra un nuevo usuario en Supabase Auth
  */
@@ -11,8 +28,22 @@ export async function signUpUser(email: string, password: string) {
     password,
   });
 
-  if (error) throw error;
-  return data;
+  if (error) {
+    // Manejar errores específicos de Supabase
+    if (error.message.includes('User already registered') || 
+        error.message.includes('already been registered') ||
+        error.message.includes('Email address is already registered')) {
+      return { 
+        data: null, 
+        error: { message: 'Este email ya está registrado. Intenta iniciar sesión en su lugar.' },
+        user: null,
+        session: null
+      };
+    }
+    return { data: null, error, user: null, session: null };
+  }
+  
+  return { data, error: null, user: data.user, session: data.session };
 }
 /**
  
@@ -41,23 +72,36 @@ export default function Auth() {
   }
 
 }
+
+
 /**
- * Crea o actualiza el perfil del ciudadano en la tabla perfiles_ciudadanos
+ * Crea el perfil del ciudadano después del registro
  */
-export async function upsertCitizenProfile(profile: CitizenProfile) {
+export async function createCitizenProfile(profileData: {
+  usuario_id: string;
+  nombre: string;
+  apellido: string;
+  email: string;
+  telefono?: string;
+}) {
   const { data, error } = await supabase
     .from('perfiles_ciudadanos')
-    .upsert({
-      usuario_id: profile.usuarioId,
-      nombre: profile.nombre,
-      email: profile.email,
-      telefono: profile.telefono || null,
-    })
+    .insert([profileData])
     .select()
     .single();
 
-  if (error) throw error;
-  return data;
+  if (error) {
+    // Si ya existe un perfil con este email, devolver error específico
+    if (error.code === '23505') { // Violación de constraint único
+      return { 
+        data: null, 
+        error: { message: 'Este email ya está registrado. Intenta iniciar sesión en su lugar.' }
+      };
+    }
+    return { data: null, error };
+  }
+  
+  return { data, error: null };
 }
 
 /**
@@ -70,8 +114,7 @@ export async function getCurrentCitizenProfile(userId: string) {
     .eq('usuario_id', userId)
     .single();
 
-  if (error) throw error;
-  return data;
+  return { data, error };
 }
 
 /**
@@ -79,5 +122,5 @@ export async function getCurrentCitizenProfile(userId: string) {
  */
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
-  if (error) throw error;
+  return { error };
 }

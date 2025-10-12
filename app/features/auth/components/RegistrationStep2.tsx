@@ -1,12 +1,8 @@
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import React, { useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
-import { registrationStep2Schema } from '../schemas/registration.schema';
-import type { RegistrationStep2Data } from '../types';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 
 interface RegistrationStep2Props {
-  onNext: (data: RegistrationStep2Data) => void;
+  onNext: (data: { telefono: string }) => void;
   onSkip: () => void;
   onBack: () => void;
 }
@@ -15,79 +11,126 @@ export function RegistrationStep2({ onNext, onSkip, onBack }: RegistrationStep2P
   const [telefono, setTelefono] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleNext = () => {
-    const trimmedPhone = telefono.trim();
+  // Formatear teléfono chileno
+  const formatChileanPhone = (value: string) => {
+    // Remover todo excepto números
+    const numbers = value.replace(/\D/g, '');
     
-    if (!trimmedPhone) {
-      setErrors({ telefono: 'Ingresa un teléfono o usa el botón "Omitir"' });
-      return;
+    // Si comienza con 56, es código de país de Chile
+    if (numbers.startsWith('56')) {
+      const localNumber = numbers.substring(2);
+      if (localNumber.length <= 1) return '+56 ';
+      if (localNumber.length <= 2) return `+56 ${localNumber}`;
+      if (localNumber.length <= 6) return `+56 ${localNumber.substring(0, 1)} ${localNumber.substring(1)}`;
+      return `+56 ${localNumber.substring(0, 1)} ${localNumber.substring(1, 5)} ${localNumber.substring(5, 9)}`;
     }
-
-    const validation = registrationStep2Schema.safeParse({ telefono: trimmedPhone });
     
-    if (!validation.success) {
-      const fieldErrors: Record<string, string> = {};
-      validation.error.errors.forEach((err) => {
-        if (err.path[0]) {
-          fieldErrors[err.path[0] as string] = err.message;
-        }
-      });
-      setErrors(fieldErrors);
-      return;
+    // Si comienza con 9 (celular chileno sin código de país)
+    if (numbers.startsWith('9')) {
+      if (numbers.length <= 1) return '+56 9';
+      if (numbers.length <= 5) return `+56 9 ${numbers.substring(1)}`;
+      return `+56 9 ${numbers.substring(1, 5)} ${numbers.substring(5, 9)}`;
     }
-
-    setErrors({});
-    onNext({ telefono: trimmedPhone });
+    
+    // Para otros números, agregar +56 automáticamente
+    if (numbers.length > 0) {
+      if (numbers.length <= 1) return `+56 ${numbers}`;
+      if (numbers.length <= 5) return `+56 ${numbers.substring(0, 1)} ${numbers.substring(1)}`;
+      return `+56 ${numbers.substring(0, 1)} ${numbers.substring(1, 5)} ${numbers.substring(5, 9)}`;
+    }
+    
+    return value;
   };
 
+  const handlePhoneChange = (value: string) => {
+    const formatted = formatChileanPhone(value);
+    setTelefono(formatted);
+    setErrors({});
+  };
+
+  // Exponer la función de validación globalmente para el botón externo
+  React.useEffect(() => {
+    (global as any).validateStep2 = (omitir = false) => {
+      const trimmedPhone = telefono.trim();
+      if (!trimmedPhone && !omitir) {
+        // Si no hay teléfono y no se confirmó omitir, no continuar
+        return false;
+      }
+      // Validar formato chileno si no está vacío
+      if (trimmedPhone && !trimmedPhone.match(/^\+56 [0-9] \d{4} \d{4}$/)) {
+        setErrors({ telefono: 'Formato inválido. Debe ser: +56 9 1234 5678' });
+        return false;
+      }
+      onNext({ telefono: trimmedPhone });
+      return true;
+    };
+
+    // Exponer función para obtener el valor actual del teléfono
+    (global as any).getCurrentPhone = () => {
+      return telefono.trim();
+    };
+  }, [telefono, onNext, onSkip]);
+
   return (
-    <ThemedView style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={onBack}>
-        <ThemedText style={styles.backButtonText}>← Atrás</ThemedText>
-      </TouchableOpacity>
-
-      <ThemedText style={styles.title}>¿Cuál es tu teléfono?</ThemedText>
-      <ThemedText style={styles.subtitle}>Opcional - Puedes omitir este paso</ThemedText>
-
-      <View style={styles.inputContainer}>
-        <ThemedText style={styles.label}>Teléfono (Opcional)</ThemedText>
+    <View style={styles.container}>
+      <View style={styles.inputSection}>
+        <Text style={styles.label}>Teléfono (Opcional)</Text>
         <TextInput
           style={[styles.input, errors.telefono && styles.inputError]}
           value={telefono}
-          onChangeText={setTelefono}
-          placeholder="+52 123 456 7890"
+          onChangeText={handlePhoneChange}
+          placeholder="+56 9 1234 5678"
           keyboardType="phone-pad"
           autoComplete="tel"
+          maxLength={17} // +56 9 1234 5678
+          placeholderTextColor="#999"
         />
         {errors.telefono && (
-          <ThemedText style={styles.errorText}>{errors.telefono}</ThemedText>
+          <Text style={styles.errorText}>{errors.telefono}</Text>
         )}
       </View>
-
-      <TouchableOpacity style={styles.button} onPress={handleNext}>
-        <ThemedText style={styles.buttonText}>Continuar</ThemedText>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
-        <ThemedText style={styles.skipButtonText}>Omitir este paso</ThemedText>
-      </TouchableOpacity>
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24 },
-  backButton: { marginBottom: 24 },
-  backButtonText: { color: '#007AFF', fontSize: 16 },
-  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 8 },
-  subtitle: { fontSize: 16, opacity: 0.7, marginBottom: 32 },
-  inputContainer: { marginBottom: 24 },
-  label: { fontSize: 14, fontWeight: '600', marginBottom: 8 },
-  input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, padding: 14, fontSize: 16, backgroundColor: '#FFFFFF' },
-  inputError: { borderColor: '#FF3B30' },
-  errorText: { color: '#FF3B30', fontSize: 12, marginTop: 4 },
-  button: { backgroundColor: '#007AFF', borderRadius: 8, padding: 16, alignItems: 'center', marginBottom: 12 },
-  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  skipButton: { padding: 16, alignItems: 'center' },
-  skipButtonText: { color: '#007AFF', fontSize: 16 },
+  container: { 
+    width: '100%',
+    justifyContent: 'flex-start',
+    alignItems: 'stretch',
+  },
+  inputSection: { 
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    marginBottom: 16, // Espaciado igual que signIn
+  },
+  label: { 
+    fontSize: 16, 
+    fontWeight: '600', 
+    marginBottom: 6,
+    color: '#333',
+    textAlign: 'left',
+  },
+  input: { 
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    color: '#333',
+    minHeight: 50, // Exactamente igual que signIn
+  },
+  inputError: { 
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  errorText: { 
+    color: '#EF4444', 
+    fontSize: 13, 
+    marginTop: 6,
+    marginLeft: 4,
+  },
 });

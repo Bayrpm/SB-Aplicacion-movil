@@ -16,6 +16,7 @@ interface BaseAuthLayoutProps {
   cardTop?: number;
   cardWidth?: number;
   cardPadding?: number;
+  hideBottomBand?: boolean; // oculta la banda inferior azul
 }
 
 export default function BaseAuthLayout({
@@ -28,6 +29,7 @@ export default function BaseAuthLayout({
   cardTop = 0.30,
   cardWidth = 0.84,
   cardPadding = 0.03,
+  hideBottomBand = false,
 }: BaseAuthLayoutProps) {
   const [storyLoaded] = useStoryScript({ StoryScript_400Regular });
   
@@ -137,13 +139,15 @@ export default function BaseAuthLayout({
         </View>
       </View>
 
-      {/* Banda inferior trapezoidal */}
-      <Svg style={styles.bottomBand} width={width + 2} height={height}>
-        <Path
-          d={`M 0 ${height * (0.86 + (1 - 0.86) * 0.2)} L ${width + 1} ${height * (0.78 + (1 - 0.78) * 0.2)} L ${width + 1} ${height} L 0 ${height} Z`}
-          fill="#0A4A90"
-        />
-      </Svg>
+      {/* Banda inferior trapezoidal (opcional) */}
+      {!hideBottomBand && (
+        <Svg style={styles.bottomBand} width={width + 2} height={height}>
+          <Path
+            d={`M 0 ${height * (0.86 + (1 - 0.86) * 0.2)} L ${width + 1} ${height * (0.78 + (1 - 0.78) * 0.2)} L ${width + 1} ${height} L 0 ${height} Z`}
+            fill="#0A4A90"
+          />
+        </Svg>
+      )}
     </View>
   );
 }

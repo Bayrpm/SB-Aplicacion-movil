@@ -12,7 +12,6 @@ export { ProgressIndicator } from './components/ProgressIndicator';
 export { RegistrationStep1 } from './components/RegistrationStep1';
 export { RegistrationStep2 } from './components/RegistrationStep2';
 export { RegistrationStep3 } from './components/RegistrationStep3';
-export { RegistrationStep4 } from './components/RegistrationStep4';
 
 // Hooks
 export { useRegistration } from './hooks/useRegistration';

@@ -6,7 +6,7 @@ export default function AuthLayout() {
       screenOptions={{ 
         headerShown: false,
         animation: 'slide_from_right',
-        animationDuration: 400,
+        animationDuration: 250,
         gestureEnabled: true,
         gestureDirection: 'horizontal',
       }}
@@ -15,21 +15,21 @@ export default function AuthLayout() {
         name="index" 
         options={{
           animation: 'fade',
-          animationDuration: 300,
+          animationDuration: 200,
         }}
       />
       <Stack.Screen 
         name="signIn" 
         options={{
           animation: 'slide_from_right',
-          animationDuration: 400,
+          animationDuration: 250,
         }}
       />
       <Stack.Screen 
         name="signUp" 
         options={{
           animation: 'slide_from_right',
-          animationDuration: 400,
+          animationDuration: 250,
         }}
       />
     </Stack>

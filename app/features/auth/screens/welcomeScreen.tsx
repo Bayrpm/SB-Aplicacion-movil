@@ -13,36 +13,29 @@ export default function WelcomeScreen() {
   const buttonW = 0.84 * width - cardPadding * 2;
   const buttonH = Math.max(56, Math.min(70, 0.07 * height));
 
-  // Animación simple
-  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  // Animación simple y estable
+  const fadeAnim = React.useRef(new Animated.Value(1)).current;
 
+  // Solo animación inicial muy sutil
   React.useEffect(() => {
-    // Animación más simple y rápida
+    fadeAnim.setValue(0.95);
     Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 300,
+      duration: 200,
       useNativeDriver: true,
     }).start();
   }, []);
 
-  // Resetear animación cuando vuelves a esta pantalla
+  // Asegurar visibilidad cuando regresa
   useFocusEffect(
     React.useCallback(() => {
-      // Restaurar opacidad completa de los botones
       fadeAnim.setValue(1);
-    }, [fadeAnim])
+    }, [])
   );
 
   const handleNavigation = (route: string) => {
-    // Animación suave y cómoda para botones
-    Animated.timing(fadeAnim, {
-      toValue: 0.7,
-      duration: 180,
-      useNativeDriver: true,
-    }).start(() => {
-      // Navegación después de la animación suave
-      router.push(route as any);
-    });
+    // Navegación directa sin animaciones problemáticas
+    router.push(route as any);
   };
 
   return (
