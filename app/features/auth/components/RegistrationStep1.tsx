@@ -39,7 +39,12 @@ export function RegistrationStep1({ onNext, onCancel }: RegistrationStep1Props) 
       onNext(data);
       return true;
     };
-  }, [nombre, apellido, onNext]);
+
+    // Exponer función para detectar si hay errores activos
+    (global as any).hasStep1Errors = () => {
+      return Object.keys(errors).length > 0;
+    };
+  }, [nombre, apellido, onNext, errors]);
 
   return (
     <View style={styles.container}>
@@ -53,6 +58,8 @@ export function RegistrationStep1({ onNext, onCancel }: RegistrationStep1Props) 
           autoCapitalize="words"
           autoComplete="name"
           placeholderTextColor="#999"
+          onFocus={() => (global as any).handleInputFocus?.('nombre')}
+          onBlur={() => (global as any).handleInputBlur?.()}
         />
         {errors.nombre && (
           <Text style={styles.errorText}>{errors.nombre}</Text>
@@ -69,6 +76,8 @@ export function RegistrationStep1({ onNext, onCancel }: RegistrationStep1Props) 
           autoCapitalize="words"
           autoComplete="family-name"
           placeholderTextColor="#999"
+          onFocus={() => (global as any).handleInputFocus?.('apellido')}
+          onBlur={() => (global as any).handleInputBlur?.()}
         />
         {errors.apellido && (
           <Text style={styles.errorText}>{errors.apellido}</Text>

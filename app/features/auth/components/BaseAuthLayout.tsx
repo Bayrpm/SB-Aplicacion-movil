@@ -17,6 +17,7 @@ interface BaseAuthLayoutProps {
   cardWidth?: number;
   cardPadding?: number;
   hideBottomBand?: boolean; // oculta la banda inferior azul
+  titleTop?: number; // posición personalizada del título
 }
 
 export default function BaseAuthLayout({
@@ -30,6 +31,7 @@ export default function BaseAuthLayout({
   cardWidth = 0.84,
   cardPadding = 0.03,
   hideBottomBand = false,
+  titleTop,
 }: BaseAuthLayoutProps) {
   const [storyLoaded] = useStoryScript({ StoryScript_400Regular });
   
@@ -43,7 +45,8 @@ export default function BaseAuthLayout({
     titleFontSize = maxTextWidth / (title.length * 0.62);
   }
   const baseline = 0.17 * height;
-  const titleTop = Math.max(height * 0.06, (baseline - titleFontSize * 0.8) + 0.040 * height);
+  const calculatedTitleTop = Math.max(height * 0.06, (baseline - titleFontSize * 0.8) + 0.040 * height);
+  const finalTitleTop = titleTop !== undefined ? titleTop * height : calculatedTitleTop;
 
   // Curva superior
   const azulSuperiorPath = () => {
@@ -89,7 +92,7 @@ export default function BaseAuthLayout({
           style={[
             styles.titleText,
             {
-              top: titleTop,
+              top: finalTitleTop,
               fontSize: titleFontSize,
               paddingHorizontal: marginX,
             },
@@ -186,7 +189,7 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 6,
     zIndex: 2,
-    overflow: 'hidden',
+    overflow: 'visible', // Permitir que el ScrollView funcione correctamente
   },
   bottomBand: {
     position: 'absolute',
@@ -209,6 +212,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden', // Asegurar que el contenido animado no se sobreponga al logo
   },
   logoInContentContainer: {
     width: '100%',

@@ -42,7 +42,12 @@ export function RegistrationStep3({ onNext, onBack }: RegistrationStep3Props) {
       onNext({ email: data.email, password: data.password });
       return true;
     };
-  }, [email, password, confirmPassword, onNext]);
+
+    // Exponer función para detectar si hay errores activos en Step 3
+    (global as any).hasStep3Errors = () => {
+      return Object.keys(errors).length > 0;
+    };
+  }, [email, password, confirmPassword, onNext, errors]);
 
   return (
     <View style={styles.container}>
@@ -57,6 +62,8 @@ export function RegistrationStep3({ onNext, onBack }: RegistrationStep3Props) {
           autoCapitalize="none"
           autoComplete="email"
           placeholderTextColor="#999"
+          onFocus={() => (global as any).handleInputFocus?.('email')}
+          onBlur={() => (global as any).handleInputBlur?.()}
         />
         {errors.email && (
           <Text style={styles.errorText}>{errors.email}</Text>
@@ -74,6 +81,8 @@ export function RegistrationStep3({ onNext, onBack }: RegistrationStep3Props) {
             secureTextEntry={!showPassword}
             autoComplete="new-password"
             placeholderTextColor="#999"
+            onFocus={() => (global as any).handleInputFocus?.('password')}
+            onBlur={() => (global as any).handleInputBlur?.()}
           />
           <TouchableOpacity
             style={styles.showPasswordButton}
@@ -101,6 +110,8 @@ export function RegistrationStep3({ onNext, onBack }: RegistrationStep3Props) {
             secureTextEntry={!showConfirmPassword}
             autoComplete="new-password"
             placeholderTextColor="#999"
+            onFocus={() => (global as any).handleInputFocus?.('confirmPassword')}
+            onBlur={() => (global as any).handleInputBlur?.()}
           />
           <TouchableOpacity
             style={styles.showPasswordButton}

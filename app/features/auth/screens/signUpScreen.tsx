@@ -7,7 +7,9 @@ import BaseAuthLayout from '../components/BaseAuthLayout';
 import { RegistrationStep1 } from '../components/RegistrationStep1';
 import { RegistrationStep2 } from '../components/RegistrationStep2';
 import { RegistrationStep3 } from '../components/RegistrationStep3';
+import { useActiveInput } from '../hooks/useActiveInput';
 import { useRegistration } from '../hooks/useRegistration';
+import { useSmartScroll } from '../hooks/useSmartScroll';
 
 const { width, height } = Dimensions.get('window');
 
@@ -56,10 +58,8 @@ export default function SignUpScreen() {
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const [keyboardHeight, setKeyboardHeight] = React.useState(0);
   
-  // Estados para el scroll y título
-  const [titleVisible, setTitleVisible] = React.useState(true);
-  const scrollViewRef = React.useRef<ScrollView>(null);
-  const titleOpacity = React.useRef(new Animated.Value(1)).current;
+  // Referencia para el scroll dentro de la card
+  // scrollViewRef ahora viene del hook useSmartScroll
 
   // Animación simple y estable
   const fadeAnim = React.useRef(new Animated.Value(1)).current;
@@ -75,7 +75,7 @@ export default function SignUpScreen() {
     }).start(() => {
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 120,
+        duration: 100,
         useNativeDriver: true,
       }).start();
     });
@@ -89,17 +89,236 @@ export default function SignUpScreen() {
       useNativeDriver: false,
     }).start();
     
-    // Resetear scroll y título al cambiar de paso
-    scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-    if (!titleVisible) {
-      setTitleVisible(true);
-      Animated.timing(titleOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
+    // Resetear scroll al cambiar de paso sin animación para evitar efectos raros
+    resetScrollImmediate();
   }, [currentStep]);
+
+  // Detectar si hay errores activos en Step 1
+  const hasStep1Errors = React.useCallback(() => {
+    if (currentStep !== 1) return false;
+    // Detectar si las funciones globales indican errores
+    const hasErrors = (global as any).hasStep1Errors ? (global as any).hasStep1Errors() : false;
+    return hasErrors;
+  }, [currentStep]);
+
+  // Detectar si hay errores activos en Step 3
+  const hasStep3Errors = React.useCallback(() => {
+    if (currentStep !== 3) return false;
+    // Detectar si las funciones globales indican errores
+    const hasErrors = (global as any).hasStep3Errors ? (global as any).hasStep3Errors() : false;
+    return hasErrors;
+  }, [currentStep]);
+
+  // Card height dinámica - Step 3 completamente adaptativo
+  const getCardHeight = React.useCallback(() => {
+    // Step 1: Altura dinámica que se expande con errores
+    if (currentStep === 1) {
+      const hasErrors = hasStep1Errors();
+      
+      // Espacio para título (menos si hay errores para dar más espacio)
+      const titleSpace = height * (hasErrors ? 0.14 : 0.17);
+      
+      // Área de botones fija
+      const buttonAreaHeight = 240;
+      
+      // Margen de seguridad ajustado según errores
+      const safetyMargin = hasErrors ? 45 : 60; // Menos margen con errores para más espacio interno
+      
+      // Con teclado: ajustar según errores
+      if (keyboardVisible) {
+        const availableSpace = height - keyboardHeight - buttonAreaHeight - titleSpace - safetyMargin;
+        const maxPossibleHeight = availableSpace / height;
+        
+        if (hasErrors) {
+          // Con errores: altura muy generosa para garantizar visibilidad
+          if (maxPossibleHeight > 0.52) {
+            return Math.min(0.65, maxPossibleHeight);
+          } else {
+            return Math.max(0.50, maxPossibleHeight);
+          }
+        } else {
+          // Sin errores: altura normal
+          if (maxPossibleHeight > 0.45) {
+            return Math.min(0.50, maxPossibleHeight);
+          } else {
+            return Math.max(0.38, maxPossibleHeight);
+          }
+        }
+      }
+      
+      // Sin teclado: expandir con errores
+      const totalUsedSpace = titleSpace + buttonAreaHeight + safetyMargin;
+      const availableSpace = height - totalUsedSpace;
+      const maxPossibleHeight = availableSpace / height;
+      
+      if (hasErrors) {
+        // Con errores: card significativamente más grande
+        if (maxPossibleHeight > 0.55) {
+          return Math.min(0.68, maxPossibleHeight);
+        } else {
+          return Math.max(0.52, maxPossibleHeight);
+        }
+      } else {
+        // Sin errores: card tamaño normal
+        if (maxPossibleHeight > 0.45) {
+          return Math.min(0.50, maxPossibleHeight);
+        } else {
+          return Math.max(0.40, maxPossibleHeight);
+        }
+      }
+    }
+    
+    // Step 2: Altura que respeta el margen siempre
+    if (currentStep === 2) {
+      const titleSpace = height * 0.17;
+      const buttonAreaHeight = 240;
+      const safetyMargin = 50; // Margen para Step 2
+      
+      const totalUsedSpace = titleSpace + buttonAreaHeight + safetyMargin;
+      const availableSpace = height - totalUsedSpace;
+      const maxPossibleHeight = availableSpace / height;
+      
+      // Altura que respete el margen siempre
+      return Math.max(0.28, Math.min(0.38, maxPossibleHeight));
+    }
+    
+    // Step 3: Altura completamente dinámica basada en espacio disponible y errores
+    if (currentStep === 3) {
+      const hasErrors = hasStep3Errors();
+      
+      // Espacio para título (menos si hay errores para dar más espacio)
+      const titleSpace = height * (hasErrors ? 0.05 : 0.06);
+      
+      // Área de botones fija
+      const buttonAreaHeight = 240;
+      
+      // Margen de seguridad ajustado según errores
+      const safetyMargin = hasErrors ? 35 : 60; // Menos margen con errores para más espacio interno
+      
+      // Con teclado: ajustar según errores
+      if (keyboardVisible) {
+        const availableSpace = height - keyboardHeight - buttonAreaHeight - titleSpace - safetyMargin;
+        const maxPossibleHeight = availableSpace / height;
+        
+        if (hasErrors) {
+          // Con errores: altura muy generosa para garantizar visibilidad
+          if (maxPossibleHeight > 0.50) {
+            return Math.min(0.68, maxPossibleHeight);
+          } else {
+            return Math.max(0.48, maxPossibleHeight);
+          }
+        } else {
+          // Sin errores: altura normal
+          if (maxPossibleHeight > 0.45) {
+            return Math.min(0.60, maxPossibleHeight);
+          } else {
+            return Math.max(0.40, maxPossibleHeight);
+          }
+        }
+      }
+      
+      // Sin teclado: expandir con errores
+      const totalUsedSpace = titleSpace + buttonAreaHeight + safetyMargin;
+      const availableSpace = height - totalUsedSpace;
+      const maxPossibleHeight = availableSpace / height;
+      
+      if (hasErrors) {
+        // Con errores: card significativamente más grande para 3 inputs + errores
+        if (maxPossibleHeight > 0.58) {
+          return Math.min(0.72, maxPossibleHeight);
+        } else {
+          return Math.max(0.55, maxPossibleHeight);
+        }
+      } else {
+        // Sin errores: card tamaño normal
+        if (maxPossibleHeight > 0.50) {
+          return Math.min(0.62, maxPossibleHeight);
+        } else {
+          return Math.max(0.45, maxPossibleHeight);
+        }
+      }
+    }
+    
+    return 0.38; // Fallback
+  }, [currentStep, keyboardVisible, keyboardHeight, hasStep1Errors, hasStep3Errors]);
+
+  // Card top dinámico - Step 3 completamente adaptativo
+  const getCardTop = React.useCallback(() => {
+    // Step 3: Posición dinámica que garantiza no tapar título ni ocultarse abajo
+    if (currentStep === 3) {
+      const hasErrors = hasStep3Errors();
+      
+      // Espacio del título ajustado según errores
+      const titleSpace = height * (hasErrors ? 0.05 : 0.06);
+      const titleHeight = height * 0.06; // Altura estimada del título
+      const cardHeight = getCardHeight() * height; // Altura actual de la card
+      const buttonAreaHeight = 240; // Área de botones
+      const safetyMargin = hasErrors ? 35 : 60; // Margen ajustado según errores
+      
+      // Posición mínima: después del título + margen reducido si hay errores
+      const marginWithTitle = hasErrors ? 10 : 20;
+      const minTop = (titleSpace + titleHeight + marginWithTitle) / height;
+      
+      // Posición máxima: que no se oculte con botones
+      const maxTop = (height - cardHeight - buttonAreaHeight - safetyMargin) / height;
+      
+      // Límite máximo ajustado según errores
+      const maxLimit = hasErrors ? 0.16 : 0.20; // Más arriba con errores
+      
+      return Math.max(minTop, Math.min(maxLimit, maxTop));
+    }
+    
+    // Step 1: Posición que se mueve hacia arriba con errores
+    if (currentStep === 1) {
+      const hasErrors = hasStep1Errors();
+      
+      // Espacio del título ajustado según errores
+      const titleSpace = height * (hasErrors ? 0.14 : 0.17);
+      const titleHeight = height * 0.06;
+      const cardHeight = getCardHeight() * height;
+      const buttonAreaHeight = 240;
+      const safetyMargin = hasErrors ? 45 : 60; // Margen ajustado según errores
+      
+      // Posición mínima: después del título + margen reducido si hay errores
+      const marginWithTitle = hasErrors ? 15 : 20;
+      const minTop = (titleSpace + titleHeight + marginWithTitle) / height;
+      
+      // Posición máxima: que no se oculte con botones
+      const maxTop = (height - cardHeight - buttonAreaHeight - safetyMargin) / height;
+      
+      // Límite máximo ajustado según errores
+      const maxLimit = hasErrors ? 0.25 : 0.30; // Más arriba con errores
+      
+      return Math.max(minTop, Math.min(maxLimit, maxTop));
+    }
+    
+    // Step 2: Comportamiento original
+    if (keyboardVisible) {
+      const titleSpace = height * 0.22;
+      const safetyMargin = 40;
+      const minTop = (titleSpace + safetyMargin) / height;
+      const cardHeight = getCardHeight() * height;
+      const buttonAreaHeight = 240;
+      const extraMargin = 20;
+      const maxTop = Math.max(minTop, (height - cardHeight - buttonAreaHeight - extraMargin) / height);
+      const uniformPosition = Math.max(minTop, 0.22);
+      return Math.min(uniformPosition, maxTop);
+    }
+    
+    // Step 2 sin teclado
+    return height > 800 ? 0.32 : height > 600 ? 0.30 : 0.28;
+  }, [currentStep, keyboardVisible, getCardHeight, hasStep1Errors, hasStep3Errors]);
+
+  // Hooks para manejo de estado
+  const { activeInput } = useActiveInput();
+  const { scrollViewRef, resetScroll, resetScrollImmediate, getSpacerOffset } = useSmartScroll({
+    currentStep,
+    keyboardVisible,
+    activeInput,
+    getCardHeight,
+  });
+
+  // La lógica de scroll se maneja ahora en el hook useSmartScroll
 
   // Reseteo mínimo para evitar problemas
   useFocusEffect(
@@ -172,106 +391,11 @@ export default function SignUpScreen() {
     }
   };
 
-  // Título dinámico según el paso - con visibilidad controlada por scroll
-  const getTitle = () => {
-    return titleVisible ? 'Bienvenidos' : '';
-  };
 
-  // Manejar el scroll para ocultar/mostrar título
-  const handleScroll = (event: any) => {
-    const scrollY = event.nativeEvent.contentOffset.y;
-    const threshold = 30; // Threshold para ocultar título
-    
-    if (scrollY > threshold && titleVisible) {
-      setTitleVisible(false);
-      Animated.timing(titleOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    } else if (scrollY <= threshold && !titleVisible) {
-      setTitleVisible(true);
-      Animated.timing(titleOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-  };
 
-  // Card height dinámica según el contenido del paso y teclado - Universal para todos los dispositivos
-  const getCardHeight = () => {
-    // Alturas base adaptativas según el contenido de cada paso
-    const baseHeights = {
-      1: 0.42, // Nombre y apellido - contenido moderado
-      2: 0.38, // Teléfono (opcional) - contenido mínimo
-      3: 0.52, // Correo y contraseña - contenido máximo (3 inputs)
-    };
-    
-    const baseHeight = baseHeights[currentStep as keyof typeof baseHeights] || 0.42;
-    
-    // Con teclado: mantener altura mínima pero ajustar si es necesario
-    if (keyboardVisible) {
-      // Alturas mínimas garantizadas para cada paso con teclado
-      const minHeights = {
-        1: 0.35, // Mínimo para 2 inputs + barra progreso
-        2: 0.30, // Mínimo para 1 input + barra progreso  
-        3: 0.45, // Mínimo para 3 inputs + barra progreso
-      };
-      
-      const minHeight = minHeights[currentStep as keyof typeof minHeights] || 0.35;
-      
-      // Calcular espacio disponible real
-      const titleSpace = height * 0.12;
-      const buttonAreaHeight = 240;
-      const safetyMargin = 30;
-      
-      const availableSpace = height - keyboardHeight - buttonAreaHeight - titleSpace - safetyMargin;
-      const maxPossibleHeight = Math.max(minHeight, (availableSpace * 0.90) / height);
-      
-      // Usar el mayor entre la altura mínima y el espacio disponible
-      return Math.max(minHeight, Math.min(baseHeight, maxPossibleHeight));
-    }
-    
-    return baseHeight;
-  };
+  // Esta definición duplicada se eliminó - ahora está arriba antes de los hooks
 
-  // Card top dinámico según el teclado - Universal para todos los dispositivos
-  const getCardTop = () => {
-    if (keyboardVisible) {
-      // Espacio mínimo necesario para título + logo + barra de progreso
-      const titleAndLogoSpace = height * 0.15; // Más espacio para evitar cortes
-      const progressBarSpace = 60; // Espacio adicional para barra de progreso
-      const minRequiredSpace = titleAndLogoSpace + progressBarSpace;
-      
-      // Posición mínima absoluta para no cortar contenido superior
-      const absoluteMinTop = minRequiredSpace / height;
-      
-      // Calcular posición ideal
-      const cardHeight = getCardHeight() * height;
-      const buttonAreaHeight = 240;
-      const safetyMargin = 20;
-      
-      // Posición que permita que la card quepa sin superponer botones
-      const maxTop = Math.max(absoluteMinTop, (height - cardHeight - buttonAreaHeight - safetyMargin) / height);
-      
-      // Posiciones adaptativas más conservadoras
-      const adaptivePositions = {
-        1: Math.max(absoluteMinTop, 0.20), // Más espacio para barra de progreso
-        2: Math.max(absoluteMinTop, 0.22), // Posición más baja para input simple
-        3: Math.max(absoluteMinTop, 0.18), // Posición ligeramente más alta para 3 inputs
-      };
-      
-      const idealPosition = adaptivePositions[currentStep as keyof typeof adaptivePositions] || absoluteMinTop;
-      
-      // Usar el menor entre la posición ideal y la máxima permitida
-      return Math.min(idealPosition, maxTop);
-    }
-    
-    // Posición por defecto sin teclado - más conservadora
-    const defaultPosition = height > 800 ? 0.28 : height > 600 ? 0.26 : 0.24;
-    return defaultPosition;
-  };
+  // Esta definición duplicada se eliminó - ahora está arriba antes de los hooks
 
   return (
     <View style={{ flex: 1 }}>
@@ -282,28 +406,41 @@ export default function SignUpScreen() {
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
           <BaseAuthLayout
-            title={getTitle()}
+            title="Bienvenidos" // Título siempre visible
             showLogo={true}
             cardHeight={getCardHeight()}
             cardTop={getCardTop()}
             hideBottomBand={true}
             logoInContent={true}
+            titleTop={
+              (currentStep === 3 && hasStep3Errors()) ? 0.04 :
+              currentStep === 3 ? 0.06 : 
+              (currentStep === 1 && hasStep1Errors()) ? 0.05 : 
+              undefined
+            } // Título dinámico: más arriba para Step 3 con errores, Step 3 normal, y Step 1 con errores
           >
+            {/* Barra de progreso estática debajo del logo */}
+            <ProgressBarMinimal />
+            
+            {/* ScrollView automático - sin interacción manual */}
+            {/* ScrollView automático - funcionaba correctamente antes */}
             <ScrollView
               ref={scrollViewRef}
               style={styles.scrollView}
               contentContainerStyle={[
                 styles.scrollContent,
-                { paddingBottom: keyboardVisible ? 20 : 80 }
+                { 
+                  paddingBottom: keyboardVisible ? 
+                    (currentStep === 3 ? (hasStep3Errors() ? 40 : 30) : (hasStep1Errors() ? 30 : 20)) : 
+                    (currentStep === 3 ? (hasStep3Errors() ? 50 : 35) : (hasStep1Errors() ? 50 : 40)), // Más padding con errores
+                  paddingTop: (currentStep === 1 || currentStep === 3) ? getSpacerOffset() : 0, // Espaciador para step 1 y 3
+                }
               ]}
-              onScroll={handleScroll}
-              scrollEventThrottle={16}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              scrollEnabled={false} // Deshabilitar scroll manual
+              automaticallyAdjustContentInsets={false}
             >
-              {/* Barra de progreso debajo del logo - espaciado coherente */}
-              <ProgressBarMinimal />
-              
               {/* Contenido de los pasos con espaciado igual a signIn */}
               <View style={styles.formContainer}>
                 <Animated.View
@@ -318,8 +455,12 @@ export default function SignUpScreen() {
                 </Animated.View>
               </View>
               
-              {/* Espacio inferior coherente */}
-              <View style={styles.bottomSpacer} />
+              {/* Espacio inferior para el scroll - dinámico por step y errores */}
+              <View style={[
+                styles.bottomSpacer, 
+                currentStep === 3 && { height: hasStep3Errors() ? 35 : 25 }, // Más espacio con errores en Step 3
+                currentStep === 1 && hasStep1Errors() && { height: 50 }, // Más espacio con errores en Step 1
+              ]} />
             </ScrollView>
           </BaseAuthLayout>
         </KeyboardAvoidingView>
@@ -414,15 +555,17 @@ export default function SignUpScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ScrollView principal
+  // ScrollView dentro de la card
   scrollView: {
     flex: 1,
     width: '100%',
+    marginTop: 8, // Pequeño margen después del progress indicator
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingBottom: height * 0.25, // Igual que signIn
+    justifyContent: 'flex-start', // Contenido desde arriba
+    paddingBottom: 20, // Espaciado inferior dentro de la card
+    paddingTop: 0, // Espacio superior para permitir scroll hacia arriba
   },
   
   // Contenedor de formulario - idéntico a signIn
@@ -435,12 +578,12 @@ const styles = StyleSheet.create({
     minHeight: undefined,
   },
   
-  // Barra de progreso debajo del logo - espaciado coherente
+  // Barra de progreso estática - espaciado compacto
   progressBarMinimalContainer: {
     width: '100%',
     alignItems: 'center',
-    marginTop: 24,   // Espacio equilibrado arriba
-    marginBottom: 36, // Espacio generoso para separar de inputs
+    marginTop: 16,   // Espacio reducido arriba
+    marginBottom: 8, // Espacio mínimo antes del scroll
     paddingHorizontal: 20,
   },
   progressBarTrack: {
