@@ -62,21 +62,12 @@ export function useRegistration() {
     let authResult;
 
     try {
-      // Console logs para debug
-      console.log('🚀 INICIANDO REGISTRO - Datos recopilados:');
-      console.log('📝 Step 1 Data:', step1);
-      console.log('📱 Step 2 Data:', step2);
-      console.log('🔐 Step 3 Data:', { email: step3Data.email, password: '[OCULTO]' });
-      
+      // Enviar datos del usuario a Supabase Auth
       const userDataToSend = {
         nombre: step1.nombre,
         apellido: step1.apellido,
         telefono: step2?.telefono
       };
-      
-      console.log('📤 Datos de usuario que se enviarán:', userDataToSend);
-
-      // Enviar datos del usuario a Supabase Auth
       authResult = await signUpUser(step3Data.email, step3Data.password, userDataToSend);
 
       if (authResult.error) {
@@ -110,12 +101,6 @@ export function useRegistration() {
         return;
       }
 
-      // Log del usuario creado exitosamente  
-      console.log('✅ USUARIO CREADO EXITOSAMENTE:');
-      console.log('🆔 User ID:', authResult.user.id);
-      console.log('📧 User Email:', authResult.user.email);
-      console.log('📋 User Metadata:', authResult.user.user_metadata);
-      console.log('🔐 Session:', authResult.session ? 'SÍ' : 'NO (requiere verificación)');
       
     } catch (error) {
       console.error('❌ Error en el registro:', error);
