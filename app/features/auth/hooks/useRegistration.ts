@@ -59,71 +59,127 @@ export function useRegistration() {
       return;
     }
 
-    const authResult = await signUpUser(step3Data.email, step3Data.password);
+    let authResult;
 
-    if (authResult.error) {
-      let errorMessage = 'Ocurrió un error inesperado';
-      let errorTitle = 'Error en el registro';
+    try {
+      // Console logs para debug
+      console.log('🚀 INICIANDO REGISTRO - Datos recopilados:');
+      console.log('📝 Step 1 Data:', step1);
+      console.log('📱 Step 2 Data:', step2);
+      console.log('🔐 Step 3 Data:', { email: step3Data.email, password: '[OCULTO]' });
+      
+      const userDataToSend = {
+        nombre: step1.nombre,
+        apellido: step1.apellido,
+        telefono: step2?.telefono
+      };
+      
+      console.log('📤 Datos de usuario que se enviarán:', userDataToSend);
 
-      if (authResult.error.message) {
-        if (authResult.error.message.includes('ya está registrado') || 
-            authResult.error.message.includes('User already registered') ||
-            authResult.error.message.includes('already been registered') ||
-            authResult.error.message.includes('Email address is already registered')) {
-          errorTitle = 'Usuario existente';
-          errorMessage = 'Este email ya está registrado. Intenta iniciar sesión en su lugar.';
-        } else if (authResult.error.message.includes('Invalid email')) {
-          errorMessage = 'El formato del email no es válido';
-        } else if (authResult.error.message.includes('Password should be at least')) {
-          errorMessage = 'La contraseña debe tener al menos 6 caracteres';
-        } else {
-          errorMessage = authResult.error.message;
+      // Enviar datos del usuario a Supabase Auth
+      authResult = await signUpUser(step3Data.email, step3Data.password, userDataToSend);
+
+      if (authResult.error) {
+        let errorMessage = 'Ocurrió un error inesperado';
+        let errorTitle = 'Error en el registro';
+
+        if (authResult.error.message) {
+          if (authResult.error.message.includes('ya está registrado') || 
+              authResult.error.message.includes('User already registered') ||
+              authResult.error.message.includes('already been registered') ||
+              authResult.error.message.includes('Email address is already registered')) {
+            errorTitle = 'Usuario existente';
+            errorMessage = 'Este email ya está registrado. Intenta iniciar sesión en su lugar.';
+          } else if (authResult.error.message.includes('Invalid email')) {
+            errorMessage = 'El formato del email no es válido';
+          } else if (authResult.error.message.includes('Password should be at least')) {
+            errorMessage = 'La contraseña debe tener al menos 6 caracteres';
+          } else {
+            errorMessage = authResult.error.message;
+          }
         }
+
+        Alert.alert(errorTitle, errorMessage);
+        setLoading(false);
+        return;
       }
 
-      Alert.alert(errorTitle, errorMessage);
+      if (!authResult.user) {
+        Alert.alert('Error en el registro', 'No se pudo crear el usuario');
+        setLoading(false);
+        return;
+      }
+
+      // Log del usuario creado exitosamente  
+      console.log('✅ USUARIO CREADO EXITOSAMENTE:');
+      console.log('🆔 User ID:', authResult.user.id);
+      console.log('📧 User Email:', authResult.user.email);
+      console.log('📋 User Metadata:', authResult.user.user_metadata);
+      console.log('🔐 Session:', authResult.session ? 'SÍ' : 'NO (requiere verificación)');
+      
+    } catch (error) {
+      console.error('❌ Error en el registro:', error);
+      Alert.alert('Error en el registro', 'Ocurrió un error inesperado durante el registro');
       setLoading(false);
       return;
     }
 
-    if (!authResult.user) {
-      Alert.alert('Error en el registro', 'No se pudo crear el usuario');
-      setLoading(false);
-      return;
-    }
+    try {
+      // El perfil se creará automáticamente por el trigger de Supabase
+      // Solo si no hay sesión (requiere verificación de email)
+      if (!authResult.session) {
+        Alert.alert(
+          '¡Registro exitoso!',
+          'Se ha enviado un correo para verificar tu cuenta. Por favor, revisa tu bandeja de entrada y verifica tu email para activar tu cuenta.',
+          [{ 
+            text: 'Entendido',
+            onPress: () => {
+              setRegistrationData({});
+              setCurrentStep(1);
+              router.replace('/(auth)'); // Esto llevará al welcomeScreen
+            }
+          }]
+        );
+      } else {
+        // Si hay sesión inmediata, crear perfil manualmente por si acaso
+        const profileResult = await createCitizenProfile({
+          usuario_id: authResult.user.id,
+          nombre: step1.nombre,
+          apellido: step1.apellido,
+          email: step3Data.email,
+          telefono: step2?.telefono || undefined
+        });
 
-    const profileResult = await createCitizenProfile({
-      usuario_id: authResult.user.id,
-      nombre: step1.nombre,
-      apellido: step1.apellido,
-      email: step3Data.email,
-      telefono: step2?.telefono || undefined
-    });
+        if (profileResult.error && !profileResult.error.message?.includes('ya está registrado')) {
+          console.error('Error creando perfil:', profileResult.error);
+          // No fallar aquí porque el trigger debería haberlo creado
+        }
 
-    if (profileResult.error) {
-      console.error('Error creando perfil:', profileResult.error);
-      Alert.alert('Error en el registro', profileResult.error.message || 'Error al crear el perfil de usuario');
-      setLoading(false);
-      return;
-    }
-
-    if (!authResult.session) {
+        Alert.alert(
+          '¡Bienvenido!',
+          'Tu cuenta ha sido creada exitosamente.',
+          [{ 
+            text: 'Continuar',
+            onPress: () => {
+              setRegistrationData({});
+              setCurrentStep(1);
+              // Si hay sesión, el AuthContext redirigirá automáticamente a (tabs)
+            }
+          }]
+        );
+      }
+    } catch (error) {
+      console.error('Error en proceso post-registro:', error);
+      // Aún mostrar éxito porque el usuario se creó
       Alert.alert(
         '¡Registro exitoso!',
-        'Por favor, verifica tu email para activar tu cuenta.',
+        'Se ha enviado un correo para verificar tu cuenta. Por favor, revisa tu bandeja de entrada para activar tu cuenta.',
         [{ 
           text: 'Entendido',
-          onPress: () => router.replace('/(auth)')
-        }]
-      );
-    } else {
-      Alert.alert(
-        '¡Bienvenido!',
-        'Tu cuenta ha sido creada exitosamente.',
-        [{ 
-          text: 'Continuar',
           onPress: () => {
-            // Si hay sesión, el AuthContext redirigirá automáticamente a (tabs)
+            setRegistrationData({});
+            setCurrentStep(1);
+            router.replace('/(auth)'); // Esto llevará al welcomeScreen
           }
         }]
       );
@@ -146,6 +202,19 @@ export function useRegistration() {
     router.replace('/(auth)');
   };
 
+  // Funciones helper para obtener datos específicos de cada step
+  const getStep1Data = (): RegistrationStep1Data | undefined => {
+    return registrationData.step1;
+  };
+
+  const getStep2Data = (): RegistrationStep2Data | undefined => {
+    return registrationData.step2;
+  };
+
+  const getStep3Data = (): RegistrationStep3Data | undefined => {
+    return registrationData.step3;
+  };
+
   return {
     currentStep,
     loading,
@@ -156,5 +225,9 @@ export function useRegistration() {
     goBack,
     cancelRegistration,
     registrationData,
+    // Helper functions para acceder a datos específicos
+    getStep1Data,
+    getStep2Data,
+    getStep3Data,
   };
 }

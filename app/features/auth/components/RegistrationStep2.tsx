@@ -5,10 +5,11 @@ interface RegistrationStep2Props {
   onNext: (data: { telefono: string }) => void;
   onSkip: () => void;
   onBack: () => void;
+  initialData?: { telefono?: string };
 }
 
-export function RegistrationStep2({ onNext, onSkip, onBack }: RegistrationStep2Props) {
-  const [telefono, setTelefono] = useState('');
+export function RegistrationStep2({ onNext, onSkip, onBack, initialData }: RegistrationStep2Props) {
+  const [telefono, setTelefono] = useState(initialData?.telefono || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Formatear teléfono chileno

@@ -4,11 +4,12 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 interface RegistrationStep1Props {
   onNext: (data: { nombre: string; apellido: string }) => void;
   onCancel: () => void;
+  initialData?: { nombre: string; apellido: string };
 }
 
-export function RegistrationStep1({ onNext, onCancel }: RegistrationStep1Props) {
-  const [nombre, setNombre] = useState('');
-  const [apellido, setApellido] = useState('');
+export function RegistrationStep1({ onNext, onCancel, initialData }: RegistrationStep1Props) {
+  const [nombre, setNombre] = useState(initialData?.nombre || '');
+  const [apellido, setApellido] = useState(initialData?.apellido || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Esta función será llamada por el botón circular externo
@@ -32,19 +33,29 @@ export function RegistrationStep1({ onNext, onCancel }: RegistrationStep1Props) 
 
       if (Object.keys(newErrors).length > 0) {
         setErrors(newErrors);
+        // Actualizar errores globalmente
+        if ((global as any).setStep1Errors) {
+          (global as any).setStep1Errors(newErrors);
+        }
         return false;
       }
 
       setErrors({});
+      // Limpiar errores globalmente
+      if ((global as any).setStep1Errors) {
+        (global as any).setStep1Errors({});
+      }
       onNext(data);
       return true;
     };
+  }, [nombre, apellido, onNext]);
 
-    // Exponer función para detectar si hay errores activos
-    (global as any).hasStep1Errors = () => {
-      return Object.keys(errors).length > 0;
-    };
-  }, [nombre, apellido, onNext, errors]);
+  // Sincronizar errores locales con el sistema global
+  React.useEffect(() => {
+    if ((global as any).setStep1Errors) {
+      (global as any).setStep1Errors(errors);
+    }
+  }, [errors]);
 
   return (
     <View style={styles.container}>

@@ -20,12 +20,21 @@ export function useSmartScroll({
 
   // Calcular espaciador superior proporcional
   const getSpacerOffset = React.useCallback(() => {
-    return Math.round(height * 0.18); // 18% de la altura de pantalla
-  }, []);
+    const isLargeScreen = height > 812;
+    // Espaciador reducido en Step 3 para pantallas grandes
+    if (currentStep === 3 && isLargeScreen) {
+      return Math.round(height * 0.12); // 12% para Step 3 en large - más espacio para inputs
+    }
+    return Math.round(height * 0.18); // 18% estándar
+  }, [currentStep]);
 
   // Calcular posición de scroll óptima
   const getScrollPosition = React.useCallback(() => {
     const spacerOffset = getSpacerOffset();
+    
+    // Factor de reducción de scroll para pantallas grandes
+    const isLargeScreen = height > 812; // S22 Ultra, iPhone Plus, etc.
+    const scrollReductionFactor = isLargeScreen ? 0.7 : 1.0; // Menos scroll en pantallas grandes
 
     if (currentStep === 1) {
       // Paso 1: Nombre y Apellido
@@ -34,29 +43,31 @@ export function useSmartScroll({
       } else if (activeInput === 'apellido') {
         // Cálculo preciso para ocultar solo el input nombre
         const inputSectionHeight = 22 + 50 + 16; // label + input + margin
-        const calculatedScroll = inputSectionHeight + 10; // margen mínimo
-        const safetyMargin = height * 0.015; // 1.5% de pantalla
+        const calculatedScroll = (inputSectionHeight + 10) * scrollReductionFactor; // Aplicar reducción
+        const safetyMargin = height * 0.01; // Reducido para pantallas grandes
         
         return Math.round(spacerOffset + calculatedScroll + safetyMargin);
       }
     } else if (currentStep === 2) {
       return 0; // Sin scroll para paso 2
     } else if (currentStep === 3) {
-      // Paso 3: Email, contraseña, confirmar contraseña - Scroll mejorado con espaciador
+      // Paso 3: Email, contraseña, confirmar contraseña - Scroll optimizado por tamaño de pantalla
       const spacerOffset = getSpacerOffset(); // Compensar el paddingTop
       const inputSectionHeight = 22 + 50 + 16; // label + input + margin = 88px
-      const safetyMargin = height * 0.015; // 1.5% de pantalla como margen
+      const safetyMargin = height * (isLargeScreen ? 0.01 : 0.015); // Menos margen en pantallas grandes
       
       if (activeInput === 'email') {
         return spacerOffset; // Posición natural del contenido
       } else if (activeInput === 'password') {
-        // Scroll moderado para mostrar password sin ocultar su contenido
-        const scrollForPassword = inputSectionHeight * 0.8; // Scroll más conservador
+        // Scroll moderado, más conservador en pantallas grandes
+        const scrollForPassword = (inputSectionHeight * 0.6) * scrollReductionFactor;
         return Math.round(spacerOffset + scrollForPassword + safetyMargin);
       } else if (activeInput === 'confirmPassword') {
-        // Scroll mínimo absoluto para confirmar contraseña
-        const scrollForConfirm = (inputSectionHeight * 1.5); // Solo 1.5 inputs de scroll
-        return Math.round(spacerOffset + scrollForConfirm); // Sin margen adicional
+        // Scroll más agresivo para confirmar contraseña, especialmente en large
+        const baseScroll = isLargeScreen ? 2.2 : 1.8; // Más scroll para mostrar input completo
+        const scrollForConfirm = (inputSectionHeight * baseScroll) * scrollReductionFactor;
+        const extraMargin = height * 0.02; // Margen adicional para el teclado
+        return Math.round(spacerOffset + scrollForConfirm + extraMargin);
       }
     }
     return 0;

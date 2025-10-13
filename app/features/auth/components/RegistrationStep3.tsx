@@ -6,12 +6,13 @@ import type { RegistrationStep3Data } from '../types';
 interface RegistrationStep3Props {
   onNext: (data: RegistrationStep3Data) => void;
   onBack: () => void;
+  initialData?: { email: string; password: string };
 }
 
-export function RegistrationStep3({ onNext, onBack }: RegistrationStep3Props) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+export function RegistrationStep3({ onNext, onBack, initialData }: RegistrationStep3Props) {
+  const [email, setEmail] = useState(initialData?.email || '');
+  const [password, setPassword] = useState(initialData?.password || '');
+  const [confirmPassword, setConfirmPassword] = useState(initialData?.password || '');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -35,19 +36,29 @@ export function RegistrationStep3({ onNext, onBack }: RegistrationStep3Props) {
           }
         });
         setErrors(fieldErrors);
+        // Actualizar errores globalmente
+        if ((global as any).setStep3Errors) {
+          (global as any).setStep3Errors(fieldErrors);
+        }
         return false;
       }
 
       setErrors({});
+      // Limpiar errores globalmente
+      if ((global as any).setStep3Errors) {
+        (global as any).setStep3Errors({});
+      }
       onNext({ email: data.email, password: data.password });
       return true;
     };
+  }, [email, password, confirmPassword, onNext]);
 
-    // Exponer función para detectar si hay errores activos en Step 3
-    (global as any).hasStep3Errors = () => {
-      return Object.keys(errors).length > 0;
-    };
-  }, [email, password, confirmPassword, onNext, errors]);
+  // Sincronizar errores locales con el sistema global
+  React.useEffect(() => {
+    if ((global as any).setStep3Errors) {
+      (global as any).setStep3Errors(errors);
+    }
+  }, [errors]);
 
   return (
     <View style={styles.container}>

@@ -20,13 +20,38 @@ export async function checkEmailExists(email: string): Promise<boolean> {
 }
 
 /**
- * Registra un nuevo usuario en Supabase Auth
+ * Registra un nuevo usuario en Supabase Auth con metadatos
  */
-export async function signUpUser(email: string, password: string) {
+export async function signUpUser(email: string, password: string, userData?: {
+  nombre?: string;
+  apellido?: string;
+  telefono?: string;
+}) {
+  // Console logs para debug
+  console.log('🔥 REGISTRO DE USUARIO - Datos enviados a Supabase:');
+  console.log('📧 Email:', email);
+  console.log('🔒 Password:', password ? '[CONTRASEÑA PRESENTE]' : '[SIN CONTRASEÑA]');
+  console.log('👤 userData recibido:', userData);
+  
+  const metadataToSend = {
+    name: userData?.nombre || '',
+    last_name: userData?.apellido || '',
+    phone: userData?.telefono || ''
+  };
+  
+  console.log('📋 Metadatos que se enviarán:', metadataToSend);
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    options: {
+      data: metadataToSend
+    }
   });
+
+  console.log('📤 Respuesta de Supabase:');
+  console.log('✅ Data:', data);
+  console.log('❌ Error:', error);
 
   if (error) {
     // Manejar errores específicos de Supabase
