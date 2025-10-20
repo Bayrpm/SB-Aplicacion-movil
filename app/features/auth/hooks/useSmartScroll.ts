@@ -1,7 +1,5 @@
 import React from 'react';
-import { Dimensions, ScrollView } from 'react-native';
-
-const { height } = Dimensions.get('window');
+import { ScrollView, useWindowDimensions } from 'react-native';
 
 interface UseSmartScrollOptions {
   currentStep: number;
@@ -17,6 +15,7 @@ export function useSmartScroll({
   getCardHeight
 }: UseSmartScrollOptions) {
   const scrollViewRef = React.useRef<ScrollView>(null);
+  const { height } = useWindowDimensions();
 
   // Calcular espaciador superior proporcional
   const getSpacerOffset = React.useCallback(() => {
@@ -39,14 +38,12 @@ export function useSmartScroll({
     if (currentStep === 1) {
       // Paso 1: Nombre y Apellido
       if (activeInput === 'nombre') {
-        return spacerOffset; // Posición natural del contenido
+        return 0; // Sin scroll para nombre
       } else if (activeInput === 'apellido') {
-        // Cálculo preciso para ocultar solo el input nombre
+        // Scroll mínimo para que 'apellido' quede visible, sin ocultar otros inputs
         const inputSectionHeight = 22 + 50 + 16; // label + input + margin
-        const calculatedScroll = (inputSectionHeight + 10) * scrollReductionFactor; // Aplicar reducción
-        const safetyMargin = height * 0.01; // Reducido para pantallas grandes
-        
-        return Math.round(spacerOffset + calculatedScroll + safetyMargin);
+  // Scroll ultra mínimo: solo la mitad del spacerOffset
+  return Math.round(spacerOffset / 2);
       }
     } else if (currentStep === 2) {
       return 0; // Sin scroll para paso 2
@@ -73,46 +70,53 @@ export function useSmartScroll({
     return 0;
   }, [currentStep, activeInput, getSpacerOffset]);
 
-  // Ejecutar scroll automático
-  const executeScroll = React.useCallback((position: number, animated: boolean = true) => {
+  // Ejecutar scroll automático. Permite un delay opcional (ms) para esperar renders o teclado.
+  const executeScroll = React.useCallback((position: number, animated: boolean = true, delay: number = 0) => {
     setTimeout(() => {
       scrollViewRef.current?.scrollTo({ 
         y: position, 
-        animated 
+        animated
       });
-    }, 200);
+    }, delay > 0 ? delay : 400); // usar 400ms por defecto para asegurar que el teclado esté visible
   }, []);
 
   // Resetear scroll
   const resetScroll = React.useCallback((animated: boolean = true) => {
-    const resetPosition = (currentStep === 1 || currentStep === 3) ? getSpacerOffset() : 0;
-    if (animated) {
-      executeScroll(resetPosition);
-    } else {
-      // Scroll inmediato sin animación para evitar efectos raros al cambiar de step
-      setTimeout(() => {
-        scrollViewRef.current?.scrollTo({ 
-          y: resetPosition, 
-          animated: false 
-        });
-      }, 50);
+    // Si estamos en Step 1 y el teclado NO está visible, quedarse en 0 para evitar saltos
+    let resetPosition = 0;
+    if (!(currentStep === 1 && !keyboardVisible)) {
+      resetPosition = (currentStep === 1 || currentStep === 3) ? getSpacerOffset() : 0;
     }
-  }, [currentStep, getSpacerOffset, executeScroll]);
+    // Ejecutar sin delay por defecto para evitar movimientos inesperados
+    executeScroll(resetPosition, animated, 0);
+  }, [currentStep, getSpacerOffset, executeScroll, keyboardVisible]);
 
   // Efecto principal de scroll automático
   React.useEffect(() => {
     if (keyboardVisible && activeInput) {
       const scrollY = getScrollPosition();
-      executeScroll(scrollY);
+      // Esperar más tiempo a que el teclado aparezca y el layout se estabilice
+      executeScroll(scrollY, true, 350);
     } else if (!keyboardVisible) {
-      resetScroll();
+      // Resetear inmediatamente en ausencia de teclado
+      resetScroll(false);
     }
   }, [keyboardVisible, activeInput, currentStep, getScrollPosition, executeScroll, resetScroll]);
+
+  const resetScrollImmediate = React.useCallback(() => {
+    const resetPosition = (currentStep === 1 && !keyboardVisible) ? 0 : ((currentStep === 1 || currentStep === 3) ? getSpacerOffset() : 0);
+    try {
+      scrollViewRef.current?.scrollTo({ y: resetPosition, animated: false });
+    } catch (e) {
+      // noop
+    }
+  }, [currentStep, getSpacerOffset, keyboardVisible]);
 
   return {
     scrollViewRef,
     resetScroll,
-    resetScrollImmediate: () => resetScroll(false),
+    resetScrollImmediate,
     getSpacerOffset,
+    getScrollPosition,
   };
 }

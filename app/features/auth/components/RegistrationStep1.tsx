@@ -5,9 +5,10 @@ interface RegistrationStep1Props {
   onNext: (data: { nombre: string; apellido: string }) => void;
   onCancel: () => void;
   initialData?: { nombre: string; apellido: string };
+  onInputFocus?: (inputName: 'nombre' | 'apellido') => void;
 }
 
-export function RegistrationStep1({ onNext, onCancel, initialData }: RegistrationStep1Props) {
+export function RegistrationStep1({ onNext, onCancel, initialData, onInputFocus }: RegistrationStep1Props) {
   const [nombre, setNombre] = useState(initialData?.nombre || '');
   const [apellido, setApellido] = useState(initialData?.apellido || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -87,7 +88,12 @@ export function RegistrationStep1({ onNext, onCancel, initialData }: Registratio
           autoCapitalize="words"
           autoComplete="family-name"
           placeholderTextColor="#999"
-          onFocus={() => (global as any).handleInputFocus?.('apellido')}
+          onFocus={() => {
+            if (typeof onInputFocus === 'function') {
+              onInputFocus('apellido');
+            }
+            (global as any).handleInputFocus?.('apellido');
+          }}
           onBlur={() => (global as any).handleInputBlur?.()}
         />
         {errors.apellido && (
@@ -98,7 +104,7 @@ export function RegistrationStep1({ onNext, onCancel, initialData }: Registratio
   );
 }
 
-const styles = StyleSheet.create({
+export const styles = StyleSheet.create({
   container: { 
     width: '100%',
     justifyContent: 'flex-start',
@@ -108,7 +114,7 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     alignItems: 'stretch',
-    marginBottom: 16, // Espaciado igual que signIn
+    marginBottom: 20, // Espaciado ligeramente mayor para evitar recortes
   },
   label: { 
     fontSize: 16, 
@@ -121,7 +127,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#E9ECEF',

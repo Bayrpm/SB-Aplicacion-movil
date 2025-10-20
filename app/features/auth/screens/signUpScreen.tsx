@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Animated, Dimensions, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import BaseAuthLayout from '../components/BaseAuthLayout';
 import { RegistrationStep1 } from '../components/RegistrationStep1';
@@ -13,12 +13,10 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useSmartScroll } from '../hooks/useSmartScroll';
 import { useValidationErrors } from '../hooks/useValidationErrors';
 
-const { width, height } = Dimensions.get('window');
-
 const TOTAL_STEPS = 3;
 
 export default function SignUpScreen() {
-  // Posicionamiento actualizado v1.1
+  const { width, height } = useWindowDimensions();
   const router = useRouter();
   const {
     currentStep,
@@ -35,15 +33,15 @@ export default function SignUpScreen() {
     getStep3Data,
   } = useRegistration();
 
-  // Asegurar que inicie en paso 1 cuando se monta el componente
   React.useEffect(() => {
-    // Si por alguna razón no está en paso 1, resetear
     if (currentStep !== 1) {
       cancelRegistration();
     }
   }, []);
 
-  // Detectar cuando aparece/desaparece el teclado
+  const [keyboardVisible, setKeyboardVisible] = React.useState(false);
+  const [keyboardHeight, setKeyboardHeight] = React.useState(0);
+
   React.useEffect(() => {
     const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (e: any) => {
       setKeyboardVisible(true);
@@ -60,20 +58,10 @@ export default function SignUpScreen() {
     };
   }, []);
 
-  // Estados para el teclado
-  const [keyboardVisible, setKeyboardVisible] = React.useState(false);
-  const [keyboardHeight, setKeyboardHeight] = React.useState(0);
-  
-  // Referencia para el scroll dentro de la card
-  // scrollViewRef ahora viene del hook useSmartScroll
-
-  // Animación simple y estable
   const fadeAnim = React.useRef(new Animated.Value(1)).current;
   const progressAnim = React.useRef(new Animated.Value(1)).current;
-  
-  // Animación muy sutil para cambio de pasos (opcional)
+
   React.useEffect(() => {
-    // Solo una animación muy sutil, sin fade out completo
     Animated.timing(fadeAnim, {
       toValue: 0.95,
       duration: 80,
@@ -87,29 +75,22 @@ export default function SignUpScreen() {
     });
   }, [currentStep]);
 
-  // Animación del progreso
   React.useEffect(() => {
     Animated.timing(progressAnim, {
       toValue: currentStep,
       duration: 300,
       useNativeDriver: false,
     }).start();
-    
-    // Resetear scroll al cambiar de paso sin animación para evitar efectos raros
     resetScrollImmediate();
   }, [currentStep]);
 
-  // Hooks para manejo de estado
   const { hasStep1Errors, hasStep3Errors } = useValidationErrors();
-  
-  // Determinar si hay errores en el step actual
   const currentStepHasErrors = React.useMemo(() => {
     if (currentStep === 1) return hasStep1Errors();
     if (currentStep === 3) return hasStep3Errors();
     return false;
   }, [currentStep, hasStep1Errors, hasStep3Errors]);
 
-  // Hook de layout responsivo
   const responsiveLayout = useResponsiveLayout({
     currentStep,
     keyboardVisible,
@@ -117,32 +98,130 @@ export default function SignUpScreen() {
     hasErrors: currentStepHasErrors,
   });
 
-  // Extraer valores del layout responsivo
-  const { cardHeight, cardTop, titleTop, spacingConfig } = responsiveLayout;
-  
-  // Función para compatibilidad con el hook useSmartScroll
-  const getCardHeight = React.useCallback(() => cardHeight, [cardHeight]);
+  const { widthCategory, heightCategory, cardHeight, cardTop, titleTop, spacingConfig } = responsiveLayout;
+  // Ajuste conservador de la altura de la card en píxeles para asegurarnos
+  // de que los inputs (especialmente en Step 1) se muestren completos al cargar.
+  // No tocamos el scroll; en su lugar hacemos que la tarjeta sea más alta si hace falta.
+  const adjustedCardHeight = React.useMemo(() => {
+    try {
+      const baseRatio = cardHeight;
+      const basePx = Math.round(baseRatio * height);
 
-  // Hooks para manejo de estado
+
+      // Usar exactamente la misma lógica de Step1 para Step3, pero aumentar el mínimo para Step3
+      const minPxStep1 = currentStepHasErrors
+        ? Math.max(380, Math.round(height * 0.34))
+        : Math.max(340, Math.round(height * 0.28));
+        const minPxStep2 = Math.max(320, Math.round(height * 0.26));
+  // Step3: aumentar ligeramente el mínimo para dar más altura
+  // Ajuste: permitir desde 40% de la pantalla o 480px como mínimo conservador
+  const minPxStep3 = Math.max(480, Math.round(height * 0.40));
+
+      let requiredPx = 0;
+      if (currentStep === 1) {
+        requiredPx = minPxStep1;
+      } else if (currentStep === 2) {
+        requiredPx = minPxStep2;
+      } else if (currentStep === 3) {
+        requiredPx = minPxStep3;
+      } else {
+        requiredPx = Math.max(Math.round(height * 0.32), 540);
+      }
+
+      // SOLO Step3: altura máxima = espacio entre top 4% y bottom 8% de la pantalla
+      let finalRatio = baseRatio;
+      if (currentStep === 3) {
+        // Make Step3 responsive: reserve top and bottom gaps and compute available space
+        const reservedTopPx = Math.round(height * 0.10); // 10% reserved at top
+        const reservedBottomPx = Math.round(height * 0.30); // 30% reserved at bottom
+        const availablePx = Math.max(0, height - reservedTopPx - reservedBottomPx);
+        const maxRatioFromAvailable = availablePx / height;
+        const capRatio = Math.min(maxRatioFromAvailable, 0.68); // hard cap
+        const minRatio = minPxStep3 / height;
+        // Prefer baseRatio but clamp to [minRatio, capRatio]
+        finalRatio = Math.max(minRatio, Math.min(capRatio, baseRatio));
+      } else {
+        if (basePx < requiredPx) {
+          const requiredRatio = Math.min(0.95, requiredPx / height);
+          finalRatio = Math.max(baseRatio, requiredRatio);
+        }
+      }
+      return finalRatio;
+    } catch (e) {
+      return cardHeight;
+    }
+  }, [cardHeight, currentStep, height, currentStepHasErrors]);
+  const getCardHeight = React.useCallback(() => cardHeight, [cardHeight]);
   const { activeInput } = useActiveInput();
-  const { scrollViewRef, resetScroll, resetScrollImmediate, getSpacerOffset } = useSmartScroll({
+  const {
+    scrollViewRef,
+    resetScroll,
+    resetScrollImmediate,
+    getSpacerOffset,
+    getScrollPosition
+  } = useSmartScroll({
     currentStep,
     keyboardVisible,
     activeInput,
     getCardHeight,
   });
 
-  // La lógica de scroll se maneja ahora en el hook useSmartScroll
+  // Asegurar que la card nunca llegue hasta el borde inferior: calcular un cardTop ajustado
+  const adjustedCardTop = React.useMemo(() => {
+    try {
+      const desiredRatio = cardTop; // ratio propuesto por el hook
+      const desiredHeightPx = Math.round(adjustedCardHeight * height);
+      const desiredTopPx = Math.round(desiredRatio * height);
 
-  // Reseteo mínimo para evitar problemas
+      // margen mínimo en px que siempre queremos dejar entre bottom de la card y el borde inferior
+      const minBottomGapPx = Math.round(height * 0.22);
+
+      // Si la card se solapa con el borde inferior, subirla lo justo para que nunca se meta debajo
+      if (desiredTopPx + desiredHeightPx > height - minBottomGapPx) {
+        // Subimos el top para que la card crezca solo hacia arriba
+        const newTopPx = Math.max(Math.round(height * 0.18), height - desiredHeightPx - minBottomGapPx);
+        return newTopPx / height;
+      }
+      if (currentStep === 3) {
+        // Top fijo en 10% de la pantalla para posicionar la card un poco más abajo
+        return Math.round(height * 0.10) / height;
+      }
+      return desiredRatio;
+    } catch (e) {
+      return cardTop;
+    }
+  }, [cardTop, adjustedCardHeight, height, spacingConfig]);
+
+  // Garantizar posición inicial del scroll
+  const initialScrollOffset = { y: 0 };
+
+  // Calcular paddingTop razonable para el contenido: no usar el spacer completo como padding
+  const spacerOffset = React.useMemo(() => getSpacerOffset(), [getSpacerOffset]);
+  const contentPaddingTop = React.useMemo(() => {
+    // Limitar el paddingTop a una fracción de la altura de la card para evitar empujar inputs fuera
+    const maxFromCard = Math.round(cardHeight * height * 0.06); // 6% de la card
+    const computed = Math.min(spacerOffset, Math.max(10, maxFromCard));
+    return computed;
+  }, [spacerOffset, cardHeight, height]);
+
   useFocusEffect(
     React.useCallback(() => {
-      // Simplemente asegurar visibilidad completa
       fadeAnim.setValue(1);
     }, [])
   );
 
-  // Barra de progreso minimalista - componente estable
+  // A la entrada en Step 1 sin teclado, asegurar posición inicial estable
+  React.useEffect(() => {
+    if (currentStep === 1 && !keyboardVisible) {
+      // Reset inmediato y sin animación (evita saltos y reintentos)
+      try {
+        resetScrollImmediate();
+      } catch (e) {
+        // noop
+      }
+    }
+  }, [currentStep, keyboardVisible, resetScrollImmediate]);
+
   const ProgressBarMinimal = () => (
     <View style={styles.progressBarMinimalContainer}>
       <View style={styles.progressBarTrack}>
@@ -178,13 +257,10 @@ export default function SignUpScreen() {
     </View>
   );
 
-  // Manejar navegación de vuelta con animación suave
   const handleBack = () => {
     if (currentStep === 1) {
-      // Volver a WelcomeScreen sin animación que cause opacidad
       router.back();
     } else {
-      // Volver al paso anterior
       goBack();
     }
   };
@@ -192,14 +268,12 @@ export default function SignUpScreen() {
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        // Paso 1: Nombre y apellido
         return <RegistrationStep1 
           onNext={saveStep1Data} 
           onCancel={handleBack}
           initialData={getStep1Data()}
         />;
       case 2:
-        // Paso 2: Teléfono (opcional)
         return <RegistrationStep2 
           onNext={saveStep2Data} 
           onSkip={skipStep2} 
@@ -207,7 +281,6 @@ export default function SignUpScreen() {
           initialData={getStep2Data()}
         />;
       case 3:
-        // Paso 3: Correo y contraseña
         return <RegistrationStep3 
           onNext={saveStep3Data} 
           onBack={goBack}
@@ -218,191 +291,276 @@ export default function SignUpScreen() {
     }
   };
 
+  const svgHeight = keyboardVisible ? Math.round(height * 0.12) : Math.round(height * 0.26);
 
+  const continueSize = React.useMemo(() => {
+    try {
+      return responsiveLayout.buttonSize ? responsiveLayout.buttonSize(80) : Math.round(width * 0.16);
+    } catch (e) {
+      return Math.round(width * 0.16);
+    }
+  }, [responsiveLayout, width]);
 
-  // Esta definición duplicada se eliminó - ahora está arriba antes de los hooks
+  const backSize = React.useMemo(() => {
+    try {
+      return responsiveLayout.buttonSize ? responsiveLayout.buttonSize(50) : Math.round(width * 0.10);
+    } catch (e) {
+      return Math.round(width * 0.10);
+    }
+  }, [responsiveLayout, width]);
 
-  // Esta definición duplicada se eliminó - ahora está arriba antes de los hooks
+  const continueIcon = React.useMemo(() => Math.round(continueSize * (responsiveLayout.iconRatio ?? 0.42)), [continueSize, responsiveLayout]);
+  const backIcon = React.useMemo(() => Math.round(backSize * (responsiveLayout.iconRatio ?? 0.42)), [backSize, responsiveLayout]);
+
+  const backTranslate = React.useMemo(() => {
+    try {
+      return responsiveLayout.getBackTranslate ? responsiveLayout.getBackTranslate(svgHeight) : Math.round(svgHeight * 0.12 + height * 0.015);
+    } catch (e) {
+      return Math.round(svgHeight * 0.12 + height * 0.015);
+    }
+  }, [responsiveLayout, svgHeight, height]);
+
+  // Clamp backTranslate so the back button never moves outside the visible footer area
+  const backTranslateClamped = React.useMemo(() => {
+    const minTranslate = -Math.round(height * 0.02); // don't lift more than 2% of height
+    // allow pushing down up to 30% of svg height as requested
+    const requestedDown = Math.round(svgHeight * 0.30);
+    const maxTranslate = Math.round(Math.max(svgHeight * 0.15, requestedDown)); // allow up to requestedDown
+    // responsiveLayout.clamp exists
+    try {
+      return responsiveLayout.clamp ? responsiveLayout.clamp(backTranslate, minTranslate, maxTranslate) : Math.max(minTranslate, Math.min(backTranslate, maxTranslate));
+    } catch (e) {
+      return Math.max(minTranslate, Math.min(backTranslate, maxTranslate));
+    }
+  }, [backTranslate, responsiveLayout, height, svgHeight]);
+
+  // Pequeño desplazamiento hacia abajo para el botón Continuar (2% de la altura), clamped
+  const continueTranslate = React.useMemo(() => {
+    try {
+      const desired = Math.round(height * 0.02);
+      const maxAllowed = Math.round(svgHeight * 0.25);
+      return responsiveLayout.clamp ? responsiveLayout.clamp(desired, 0, maxAllowed) : Math.max(0, Math.min(desired, maxAllowed));
+    } catch (e) {
+      return Math.round(height * 0.02);
+    }
+  }, [height, svgHeight, responsiveLayout]);
 
   return (
     <View style={{ flex: 1 }}>
-      <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-        <KeyboardAvoidingView 
-          style={{ flex: 1 }} 
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-        >
-          <BaseAuthLayout
-            title="Bienvenidos" // Título siempre visible
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        {currentStep === 3 ? (
+      <BaseAuthLayout
+            title=""
             showLogo={true}
-            cardHeight={cardHeight}
-            cardTop={cardTop}
+            logoSize={widthCategory === 'compact' ? 0.72 : 0.60}
+            // En Step3 queremos que 0.64 sea un tope máximo (un poco más alta)
+            cardHeight={Math.min(adjustedCardHeight, 0.64)}
+            cardTop={adjustedCardTop}
+            // Aumentar el espacio inferior reservado para Step3 para elevar la card
+            cardBottomPx={currentStep === 3 ? Math.round(height * 0.34) : undefined}
             hideBottomBand={true}
             logoInContent={true}
-            titleTop={titleTop} // Título dinámico calculado por el hook responsivo
+            contentCentered={false}
+            titleTop={titleTop}
           >
-            {/* Barra de progreso estática debajo del logo */}
-            <ProgressBarMinimal />
-            
-            {/* ScrollView automático - sin interacción manual */}
-            {/* ScrollView automático - funcionaba correctamente antes */}
-            <ScrollView
-              ref={scrollViewRef}
-              style={styles.scrollView}
-              contentContainerStyle={[
-                styles.scrollContent,
-                { 
-                  paddingBottom: spacingConfig.paddingBottom, // Calculado por el hook responsivo
-                  paddingTop: (currentStep === 1 || currentStep === 3) ? getSpacerOffset() : 0, // Espaciador para step 1 y 3
-                }
-              ]}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              scrollEnabled={false} // Deshabilitar scroll manual
-              automaticallyAdjustContentInsets={false}
-            >
-              {/* Contenido de los pasos con espaciado igual a signIn */}
-              <View style={styles.formContainer}>
-                <Animated.View
-                  style={[
-                    styles.stepContent,
-                    { 
-                      opacity: fadeAnim,
-                    }
-                  ]}
+            <View style={{ width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', marginBottom: 0 }}>
+              {/* Logo y ProgressBar juntos, sin margen extra */}
+              {/* El logo ya está dentro del card por logoInContent, así que solo el ProgressBar */}
+              <ProgressBarMinimal />
+            </View>
+            <View style={[styles.formContainer, { paddingHorizontal: 22, alignItems: 'center' }]}> 
+              <Animated.View style={[styles.stepContent, { opacity: fadeAnim, width: '100%', maxWidth: 420 }]}> 
+                <ScrollView
+                  ref={scrollViewRef}
+                  scrollEnabled={true}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{
+                    minHeight: '100%',
+                    flexGrow: 1,
+                    paddingBottom: 0,
+                    marginBottom: 0,
+                    paddingHorizontal: 8,
+                    alignItems: 'stretch',
+                  }}
+                  keyboardShouldPersistTaps="handled"
                 >
-                  {renderStep()}
-                </Animated.View>
-              </View>
-              
-              {/* Espacio inferior para el scroll - dinámico calculado por hook responsivo */}
-              <View style={[
-                styles.bottomSpacer, 
-                { height: spacingConfig.bottomSpacerHeight }
-              ]} />
-            </ScrollView>
+                  <RegistrationStep3 
+                    onNext={saveStep3Data}
+                    onBack={goBack}
+                    initialData={getStep3Data()}
+                    onInputFocus={() => {}}
+                  />
+                </ScrollView>
+              </Animated.View>
+            </View>
+            <View style={[styles.bottomSpacer, { height: keyboardVisible ? 10 : spacingConfig.bottomSpacerHeight }]} />
           </BaseAuthLayout>
-        </KeyboardAvoidingView>
-        
-        {/* Área circular en esquina derecha con botones - DINÁMICA */}
-        <View style={[styles.circularButtonArea, { height: spacingConfig.buttonAreaHeight }]}>
-          <Svg style={styles.circularBackground} width={width} height={spacingConfig.buttonAreaHeight}>
-            <Path
-              d={`M 0 150 Q ${width * 0.5} 10 ${width} 30 L ${width} ${spacingConfig.buttonAreaHeight} L 0 ${spacingConfig.buttonAreaHeight} Z`}
-              fill="#0A4A90"
-            />
-          </Svg>
-          
-          {/* Botones dentro del área circular */}
-          
-          {/* Botón continuar a la derecha */}
-          <View style={styles.rightButtonsContainer}>
-            <TouchableOpacity
-              style={[styles.continueButton, loading && styles.continueButtonDisabled]}
-              onPress={() => {
-                if (loading) return; // Evitar múltiples clics durante loading
-                
-                if (currentStep === 1) {
-                  // Usar la función global de validación del step 1
-                  if ((global as any).validateStep1) {
-                    (global as any).validateStep1();
-                  }
-                } else if (currentStep === 2) {
-                  // Verificar si el teléfono está vacío antes de continuar
-                  const currentPhone = (global as any).getCurrentPhone ? (global as any).getCurrentPhone() : '';
-                  
-                  if (!currentPhone) {
-                    // Si el teléfono está vacío, mostrar modal de confirmación
-                    Alert.alert(
-                      '¿Seguro que quieres omitir tu teléfono?',
-                      'Podrás agregarlo más tarde en tu perfil.',
-                      [
-                        {
-                          text: 'Cancelar',
-                          style: 'cancel',
-                        },
-                        {
-                          text: 'Omitir',
-                          style: 'destructive',
-                          onPress: () => {
-                            if ((global as any).validateStep2) {
-                              (global as any).validateStep2(true);
-                            }
-                          },
-                        },
-                      ]
-                    );
-                  } else {
-                    // Si hay teléfono, validar normalmente
-                    if ((global as any).validateStep2) {
-                      (global as any).validateStep2();
-                    }
-                  }
-                } else if (currentStep === 3) {
-                  // Usar la función global de validación del step 3
-                  if ((global as any).validateStep3) {
-                    (global as any).validateStep3();
+        ) : (
+          <BaseAuthLayout
+            title=""
+            showLogo={true}
+            logoSize={widthCategory === 'compact' ? 0.72 : 0.60}
+            cardHeight={adjustedCardHeight}
+            cardTop={adjustedCardTop}
+            hideBottomBand={true}
+            logoInContent={false}
+            contentCentered={false}
+            titleTop={titleTop}
+          >
+            <View style={{ width: '100%', alignItems: 'center' }}>
+              <ProgressBarMinimal />
+            </View>
+            <View style={[styles.formContainer, { paddingHorizontal: 22, alignItems: 'center' }]}> 
+              <Animated.View style={[styles.stepContent, { opacity: fadeAnim, width: '100%', maxWidth: 420 }]}> 
+                {currentStep === 1 ? (
+                  <ScrollView
+                    ref={scrollViewRef}
+                    scrollEnabled={true}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{
+                      flexGrow: 1,
+                      paddingBottom: 8,
+                      paddingHorizontal: 8,
+                      alignItems: 'center',
+                    }}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    <RegistrationStep1 
+                      onNext={saveStep1Data} 
+                      onCancel={handleBack}
+                      initialData={getStep1Data()}
+                      onInputFocus={(inputName) => {
+                        if (inputName === 'apellido' && keyboardVisible) {
+                          setTimeout(() => {
+                            try {
+                              if (scrollViewRef && scrollViewRef.current && typeof getScrollPosition === 'function') {
+                                const y = getScrollPosition();
+                                scrollViewRef.current.scrollTo({ y, animated: true });
+                              }
+                            } catch (e) {}
+                          }, 120);
+                        }
+                      }}
+                    />
+                  </ScrollView>
+                ) : (
+                  <RegistrationStep2 
+                    onNext={saveStep2Data} 
+                    onSkip={skipStep2} 
+                    onBack={goBack}
+                    initialData={getStep2Data()}
+                  />
+                )}
+              </Animated.View>
+            </View>
+            <View style={[styles.bottomSpacer, { height: keyboardVisible ? 10 : spacingConfig.bottomSpacerHeight }]} />
+          </BaseAuthLayout>
+        )}
+      </KeyboardAvoidingView>
+  {/* Área azul inferior y botones FUERA del KeyboardAvoidingView para evitar errores de renderizado */}
+  {/* Agregar un margen extra del 2% de la altura para separar los botones de la banda inferior */}
+  {/** extraMargin se calcula en tiempo de ejecución para ser responsivo */}
+  <View style={[styles.bottomButtonRowFixed, { paddingBottom: height < 700 ? 8 : 0 }]}>
+        <Svg width={'100%'} height={svgHeight} viewBox={`0 -30 1000 170`} preserveAspectRatio="none" style={styles.bottomSvgFixed}>
+          <Path
+            d={`M 0 70 Q 400 -30 1000 0 L 1000 ${svgHeight} L 0 ${svgHeight} Z`}
+            fill="#0A4A90"
+          />
+        </Svg>
+          {/* Calcular un margen extra del 2% de la altura y sumarlo al offset inferior */}
+          <View style={[styles.buttonRowFixed, { position: 'absolute', left: 0, right: 0, bottom: Math.round(svgHeight * (height < 700 ? 0.20 : 0.28)) + Math.round(height * 0.02) }]}>
+          <TouchableOpacity
+            style={[styles.backButton, { width: backSize, height: backSize, borderRadius: Math.round(backSize/2), marginBottom: 0, transform: [{ translateY: backTranslateClamped }] }]}
+            onPress={handleBack}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-back" size={backIcon} color="#0A4A90" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              { width: continueSize, height: continueSize, borderRadius: Math.round(continueSize/2) },
+              loading && styles.continueButtonDisabled,
+              { marginBottom: 0, transform: [{ translateY: continueTranslate }] },
+            ]}
+            onPress={() => {
+              if (loading) return;
+              if (currentStep === 1) {
+                if ((global as any).validateStep1) {
+                  (global as any).validateStep1();
+                }
+              } else if (currentStep === 2) {
+                const currentPhone = (global as any).getCurrentPhone ? (global as any).getCurrentPhone() : '';
+                if (!currentPhone) {
+                  Alert.alert(
+                    '¿Seguro que quieres omitir tu teléfono?',
+                    'Podrás agregarlo más tarde en tu perfil.',
+                    [
+                      { text: 'Cancelar', style: 'cancel' },
+                      { text: 'Omitir', style: 'destructive', onPress: () => { if ((global as any).validateStep2) { (global as any).validateStep2(true); } } },
+                    ]
+                  );
+                } else {
+                  if ((global as any).validateStep2) {
+                    (global as any).validateStep2();
                   }
                 }
-              }}
-              activeOpacity={loading ? 1 : 0.8}
-              disabled={loading}
+              } else if (currentStep === 3) {
+                if ((global as any).validateStep3) {
+                  (global as any).validateStep3();
+                }
+              }
+            }}
+            activeOpacity={loading ? 1 : 0.8}
+            disabled={loading}
+          >
+            <Text
+              allowFontScaling={false}
+              style={[
+                styles.continueButtonText,
+                // Ensure button text scales reasonably with the button; cap max size so it doesn't become huge
+                { fontSize: Math.min(Math.max(responsiveLayout.fontSize ? responsiveLayout.fontSize(14) : 16, Math.round(continueSize * 0.18)), 18) },
+                loading && styles.continueButtonTextDisabled,
+              ]}
             >
-              <Text style={[styles.continueButtonText, loading && styles.continueButtonTextDisabled]}>
-                {loading ? '...' : currentStep === 3 ? 'Finalizar' : 'Continuar'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Botones a la izquierda */}
-          <View style={styles.leftButtonsContainer}>
-            {/* Botón volver pequeño */}
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={handleBack}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="arrow-back" size={20} color="#0A4A90" />
-            </TouchableOpacity>
-            
-
-          </View>
+              {loading ? '...' : currentStep === 3 ? 'Finalizar' : 'Continuar'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </Animated.View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // ScrollView dentro de la card
   scrollView: {
     flex: 1,
     width: '100%',
-    marginTop: 8, // Pequeño margen después del progress indicator
+    marginTop: 8,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'flex-start', // Contenido desde arriba
-    paddingBottom: 20, // Espaciado inferior dentro de la card
-    paddingTop: 0, // Espacio superior para permitir scroll hacia arriba
+    justifyContent: 'flex-start',
+    paddingBottom: 20,
+    paddingTop: 0,
+    minHeight: 420, // Asegura espacio mínimo para inputs en pantallas pequeñas
   },
-  
-  // Contenedor de formulario - idéntico a signIn
   formContainer: {
     width: '100%',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingHorizontal: 16, // Igual que signIn
-    paddingVertical: 12,   // Igual que signIn
-    minHeight: undefined,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  
-  // Barra de progreso estática - espaciado compacto
   progressBarMinimalContainer: {
     width: '100%',
     alignItems: 'center',
-    marginTop: 16,   // Espacio reducido arriba
-    marginBottom: 8, // Espacio mínimo antes del scroll
+    marginTop: 16,
+    marginBottom: 8,
     paddingHorizontal: 20,
   },
   progressBarTrack: {
@@ -429,86 +587,70 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#E5E7EB',
   },
-  
-  // Contenido de pasos - igual que signIn
   stepContent: {
     width: '100%',
     alignItems: 'stretch',
     justifyContent: 'flex-start',
-    marginBottom: 12, // Espacio antes de botones
   },
-  
-  // Espaciador inferior
   bottomSpacer: {
-    height: 40, // Reducido para mejor proporción
+    width: '100%',
   },
-  // Área circular completa - height dinámico aplicado inline
-  circularButtonArea: {
+  bottomButtonRowFixed: {
+    width: '100%',
     position: 'absolute',
-    bottom: 0,
     left: 0,
-    right: 0,
+    bottom: 0, // Volver a bottom como footer
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 0,
     zIndex: 10,
   },
-  circularBackground: {
+  bottomSvgFixed: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
+    bottom: 0,
   },
-  rightButtonsContainer: {
-    position: 'absolute',
-    bottom: 100,
-    right: 30,
-    alignItems: 'center',
-  },
-  leftButtonsContainer: {
-    position: 'absolute',
-    bottom: 45,
-    left: 30,
-    alignItems: 'center',
-    gap: 14,
-  },
-
-  continueButton: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  continueButtonDisabled: {
-    opacity: 0.7,
-    backgroundColor: '#F5F5F5',
-  },
-  continueButtonText: {
-    color: '#0A4A90',
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'Nunito-Bold' : Platform.OS === 'android' ? 'Nunito-Bold' : 'Quicksand-Bold',
-  },
-  continueButtonTextDisabled: {
-    color: '#999',
+  buttonRowFixed: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: 30,
+    paddingVertical: 20, // Más padding para subir los botones
+    position: 'relative',
+    zIndex: 11,
   },
   backButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: '#fff',
+    borderRadius: 45, // Circular
+    width: 70,
+    height: 70,
+    borderWidth: 1,
+    borderColor: '#0A4A90',
+    marginRight: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
-
-
+  continueButton: {
+    backgroundColor: '#fff',
+    borderRadius: 40, // Circular
+    width: 80,
+    height: 80,
+    borderWidth: 1,
+    borderColor: '#0A4A90',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+    borderColor: '#E5E7EB',
+  },
+  continueButtonText: {
+    color: '#0A4A90', // Cambiar a azul como el icono
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  continueButtonTextDisabled: {
+    color: '#7AA7D9',
+  },
 });

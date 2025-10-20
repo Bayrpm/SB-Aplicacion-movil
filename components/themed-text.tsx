@@ -1,3 +1,4 @@
+import { Fonts } from '@/constants/theme';
 import { StyleSheet, Text, type TextProps } from 'react-native';
 
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -20,7 +21,7 @@ export function ThemedText({
   return (
     <Text
       style={[
-        { color },
+        { color, fontFamily: (Fonts && Fonts.sans) ? (Fonts as any).sans : undefined },
         type === 'default' ? styles.default : undefined,
         type === 'title' ? styles.title : undefined,
         type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
@@ -28,6 +29,8 @@ export function ThemedText({
         type === 'link' ? styles.link : undefined,
         style,
       ]}
+      // Forzar que no escale por la configuración del sistema y usar nuestra fuente
+      allowFontScaling={false}
       {...rest}
     />
   );

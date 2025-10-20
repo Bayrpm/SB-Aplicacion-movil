@@ -1,12 +1,14 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { Animated, Dimensions, Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { Animated, Platform, StyleSheet, Text, TouchableOpacity, useWindowDimensions } from 'react-native';
 import BaseAuthLayout from '../components/BaseAuthLayout';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
-const { width, height } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const responsive = useResponsiveLayout({ currentStep: 0, keyboardVisible: false, keyboardHeight: 0 });
   
   // Cálculos para botones
   const cardPadding = Math.max(24, Math.round(0.03 * height));
@@ -39,7 +41,7 @@ export default function WelcomeScreen() {
   };
 
   return (
-    <BaseAuthLayout title="Bienvenido" showLogo={true}>
+    <BaseAuthLayout title="Bienvenido" showLogo={true} logoSize={responsive.widthCategory === 'compact' ? 0.72 : 0.60}>
       <Animated.View 
         style={[
           styles.buttonGroup,
@@ -51,14 +53,14 @@ export default function WelcomeScreen() {
           onPress={() => handleNavigation('/(auth)/signIn')}
           activeOpacity={0.8}
         >
-          <Text style={styles.pillButtonText}>Iniciar sesión</Text>
+          <Text allowFontScaling={false} style={[styles.pillButtonText, { fontSize: responsive.fontSize ? responsive.fontSize(18) : Math.max(18, Math.min(20, 0.024 * height)) } ]}>Iniciar sesión</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.pillButton, { height: buttonH, width: buttonW }]}
           onPress={() => handleNavigation('/(auth)/signUp')}
           activeOpacity={0.8}
         >
-          <Text style={styles.pillButtonText}>Registrarse</Text>
+          <Text allowFontScaling={false} style={[styles.pillButtonText, { fontSize: responsive.fontSize ? responsive.fontSize(18) : Math.max(18, Math.min(20, 0.024 * height)) } ]}>Registrarse</Text>
         </TouchableOpacity>
       </Animated.View>
     </BaseAuthLayout>
@@ -84,7 +86,7 @@ const styles = StyleSheet.create({
   },
   pillButtonText: {
     color: '#FFFFFF',
-    fontSize: Math.max(18, Math.min(20, 0.024 * height)),
+    // fontSize dinámico inyectado inline desde el componente para usar useWindowDimensions
     fontWeight: '700',
     letterSpacing: 0.3,
     fontFamily:

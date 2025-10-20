@@ -12,8 +12,10 @@ interface BaseAuthLayoutProps {
   showLogo?: boolean; // mostrar logo o no (default true)
   logoSize?: number; // tamaño del logo dinámico (default 0.60)
   logoInContent?: boolean; // si el logo va dentro del contenido scrollable
+  contentCentered?: boolean; // si el contenido se centra verticalmente dentro de la card (default true)
   cardHeight?: number;
   cardTop?: number;
+  cardBottomPx?: number;
   cardWidth?: number;
   cardPadding?: number;
   hideBottomBand?: boolean; // oculta la banda inferior azul
@@ -26,8 +28,10 @@ export default function BaseAuthLayout({
   showLogo = true,
   logoSize = 0.60,
   logoInContent = false,
+  contentCentered = true,
   cardHeight = 0.44,
   cardTop = 0.30,
+  cardBottomPx,
   cardWidth = 0.84,
   cardPadding = 0.03,
   hideBottomBand = false,
@@ -67,12 +71,22 @@ export default function BaseAuthLayout({
     return d;
   };
 
+
   // Tarjeta blanca centrada
   const cardW = cardWidth * width;
   const cardH = cardHeight * height;
   const cardTopPx = cardTop * height;
   const cardRadius = Math.max(18, Math.round(0.05 * width));
   const cardPaddingPx = Math.max(24, Math.round(cardPadding * height));
+
+  // Detectar si el hijo es RegistrationStep3 (debe ir antes de los estilos que la usan)
+  const isStep3 = React.Children.toArray(children).some(
+    (child: any) => child?.type?.name === 'RegistrationStep3'
+  );
+
+  // No forzar layout especial para Step3, mantener centrado vertical
+  const cardStyleStep3 = {};
+  const contentStyleStep3 = {};
 
   // Cálculos para el logo - dinámico basado en logoSize
   const logoW = showLogo ? logoSize * cardW : 0;
@@ -98,6 +112,7 @@ export default function BaseAuthLayout({
             },
           ]}
           numberOfLines={1}
+          allowFontScaling={false}
         >
           {title}
         </Text>
@@ -110,9 +125,9 @@ export default function BaseAuthLayout({
           {
             width: cardW,
             height: cardH,
-            top: cardTopPx,
             borderRadius: cardRadius,
             padding: cardPaddingPx,
+            ...(typeof cardBottomPx === 'number' ? { bottom: cardBottomPx } : { top: cardTopPx }),
           },
         ]}
       >
@@ -128,9 +143,19 @@ export default function BaseAuthLayout({
         )}
         
         {/* Contenido específico de cada pantalla */}
-        <View style={[styles.contentContainer, { flex: (showLogo && !logoInContent) ? 0.85 : 1, marginTop: (showLogo && !logoInContent) ? -30 : 0 }]}>
+        {/* Si el logo está dentro del contenido (logoInContent), alineamos el contenido al inicio
+            y permitimos overflow para que los inputs no queden cortados en pantallas pequeñas. */}
+        <View
+          style={[
+            styles.contentContainer,
+            (logoInContent ? styles.contentWithLogoInContent : {}),
+            contentCentered
+              ? { flex: (showLogo && !logoInContent) ? 0.85 : 1, marginTop: (showLogo && logoInContent) ? -10 : 0, alignItems: 'center', justifyContent: 'center' }
+              : { flex: 1, alignItems: 'stretch', justifyContent: 'flex-start', marginTop: (showLogo && logoInContent) ? -10 : 0 },
+          ]}
+        >
           {logoInContent && showLogo && (
-            <View style={[styles.logoInContentContainer]}>
+            <View style={[styles.logoInContentContainer, { marginBottom: 2 }]}> 
               <Image
                 source={require('@/assets/images/img_logo.png')}
                 style={[styles.logo, { width: logoW, height: logoH }]}
@@ -212,12 +237,18 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden', // Asegurar que el contenido animado no se sobreponga al logo
+    overflow: 'visible', // Permitimos overflow para que ScrollView y inputs no queden recortados
   },
   logoInContentContainer: {
     width: '100%',
     alignItems: 'center',
     paddingBottom: 20,
     marginTop: -10,
+  },
+  contentWithLogoInContent: {
+    width: '100%',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    overflow: 'visible',
   },
 });
