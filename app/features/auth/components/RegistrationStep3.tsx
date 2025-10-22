@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { registrationStep3Schema } from '../schemas/registration.schema';
 import type { RegistrationStep3Data } from '../types';
@@ -14,15 +14,16 @@ interface RegistrationStep3Props {
 export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }: RegistrationStep3Props) {
   const [email, setEmail] = useState(initialData?.email || '');
   const [password, setPassword] = useState(initialData?.password || '');
+  const passwordRef = useRef<TextInput | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   React.useEffect(() => {
     (global as any).validateStep3 = () => {
       const data = {
-        email: email.trim(),
-        password
-      };
+          email: email.trim(),
+          password,
+        };
       const validation = registrationStep3Schema.safeParse(data);
       if (!validation.success) {
         const fieldErrors: Record<string, string> = {};
@@ -34,6 +35,12 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
         setErrors(fieldErrors);
         if ((global as any).setStep3Errors) {
           (global as any).setStep3Errors(fieldErrors);
+        }
+        // Si hay errores relacionados con la contraseña, enfocar el input para que
+        // el usuario vea rápidamente los requisitos incumplidos.
+        const hasPasswordError = validation.error.errors.some(e => e.path[0] === 'password');
+        if (hasPasswordError) {
+          try { passwordRef.current?.focus(); } catch (e) { /* noop */ }
         }
         return false;
       }
@@ -54,7 +61,8 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
 
   const minLength = 8;
   const hasMinLength = password.length >= minLength;
-  const hasNumber = /\d/.test(password);
+  const digitMatches = password.match(/\d/g) || [];
+  const hasTwoNumbers = digitMatches.length >= 2;
   const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
 
   const passwordRules: { label: string; valid: boolean }[] = [
@@ -63,8 +71,8 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
       valid: hasMinLength,
     },
     {
-      label: 'Al menos un número',
-      valid: hasNumber,
+      label: 'Al menos 2 números',
+      valid: hasTwoNumbers,
     },
     {
       label: 'Al menos un carácter especial',
@@ -86,8 +94,11 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
           autoComplete="email"
           placeholderTextColor="#999"
           onFocus={() => {
-            if (typeof (global as any).handleInputFocus === 'function') {
-              (global as any).handleInputFocus('email');
+            // No disparar el handler global aquí para evitar el scroll automático
+            // cuando el usuario solo toca el campo email.
+            // Si el contenedor exterior necesita una notificación, usará la prop onInputFocus.
+            if (typeof onInputFocus === 'function') {
+              onInputFocus('email');
             }
           }}
           onBlur={() => (global as any).handleInputBlur?.()}
@@ -99,9 +110,10 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
 
       <View style={styles.inputSection}>
         <Text style={styles.label}>Contraseña</Text>
-        <View style={styles.passwordContainer}>
+        <View style={[styles.passwordContainer, errors.password && styles.inputError]}>
           <TextInput
-            style={[styles.passwordInput, errors.password && styles.inputError]}
+            ref={passwordRef}
+            style={[styles.passwordInput]}
             value={password}
             onChangeText={setPassword}
             placeholder="Tu contraseña"
@@ -109,6 +121,7 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
             autoCapitalize="none"
             autoComplete="new-password"
             placeholderTextColor="#999"
+            underlineColorAndroid="transparent"
             onFocus={() => {
               if (typeof (global as any).handleInputFocus === 'function') {
                 (global as any).handleInputFocus('password');
@@ -156,6 +169,7 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
             </View>
           ))}
         </View>
+        {/* confirmPassword removed by request; only email + password remain */}
       </View>
     </View>
   );
@@ -201,6 +215,8 @@ const styles = StyleSheet.create({
   inputError: {
     borderColor: '#EF4444',
     backgroundColor: '#FEF2F2'
+    ,
+    borderRadius: 12
   },
   errorText: {
     color: '#EF4444',

@@ -51,20 +51,21 @@ export function useSmartScroll({
       // Paso 3: Email, contraseña, confirmar contraseña - Scroll optimizado por tamaño de pantalla
       const spacerOffset = getSpacerOffset(); // Compensar el paddingTop
       const inputSectionHeight = 22 + 50 + 16; // label + input + margin = 88px
-      const safetyMargin = height * (isLargeScreen ? 0.01 : 0.015); // Menos margen en pantallas grandes
-      
+      // Hacer el scroll para contraseña mucho más conservador: reducir multiplicador y margen
+      const safetyMargin = height * (isLargeScreen ? 0.006 : 0.005);
+
       if (activeInput === 'email') {
-        return spacerOffset; // Posición natural del contenido
+        return 0; // No hacer scroll cuando el email recibe el foco
       } else if (activeInput === 'password') {
-        // Scroll moderado, más conservador en pantallas grandes
-        const scrollForPassword = (inputSectionHeight * 0.6) * scrollReductionFactor;
-        return Math.round(spacerOffset + scrollForPassword + safetyMargin);
-      } else if (activeInput === 'confirmPassword') {
-        // Scroll más agresivo para confirmar contraseña, especialmente en large
-        const baseScroll = isLargeScreen ? 2.2 : 1.8; // Más scroll para mostrar input completo
-        const scrollForConfirm = (inputSectionHeight * baseScroll) * scrollReductionFactor;
-        const extraMargin = height * 0.02; // Margen adicional para el teclado
-        return Math.round(spacerOffset + scrollForConfirm + extraMargin);
+        // Scroll muy conservador para contraseña: base 0.10
+        const scrollForPassword = (inputSectionHeight * 0.10) * scrollReductionFactor;
+        const desired = Math.round(spacerOffset + scrollForPassword + safetyMargin);
+        // Limitar el desplazamiento máximo para evitar movimientos agresivos (4% de la altura)
+        const maxAllowed = Math.round(spacerOffset + height * 0.04);
+        // Aplicar reducción final del 20% para atenuar movimientos
+        const reducedDesired = Math.round(desired * 0.80);
+        const reducedMax = Math.round(maxAllowed * 0.80);
+        return Math.min(reducedDesired, reducedMax);
       }
     }
     return 0;

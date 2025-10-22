@@ -1,8 +1,11 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
 import { Alert, Animated, Dimensions, Image, Keyboard, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { signInUser } from '../api/auth.api';
 import BaseAuthLayout from '../components/BaseAuthLayout';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const { width, height } = Dimensions.get('window');
 
@@ -197,8 +200,15 @@ export default function SignInScreen() {
     
     setIsLoading(true);
     try {
-      await signInUser(email, password);
-      // Animación de salida rápida antes de navegar al dashboard
+      const result = await signInUser(email, password);
+      if (result.error) {
+        // Mostrar el mensaje de error retornado por la API
+        const message = result.error.message || 'Credenciales incorrectas';
+        Alert.alert('Error', message);
+        setIsLoading(false);
+        return;
+      }
+      // Animación de salida rápida (opcional) y dejar que el layout principal redirija
       Animated.parallel([
         Animated.timing(screenFadeAnim, {
           toValue: 0,
@@ -211,14 +221,13 @@ export default function SignInScreen() {
           useNativeDriver: true,
         }),
       ]).start(() => {
-        // Solo navegar si el login fue exitoso
-        router.push('/(tabs)' as any);
+        // No navegar manualmente, el layout principal lo hará automáticamente
       });
     } catch (error) {
-      // En caso de error, resetear animación y mostrar mensaje
-      screenFadeAnim.setValue(1);
+      // En caso de error inesperado
+      console.error('Error al iniciar sesión:', error);
+      Alert.alert('Error', 'Ocurrió un error al iniciar sesión');
       setIsLoading(false);
-      Alert.alert('Error', 'Credenciales incorrectas');
     }
   };
 
@@ -251,9 +260,11 @@ export default function SignInScreen() {
   };
 
   // Dimensiones de card y elementos internos
-  const baseCardHeight = step === 1 ? 0.45 : 0.55;
+  // Ajuste por pedido: step 1 más compacto (0.38), step 2 más alto (0.48)
+  const baseCardHeight = step === 1 ? 0.38 : 0.48;
   const baseCardTop = 0.30;
   const currentCardHeight = baseCardHeight * height;
+  const isSmall = height < 700;
   const cardW = 0.84 * width;
   const cardPaddingPx = Math.max(24, Math.round(0.03 * height));
   const safeContentW = cardW - cardPaddingPx * 2;
@@ -263,50 +274,115 @@ export default function SignInScreen() {
   // Tamaños fijos objetivo con clamp para evitar desbordes laterales
   const targetFieldW = 280;
   const fieldW = Math.min(targetFieldW, Math.max(240, safeFieldW));
+  // Ensure field width never exceeds the available screen width minus margins
+  // Allow slightly larger effective width while keeping small margins
+  const effectiveFieldW = Math.min(fieldW, Math.round(width - 24));
+  // Final defensive clamp: ensure not wider than card inner safe field width
+  const finalFieldW = Math.min(effectiveFieldW, safeFieldW, Math.round(width * 0.94));
   const buttonW = fieldW; // Botones e inputs comparten ancho visual fijo (con clamp)
   const buttonH = 56; // Altura fija para botones
 
-  // Card dinámica con teclado: scroll + mayor crecimiento para password
-  const cardHeightProp = keyboardVisible 
-    ? (step === 1 
-        ? Math.min(0.60, baseCardHeight + 0.05)  // Email: expansión mínima
-        : Math.min(0.65, baseCardHeight + 0.08)) // Password: expansión mayor
+  // Card dinámica: mover la card más arriba y hacerla un poco más alta en step 2 cuando el teclado está visible
+  const cardHeightProp = (step === 2 && keyboardVisible)
+    ? Math.min(isSmall ? 0.78 : 0.70, baseCardHeight + (isSmall ? 0.18 : 0.12)) // más espacio en pantallas pequeñas
     : baseCardHeight;
-  const cardTopProp = keyboardVisible 
-    ? (step === 1 
-        ? Math.max(0.28, baseCardTop - 0.1)     // Email: subida mínima
-        : Math.max(0.24, baseCardTop - 0.08))   // Password: más crecimiento hacia arriba
-    : baseCardTop;
+  // Move the card upwards on SignIn by a fixed extra fraction so it sits higher
+  // across both steps (improves visibility of inputs). Extra is 5% of screen.
+  const extraUp = 0.05; // 5% of screen height
+  const cardTopProp = Math.max(0, baseCardTop - extraUp);
+
+  // Ensure the card never overflows the bottom edge: compute an adjusted cardHeight fraction
+  const minBottomGapPx = Math.round(Math.max(44, height * 0.04)); // visible margin under the card
+  const maxAllowedCardHeight = Math.max(0.2, (1 - minBottomGapPx / height) - cardTopProp);
+  let adjustedCardHeightProp = Math.min(cardHeightProp, maxAllowedCardHeight);
+
+  // Reserve space for the bottom footer (SVG + buttons). Use conservative estimates so card never goes underneath.
+  const estimatedSvgHeight = keyboardVisible ? Math.round(height * 0.12) : Math.round(height * 0.26);
+  const estimatedButtonsHeight = Math.round(height * 0.82); // conservative buttons area
+  const footerReservePx = estimatedSvgHeight + estimatedButtonsHeight + minBottomGapPx;
+
+  // Compute card bottom in px and cap adjustedCardHeightProp if it would collide with footerReservePx
+  const cardTopPx = Math.round(cardTopProp * height);
+  const desiredCardHeightPx = Math.round(adjustedCardHeightProp * height);
+  const maxCardHeightPx = Math.max(0, height - footerReservePx - cardTopPx);
+  if (desiredCardHeightPx > maxCardHeightPx) {
+    // reduce adjustedCardHeightProp to fit but never below the configured base
+    // card height for the current step (so we don't accidentally inflate the
+    // card on step 1 to a larger fixed minimum).
+    adjustedCardHeightProp = Math.max(baseCardHeight, maxCardHeightPx / height);
+  }
 
   // Logo dentro del ScrollView para que se mueva junto con inputs
   const logoW = Math.min(safeContentW, 0.60 * cardW);
   const logoH = 0.15 * currentCardHeight;
 
   const measureAndScrollTo = (inputRef: React.RefObject<TextInput | null>) => {
+    // Only attempt programmatic scroll when keyboard is visible and for password (step 2).
+    if (!keyboardVisible) return;
+    if (step === 1) return; // Do not auto-scroll for email to avoid undesired jumps
+
     // Esperar al layout/teclado
     setTimeout(() => {
-      // GAP diferenciado: email necesita menos scroll, password necesita scroll extremo
-      const GAP = step === 1 ? 20 : 150; // px - email: mínimo, password: extremadamente agresivo
+      // GAP moderado para password: depende del tamaño de pantalla
+      const GAP = isSmall ? 70 : 90; // px
       const windowH = height;
       const kbdTop = windowH - keyboardHeight;
-      
+
       inputRef.current?.measureInWindow?.((x, y, w, h) => {
         const inputBottom = y + h;
         const desiredBottom = kbdTop - GAP;
         const delta = inputBottom - desiredBottom; // positivo: falta subir; negativo: sobra
-        
-        if (Math.abs(delta) > 1) {
+
+        // Require a small threshold to avoid micro-jumps
+        if (Math.abs(delta) > 4) {
           const nextY = Math.max(0, scrollYRef.current + delta);
           scrollYRef.current = nextY;
-          // Scroll más rápido: sin animación para respuesta inmediata
-          scrollViewRef.current?.scrollTo({ y: nextY, animated: false });
+          // Animate the scroll for smoother UX
+          scrollViewRef.current?.scrollTo({ y: nextY, animated: true });
         }
       });
-    }, 10); // Timeout ultra reducido para animación súper rápida
+    }, 30);
   };
 
-  const handleEmailFocus = () => measureAndScrollTo(emailInputRef);
+  // Email focus: only scroll up if the input is being occluded by the keyboard (never scroll down towards the footer)
+  const emailMeasureScrollUp = (inputRef: React.RefObject<TextInput | null>) => {
+    if (!keyboardVisible) return;
+    // Small delay to allow layout to settle
+    setTimeout(() => {
+      const kbdTop = height - keyboardHeight;
+      inputRef.current?.measureInWindow?.((x, y, w, h) => {
+        const inputBottom = y + h;
+        // If input bottom is below keyboard top, compute delta to move it just above keyboard
+        if (inputBottom > kbdTop) {
+          const desiredBottom = kbdTop - 18; // small margin above keyboard
+          const delta = inputBottom - desiredBottom;
+          // Only act on meaningful occlusions
+          if (delta > 6) {
+            // Cap the upward scroll when on email so the card doesn't jump too far
+            const maxEmailScroll = Math.round(height * 0.10); // allow only up to ~10% of screen on email
+            const desiredNext = scrollYRef.current + delta;
+            // Only scroll upwards (increase y). Never reduce scrollY (no push down).
+            if (desiredNext > scrollYRef.current) {
+              const nextY = Math.max(0, Math.min(desiredNext, scrollYRef.current + maxEmailScroll));
+              scrollYRef.current = nextY;
+              scrollViewRef.current?.scrollTo({ y: nextY, animated: true });
+            }
+          }
+        }
+      });
+    }, 30);
+  };
+  
+  const handleEmailFocus = () => emailMeasureScrollUp(emailInputRef);
   const handlePasswordFocus = () => measureAndScrollTo(passwordInputRef);
+
+  // Spacer above content: keep small on step 1 to avoid pushing logo/inputs down
+  // when the keyboard appears. Step 2 can use a slightly larger spacer to allow
+  // password animations room.
+  const topSpacer = step === 2 ? (keyboardVisible ? (isSmall ? 12 : 36) : 20) : 12;
+
+  // keep responsiveLayout object for footer math
+  const responsiveLayout = useResponsiveLayout({ currentStep: step, keyboardVisible, keyboardHeight, hasErrors: false });
 
 
 
@@ -315,26 +391,34 @@ export default function SignInScreen() {
       <BaseAuthLayout 
         title="Bienvenido" 
         showLogo={false}
-        cardHeight={cardHeightProp}
+        cardHeight={adjustedCardHeightProp}
         cardTop={cardTopProp}
+        contentCentered={false}
+        hideBottomBand={true}
       >
         <View style={styles.formContainer}>
         {/* Solo inputs hacen scroll; logo fijo visible en la card */}
-        <ScrollView
+          <ScrollView
           ref={scrollViewRef}
           style={[styles.inputScroll, keyboardVisible && { maxHeight: height * 0.45 }]}
           contentContainerStyle={[
-            styles.inputScrollContent, 
-            keyboardVisible ? { paddingBottom: 160 } : { paddingBottom: 10 } // Más padding para permitir scroll
+            styles.inputScrollContent,
+            // dynamic padding so there's always room to scroll content above the keyboard
+            keyboardVisible
+              ? { paddingBottom: Math.max(minBottomGapPx, keyboardHeight + minBottomGapPx) }
+              : { paddingBottom: 10 }
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          scrollEnabled={false}
+          // Allow scrolling only when the keyboard is visible so we can nudge
+          // content upwards for occluded inputs without enabling free scroll
+          // in the rest of the UI.
+          scrollEnabled={keyboardVisible}
           bounces={false}
 
         >
-        {/* Espacio superior para permitir scroll hacia arriba */}
-        <View style={{ height: keyboardVisible ? 100 : 20 }} />
+  {/* Espacio superior para permitir scroll hacia arriba */}
+  <View style={{ height: topSpacer }} />
         
         {/* Logo que se mueve junto con inputs */}
         <View style={styles.logoBlock}>
@@ -358,18 +442,22 @@ export default function SignInScreen() {
             // Paso 1: Email
             <>
               <Text style={styles.label}>Correo electrónico</Text>
-              <TextInput
-                ref={emailInputRef}
-                style={[styles.input, { width: fieldW }]}
-                placeholder="ejemplo@correo.com"
-                value={email}
-                onChangeText={setEmail}
-                onFocus={handleEmailFocus}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                placeholderTextColor="#999"
-              />
+              <View style={{ width: finalFieldW, alignSelf: 'center' }}>
+                <TextInput
+                  ref={emailInputRef}
+                  style={[styles.input, { width: '100%' }]}
+                  placeholder="ejemplo@correo.com"
+                  value={email}
+                  onChangeText={setEmail}
+                  onFocus={handleEmailFocus}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  allowFontScaling={false}
+                  multiline={false}
+                  placeholderTextColor="#999"
+                />
+              </View>
             </>
           ) : (
             // Paso 2: Password con animaciones en cascada
@@ -393,7 +481,8 @@ export default function SignInScreen() {
                 style={[
                   styles.passwordContainer, 
                   { 
-                    width: fieldW,
+                    width: finalFieldW,
+                    alignSelf: 'center',
                     opacity: passwordInputAnim,
                     transform: [{
                       translateY: passwordInputAnim.interpolate({
@@ -406,24 +495,28 @@ export default function SignInScreen() {
               >
                 <TextInput
                   ref={passwordInputRef}
-                  style={styles.passwordInput}
-                  placeholder="Ingresa tu contraseña"
+                  style={[styles.passwordInput, { paddingRight: 52, paddingLeft: 12 }]}
+                  placeholder="Contraseña"
                   value={password}
                   onChangeText={setPassword}
                   onFocus={handlePasswordFocus}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  allowFontScaling={false}
+                  multiline={false}
                   placeholderTextColor="#999"
                 />
                 <TouchableOpacity
-                  style={styles.showPasswordButton}
+                  style={[styles.showPasswordButton, { position: 'absolute', right: 12 }]}
                   onPress={() => setShowPassword(!showPassword)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.showPasswordText}>
-                    {showPassword ? 'Ocultar' : 'Mostrar'}
-                  </Text>
+                  <Ionicons
+                    name={showPassword ? 'eye-off' : 'eye'}
+                    size={22}
+                    color="#0A4A90"
+                  />
                 </TouchableOpacity>
               </Animated.View>
             </>
@@ -431,43 +524,72 @@ export default function SignInScreen() {
         </Animated.View>
         </ScrollView>
 
-  {/* Botones fijos, fuera del scroll de inputs */}
-  <Animated.View 
-    style={[
-      styles.buttonGroup,
-      { opacity: buttonFadeAnim }
-    ]}
-  >
+  
+        </View>
+      </BaseAuthLayout>
+  {/* Footer SVG + botones (misma apariencia que SignUp) - colocado fuera de la card */}
+  {(() => {
+    const svgHeight = keyboardVisible ? Math.round(height * 0.12) : Math.round(height * 0.26);
+    const continueSize = responsiveLayout.buttonSize ? responsiveLayout.buttonSize(80) : Math.round(width * 0.16);
+    const backSize = responsiveLayout.buttonSize ? responsiveLayout.buttonSize(50) : Math.round(width * 0.10);
+    const continueIcon = Math.round(continueSize * (responsiveLayout.iconRatio ?? 0.42));
+    const backIcon = Math.round(backSize * (responsiveLayout.iconRatio ?? 0.42));
+    const backTranslate = responsiveLayout.getBackTranslate ? responsiveLayout.getBackTranslate(svgHeight) : Math.round(svgHeight * 0.12 + height * 0.015);
+    const minTranslate = -Math.round(height * 0.02);
+    const requestedDown = Math.round(svgHeight * 0.30);
+    const maxTranslate = Math.round(Math.max(svgHeight * 0.15, requestedDown));
+    const backTranslateClamped = responsiveLayout.clamp ? responsiveLayout.clamp(backTranslate, minTranslate, maxTranslate) : Math.max(minTranslate, Math.min(backTranslate, maxTranslate));
+    const continueTranslate = (() => {
+      try {
+        const desired = Math.round(height * 0.02);
+        const maxAllowed = Math.round(svgHeight * 0.25);
+        return responsiveLayout.clamp ? responsiveLayout.clamp(desired, 0, maxAllowed) : Math.max(0, Math.min(desired, maxAllowed));
+      } catch (e) {
+        return Math.round(height * 0.02);
+      }
+    })();
+    return (
+      <View style={[styles.bottomButtonRowFixed, { paddingBottom: height < 700 ? 8 : 0 }]}> 
+        <Svg width={'100%'} height={svgHeight} viewBox={`0 -30 1000 170`} preserveAspectRatio="none" style={styles.bottomSvgFixed}>
+          <Path
+            d={`M 0 70 Q 400 -30 1000 0 L 1000 ${svgHeight} L 0 ${svgHeight} Z`}
+            fill="#0A4A90"
+          />
+        </Svg>
+        <View style={[styles.buttonRowFixed, { position: 'absolute', left: 0, right: 0, bottom: Math.round(svgHeight * (height < 700 ? 0.20 : 0.28)) + Math.round(height * 0.02) }]}> 
           <TouchableOpacity
-            style={[
-              styles.pillButton, 
-              { 
-                height: buttonH, 
-                width: buttonW,
-                opacity: isLoading ? 0.6 : 1
-              }
-            ]}
-            onPress={handleNext}
-            activeOpacity={0.8}
-            disabled={isLoading}
-          >
-            <Text style={styles.pillButtonText}>
-              {step === 1 ? 'Siguiente' : isLoading ? 'Iniciando...' : 'Iniciar sesión'}
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.secondaryButton, { height: buttonH - 8, width: buttonW }]}
+            style={[styles.backButton, { width: backSize, height: backSize, borderRadius: Math.round(backSize / 2), marginBottom: 0, transform: [{ translateY: backTranslateClamped }] }]}
             onPress={handleBack}
             activeOpacity={0.8}
           >
-            <Text style={styles.secondaryButtonText}>
-              {step === 1 ? 'Volver' : 'Cambiar correo'}
+            <Ionicons name="arrow-back" size={backIcon} color="#0A4A90" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              { width: continueSize, height: continueSize, borderRadius: Math.round(continueSize / 2) },
+              isLoading && styles.continueButtonDisabled,
+              { marginBottom: 0, transform: [{ translateY: continueTranslate }] },
+            ]}
+            onPress={handleNext}
+            activeOpacity={isLoading ? 1 : 0.8}
+            disabled={isLoading}
+          >
+            <Text
+              allowFontScaling={false}
+              style={[
+                styles.continueButtonText,
+                { fontSize: Math.min(Math.max(14, Math.round(continueSize * 0.18)), 18) },
+                isLoading && styles.continueButtonTextDisabled,
+              ]}
+            >
+              {isLoading ? '...' : step === 1 ? 'Siguiente' : 'Iniciar sesión'}
             </Text>
           </TouchableOpacity>
-          </Animated.View>
         </View>
-      </BaseAuthLayout>
+      </View>
+    );
+  })()}
     </Animated.View>
   );
 }
@@ -536,7 +658,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 50,
-    paddingRight: 4,
+    paddingRight: 2, // espacio extra para el icono y evitar recorte del texto
   },
   passwordInput: {
     flex: 1,
@@ -544,7 +666,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     color: '#333',
-    minHeight: 50,
+    minHeight: 56,
+    lineHeight: 20,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   showPasswordButton: {
     paddingHorizontal: 12,
@@ -616,5 +741,68 @@ const styles = StyleSheet.create({
   logoBlock: {
     alignItems: 'center',
     marginBottom: 20,
+  },
+  bottomSpacer: {
+    width: '100%',
+  },
+  bottomButtonRowFixed: {
+    width: '100%',
+    position: 'absolute',
+    left: 0,
+    bottom: 0, // Volver a bottom como footer
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 0,
+    zIndex: 10,
+  },
+  bottomSvgFixed: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+  },
+  buttonRowFixed: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingHorizontal: 30,
+    paddingVertical: 20, // Más padding para subir los botones
+    position: 'relative',
+    zIndex: 11,
+  },
+  backButton: {
+    backgroundColor: '#fff',
+    borderRadius: 45, // Circular
+    width: 70,
+    height: 70,
+    borderWidth: 1,
+    borderColor: '#0A4A90',
+    marginRight: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueButton: {
+    backgroundColor: '#fff',
+    borderRadius: 40, // Circular
+    width: 80,
+    height: 80,
+    borderWidth: 1,
+    borderColor: '#0A4A90',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+    borderColor: '#E5E7EB',
+  },
+  continueButtonText: {
+    color: '#0A4A90', // Cambiar a azul como el icono
+    fontWeight: 'bold',
+    fontSize: 16,
+    textAlign: 'center',
+    alignSelf: 'center',
+  },
+  continueButtonTextDisabled: {
+    color: '#7AA7D9',
   },
 });

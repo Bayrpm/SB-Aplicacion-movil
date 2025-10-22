@@ -6,10 +6,12 @@ export function useActiveInput() {
   // Configurar funciones globales para comunicación con componentes de input
   React.useEffect(() => {
     (global as any).handleInputFocus = (inputName: string) => {
+      // focus received
       setActiveInput(inputName);
     };
     
     (global as any).handleInputBlur = () => {
+      // blur received
       setActiveInput(null);
     };
 

@@ -2,10 +2,11 @@
 import React, { useState } from 'react';
 import { Alert } from 'react-native';
 import { createCitizenProfile, signUpUser } from '../api/auth.api';
+import { registrationStep3Schema } from '../schemas/registration.schema';
 import type {
-  RegistrationStep1Data,
-  RegistrationStep2Data,
-  RegistrationStep3Data
+    RegistrationStep1Data,
+    RegistrationStep2Data,
+    RegistrationStep3Data
 } from '../types';
 
 export function useRegistration() {
@@ -52,6 +53,25 @@ export function useRegistration() {
     setLoading(true);
     
     const { step1, step2 } = registrationData;
+
+    // Validación extra en el cliente: asegurarnos de que la contraseña cumple
+    // los requisitos antes de enviar al backend. Defensa en profundidad.
+    try {
+      const validation = registrationStep3Schema.safeParse({ email: step3Data.email, password: step3Data.password });
+      if (!validation.success) {
+        // Construir mensaje concatenado de errores relevantes
+        const msgs: string[] = [];
+        validation.error.errors.forEach((err) => {
+          if (err.message) msgs.push(err.message);
+        });
+        const message = msgs.length > 0 ? msgs.join('\n') : 'La contraseña no cumple los requisitos';
+        Alert.alert('Error en la contraseña', message);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      // Si algo raro ocurre, no bloquear por error de validación local; continuar y dejar que el backend valide
+    }
 
     if (!step1 || !step3Data) {
       Alert.alert('Error en el registro', 'Datos de registro incompletos');

@@ -33,13 +33,10 @@ export const registrationStep3Schema = z.object({
   password: z
     .string()
     .min(8, 'La contraseña debe tener al menos 8 caracteres')
-    .regex(/[A-Z]/, 'Debe contener al menos una mayúscula')
-    .regex(/[a-z]/, 'Debe contener al menos una minúscula')
-    .regex(/[0-9]/, 'Debe contener al menos un número'),
-  confirmPassword: z.string().min(1, 'Confirma tu contraseña'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: 'Las contraseñas no coinciden',
-  path: ['confirmPassword'],
+    // Al menos 2 dígitos
+    .regex(/(?=(.*\d){2,})/, 'Debe contener al menos 2 números')
+    // Al menos 1 carácter especial
+    .regex(/[!@#$%^&*(),.?":{}|<>]/, 'Debe contener al menos un carácter especial'),
 });
 
 export type RegistrationStep1Form = z.infer<typeof registrationStep1Schema>;

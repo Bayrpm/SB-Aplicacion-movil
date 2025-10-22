@@ -99,6 +99,12 @@ export default function SignUpScreen() {
   });
 
   const { widthCategory, heightCategory, cardHeight, cardTop, titleTop, spacingConfig } = responsiveLayout;
+  // Top ratio para Step3 sensible al tamaño de pantalla: no tocará teléfonos pequeños
+  const step3TopRatio = React.useMemo(() => {
+    if (height < 700) return 0.04; // phones pequeños (mantener lo bueno)
+    if (height < 900) return 0.07; // tablets pequeñas / phablets
+    return 0.14; // pantallas más grandes: bajar la card un poco más
+  }, [height]);
   // Ajuste conservador de la altura de la card en píxeles para asegurarnos
   // de que los inputs (especialmente en Step 1) se muestren completos al cargar.
   // No tocamos el scroll; en su lugar hacemos que la tarjeta sea más alta si hace falta.
@@ -131,9 +137,9 @@ export default function SignUpScreen() {
       // SOLO Step3: altura máxima = espacio entre top 4% y bottom 8% de la pantalla
       let finalRatio = baseRatio;
       if (currentStep === 3) {
-        // Make Step3 responsive: reserve top and bottom gaps and compute available space
-        const reservedTopPx = Math.round(height * 0.10); // 10% reserved at top
-        const reservedBottomPx = Math.round(height * 0.30); // 30% reserved at bottom
+  // Make Step3 responsive: reserve top and bottom gaps and compute available space
+  const reservedTopPx = Math.round(height * step3TopRatio);
+  const reservedBottomPx = Math.round(height * 0.30); // 30% reserved at bottom
         const availablePx = Math.max(0, height - reservedTopPx - reservedBottomPx);
         const maxRatioFromAvailable = availablePx / height;
         const capRatio = Math.min(maxRatioFromAvailable, 0.68); // hard cap
@@ -166,6 +172,9 @@ export default function SignUpScreen() {
     getCardHeight,
   });
 
+  // Debug refs to inspect scroll behavior and sizes
+  // Debug helpers removed after confirmation
+
   // Asegurar que la card nunca llegue hasta el borde inferior: calcular un cardTop ajustado
   const adjustedCardTop = React.useMemo(() => {
     try {
@@ -183,8 +192,8 @@ export default function SignUpScreen() {
         return newTopPx / height;
       }
       if (currentStep === 3) {
-        // Top fijo en 10% de la pantalla para posicionar la card un poco más abajo
-        return Math.round(height * 0.10) / height;
+        // Top fijo responsivo según tamaño
+        return step3TopRatio;
       }
       return desiredRatio;
     } catch (e) {
@@ -353,15 +362,16 @@ export default function SignUpScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         {currentStep === 3 ? (
-      <BaseAuthLayout
+          <BaseAuthLayout
             title=""
             showLogo={true}
             logoSize={widthCategory === 'compact' ? 0.72 : 0.60}
-            // En Step3 queremos que 0.64 sea un tope máximo (un poco más alta)
-            cardHeight={Math.min(adjustedCardHeight, 0.64)}
-            cardTop={adjustedCardTop}
-            // Aumentar el espacio inferior reservado para Step3 para elevar la card
-            cardBottomPx={currentStep === 3 ? Math.round(height * 0.34) : undefined}
+            // Forzar un top ligeramente superior para Step3 (4%) para mover la card hacia arriba
+            // Reducir la altura de la card en 3% para Step3 (ajuste solicitado)
+            cardHeight={Math.max(0.05, adjustedCardHeight - 0.03)}
+            cardTop={step3TopRatio}
+            // No usar cardBottomPx en Step3: preferimos posicionar la card por `cardTop`
+            cardBottomPx={undefined}
             hideBottomBand={true}
             logoInContent={true}
             contentCentered={false}
@@ -376,17 +386,21 @@ export default function SignUpScreen() {
               <Animated.View style={[styles.stepContent, { opacity: fadeAnim, width: '100%', maxWidth: 420 }]}> 
                 <ScrollView
                   ref={scrollViewRef}
-                  scrollEnabled={true}
+                  // Deshabilitar scroll manual mientras el teclado esté visible
+                  scrollEnabled={!keyboardVisible}
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={{
                     minHeight: '100%',
                     flexGrow: 1,
-                    paddingBottom: 0,
+                    // Añadir padding dinámico cuando el teclado está visible para
+                    // asegurar que el ScrollView sea desplazable y permitir scrollTo
+                    paddingBottom: keyboardVisible ? Math.max(24, keyboardHeight + 24) : 0,
                     marginBottom: 0,
                     paddingHorizontal: 8,
                     alignItems: 'stretch',
                   }}
                   keyboardShouldPersistTaps="handled"
+                  scrollEventThrottle={16}
                 >
                   <RegistrationStep3 
                     onNext={saveStep3Data}
@@ -419,30 +433,52 @@ export default function SignUpScreen() {
                 {currentStep === 1 ? (
                   <ScrollView
                     ref={scrollViewRef}
-                    scrollEnabled={true}
+                    // Deshabilitar scroll manual mientras el teclado esté visible
+                    // (cuando keyboardVisible=false, mantenemos false por diseño de Step1)
+                    scrollEnabled={!keyboardVisible}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{
                       flexGrow: 1,
-                      paddingBottom: 8,
+                      paddingBottom: keyboardVisible ? Math.max(24, keyboardHeight + 24) : 8,
                       paddingHorizontal: 8,
                       alignItems: 'center',
                     }}
                     keyboardShouldPersistTaps="handled"
+                    scrollEventThrottle={16}
                   >
                     <RegistrationStep1 
                       onNext={saveStep1Data} 
                       onCancel={handleBack}
                       initialData={getStep1Data()}
                       onInputFocus={(inputName) => {
-                        if (inputName === 'apellido' && keyboardVisible) {
-                          setTimeout(() => {
-                            try {
-                              if (scrollViewRef && scrollViewRef.current && typeof getScrollPosition === 'function') {
-                                const y = getScrollPosition();
-                                scrollViewRef.current.scrollTo({ y, animated: true });
-                              }
-                            } catch (e) {}
-                          }, 120);
+                        if (inputName === 'apellido') {
+                          // Si el teclado ya está visible, scroll inmediato (con pequeño debounce)
+                          if (keyboardVisible) {
+                            setTimeout(() => {
+                              try {
+                                if (scrollViewRef && scrollViewRef.current && typeof getScrollPosition === 'function') {
+                                  const y = getScrollPosition();
+                                  // requesting scroll for apellido
+                                  scrollViewRef.current.scrollTo({ y, animated: true });
+                                }
+                              } catch (e) {}
+                            }, 120);
+                          } else {
+                            // Si el teclado aún no está visible, programar un intento tras un delay
+                            // para cubrir casos en que keyboardDidShow se dispara después del focus.
+                            const fallbackTimer = setTimeout(() => {
+                              try {
+                                if (scrollViewRef && scrollViewRef.current && typeof getScrollPosition === 'function') {
+                                  const y = getScrollPosition();
+                                  // fallback requesting scroll for apellido
+                                  scrollViewRef.current.scrollTo({ y, animated: true });
+                                }
+                              } catch (e) {}
+                            }, 360);
+                            // Limpiar el timeout si más tarde el teclado aparece y se ejecuta el efecto
+                            // (no hacemos seguimiento extra aquí; el timeout es de corta duración)
+                            setTimeout(() => clearTimeout(fallbackTimer), 1000);
+                          }
                         }
                       }}
                     />

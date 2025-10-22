@@ -79,6 +79,7 @@ export default function BaseAuthLayout({
   const cardRadius = Math.max(18, Math.round(0.05 * width));
   const cardPaddingPx = Math.max(24, Math.round(cardPadding * height));
 
+
   // Detectar si el hijo es RegistrationStep3 (debe ir antes de los estilos que la usan)
   const isStep3 = React.Children.toArray(children).some(
     (child: any) => child?.type?.name === 'RegistrationStep3'
