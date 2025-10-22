@@ -25,3 +25,7 @@ export interface CompleteRegistrationData
   extends RegistrationStep1Data, 
           RegistrationStep2Data, 
           RegistrationStep3Data {}
+
+// Default export to satisfy expo-router scanning
+const _typesPlaceholder = {} as const;
+export default _typesPlaceholder;

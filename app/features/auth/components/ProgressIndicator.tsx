@@ -54,3 +54,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
   },
 });
+
+// Default export for expo-router route detection (these components are used as named exports elsewhere)
+export default ProgressIndicator;

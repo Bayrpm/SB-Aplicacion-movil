@@ -354,3 +354,5 @@ export function useResponsiveLayout({
     getBackTranslate,
   };
 }
+
+export default useResponsiveLayout;

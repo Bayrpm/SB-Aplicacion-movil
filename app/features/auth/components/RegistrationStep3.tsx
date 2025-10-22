@@ -272,3 +272,6 @@ const styles = StyleSheet.create({
   flexShrink: 1
   }
 });
+
+// Default export for expo-router route detection
+export default RegistrationStep3;

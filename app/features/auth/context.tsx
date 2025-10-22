@@ -49,3 +49,6 @@ export function useAuth() {
   }
   return context;
 }
+
+// Default export to satisfy expo-router file scan (not used as a page)
+export default AuthProvider;

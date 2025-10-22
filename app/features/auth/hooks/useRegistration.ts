@@ -236,3 +236,5 @@ export function useRegistration() {
     getStep3Data,
   };
 }
+
+export default useRegistration;

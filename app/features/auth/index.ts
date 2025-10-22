@@ -24,3 +24,8 @@ export * from './types';
 
 // Schemas
 export * from './schemas/registration.schema';
+
+// Default export to satisfy expo-router scanning (this is a barrel, not a page)
+import React from 'react';
+const _AuthBarrelPlaceholder: React.FC = () => null;
+export default _AuthBarrelPlaceholder;

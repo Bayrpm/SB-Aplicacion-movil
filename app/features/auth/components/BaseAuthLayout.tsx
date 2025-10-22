@@ -22,6 +22,7 @@ interface BaseAuthLayoutProps {
   hideBottomBand?: boolean; // oculta la banda inferior azul
   logoShift?: number; // desplazamiento vertical extra del logo en px (opcional)
   titleTop?: number; // posición personalizada del título
+  clipOverflow?: boolean; // cuando true aplica overflow: 'hidden' en la card para recortar contenido
 }
 
 export default function BaseAuthLayout({
@@ -39,14 +40,22 @@ export default function BaseAuthLayout({
   hideBottomBand = false,
   logoShift,
   titleTop,
+  clipOverflow = false,
 }: BaseAuthLayoutProps) {
     const [storyLoaded] = useStoryScript({ StoryScript_400Regular });
   const scheme = useColorScheme();
+  // Llamar a los hooks en orden constante: obtener valores por defecto desde useThemeColor
+  // y luego aplicar overrides para modo oscuro. Esto evita cambiar el número/orden de hooks
+  // al alternar el esquema de color en caliente.
+  const defaultBackground = useThemeColor({}, 'background');
+  const defaultTopFill = useThemeColor({ light: '#6FB0DF', dark: '#072F4A' }, 'tint');
+  const defaultBottomFill = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint');
+
   // Fondo y card: en modo oscuro el fondo debe ser negro y la card un gris oscuro
-  const containerBg = scheme === 'dark' ? '#000000' : useThemeColor({}, 'background');
-  const cardBg = scheme === 'dark' ? '#111418' : useThemeColor({}, 'background');
-    const topFill = useThemeColor({ light: '#6FB0DF', dark: '#072F4A' }, 'tint');
-    const bottomFill = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint');
+  const containerBg = scheme === 'dark' ? '#000000' : defaultBackground;
+  const cardBg = scheme === 'dark' ? '#111418' : defaultBackground;
+  const topFill = defaultTopFill;
+  const bottomFill = defaultBottomFill;
   
   // Cálculos para el título
   const marginX = width * 0.08;
@@ -154,6 +163,8 @@ export default function BaseAuthLayout({
             padding: cardPaddingPx,
             backgroundColor: cardBg,
             ...(typeof cardBottomPx === 'number' ? { bottom: cardBottomPx } : { top: cardTopPx }),
+            // Allow parent to request clipping of overflowing children (useful when keyboard moves content)
+            ...(clipOverflow ? { overflow: 'hidden' } : { overflow: 'visible' }),
           },
         ]}
       >

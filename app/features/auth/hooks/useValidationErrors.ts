@@ -106,3 +106,5 @@ export function useValidationErrors(): UseValidationErrorsReturn {
     clearAllErrors,
   };
 }
+
+export default useValidationErrors;

@@ -42,3 +42,12 @@ export const registrationStep3Schema = z.object({
 export type RegistrationStep1Form = z.infer<typeof registrationStep1Schema>;
 export type RegistrationStep2Form = z.infer<typeof registrationStep2Schema>;
 export type RegistrationStep3Form = z.infer<typeof registrationStep3Schema>;
+
+// Default export to satisfy expo-router scanning (not used as a page)
+const _registrationSchemas = {
+  registrationStep1Schema,
+  registrationStep2Schema,
+  registrationStep3Schema,
+};
+
+export default _registrationSchemas;

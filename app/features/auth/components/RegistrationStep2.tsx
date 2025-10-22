@@ -145,3 +145,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 });
+
+// Default export for expo-router route detection
+export default RegistrationStep2;

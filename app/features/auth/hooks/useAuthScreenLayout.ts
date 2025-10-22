@@ -79,3 +79,5 @@ export function useAuthScreenLayout({
     screenConfig,
   };
 }
+
+export default useAuthScreenLayout;

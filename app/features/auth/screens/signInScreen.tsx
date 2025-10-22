@@ -437,12 +437,13 @@ export default function SignInScreen() {
         cardTop={cardTopProp}
         contentCentered={false}
         hideBottomBand={true}
+        clipOverflow={keyboardVisible && step === 2}
       >
         <View style={styles.formContainer}>
         {/* Solo inputs hacen scroll; logo fijo visible en la card */}
           <ScrollView
           ref={scrollViewRef}
-          style={[styles.inputScroll, keyboardVisible && { maxHeight: height * 0.45 }]}
+          style={[styles.inputScroll, keyboardVisible && { maxHeight: height * 0.45, overflow: 'visible' }]}
           contentContainerStyle={[
             styles.inputScrollContent,
             // dynamic padding so there's always room to scroll content above the keyboard
@@ -462,13 +463,17 @@ export default function SignInScreen() {
   {/* Espacio superior para permitir scroll hacia arriba */}
   <View style={{ height: topSpacer }} />
         
-        {/* Logo que se mueve junto con inputs */}
-        <View style={styles.logoBlock}>
-          <Image
-            source={logoSource}
-            style={{ width: logoW, height: logoH }}
-            resizeMode="contain"
-          />
+        {/* Logo que se mueve junto con inputs. Lo envolvemos en un wrapper con overflow hidden
+            para que, al hacer scroll hacia arriba (p. ej. foco en password), el logo quede
+            recortado por la tarjeta y no aparezca por encima de ella. */}
+        <View style={[styles.logoWrapper, { height: Math.round(logoH + 8) }]}> 
+          <View style={styles.logoBlock}>
+            <Image
+              source={logoSource}
+              style={{ width: logoW, height: logoH }}
+              resizeMode="contain"
+            />
+          </View>
         </View>
         
         <Animated.View 
@@ -484,12 +489,12 @@ export default function SignInScreen() {
             // Paso 1: Email
             <>
               <Text style={[styles.label, { color: labelColor }]}>Correo electrónico</Text>
-              <View style={{ width: finalFieldW, alignSelf: 'center' }}>
+              <View style={{ width: finalFieldW, alignSelf: 'center', overflow: 'visible', paddingRight: 6 }}>
                 <TextInput
                   ref={emailInputRef}
                   style={[
                     styles.input,
-                    { width: '100%', backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor },
+                    { width: '100%', backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor, paddingRight: 28, paddingLeft: 16, minWidth: 0 },
                   ]}
                   placeholder="ejemplo@correo.com"
                   value={email}
@@ -701,12 +706,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingRight: 20,
+    paddingVertical: 12,
     fontSize: 16,
+    lineHeight: 20,
     borderWidth: 1,
     borderColor: '#E9ECEF',
     color: '#333',
-    minHeight: 50,
+    minHeight: 56,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   passwordContainer: {
     backgroundColor: '#F8F9FA',
@@ -799,6 +808,13 @@ const styles = StyleSheet.create({
   logoBlock: {
     alignItems: 'center',
     marginBottom: 20,
+  },
+  logoWrapper: {
+    width: '100%',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   bottomSpacer: {
     width: '100%',

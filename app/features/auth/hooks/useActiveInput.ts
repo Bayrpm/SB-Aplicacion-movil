@@ -27,3 +27,5 @@ export function useActiveInput() {
     setActiveInput,
   };
 }
+
+export default useActiveInput;

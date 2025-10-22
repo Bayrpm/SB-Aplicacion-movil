@@ -121,3 +121,5 @@ export function useSmartScroll({
     getScrollPosition,
   };
 }
+
+export default useSmartScroll;
