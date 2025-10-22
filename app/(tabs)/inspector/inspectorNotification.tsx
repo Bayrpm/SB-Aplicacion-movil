@@ -83,7 +83,6 @@ export default function TabTwoScreen() {
           <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
             react-native-reanimated
           </ThemedText>{' '}
-         
         </ThemedText>
         {Platform.select({
           ios: (
