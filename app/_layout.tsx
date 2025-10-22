@@ -41,13 +41,21 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0]?.includes('auth');
 
-    // Si el grupo actual no coincide con el estado de auth, redirigir
+    // Si el grupo actual no coincide con el estado de auth, redirigir.
+    // Para evitar unmatched routes, navegamos directamente a la ruta
+    // completa del rol (inspector o citizen) cuando haya sesión.
     if (!session && !inAuthGroup) {
       router.replace('/(auth)' as any);
       return; // Mantener Splash hasta que cambien los segmentos
     }
     if (session && inAuthGroup) {
-      router.replace('/(tabs)' as any);
+      // Determinar rol por dominio de email
+      const email = session.user?.email ?? '';
+      const isInspector = email.toLowerCase().endsWith('@sanbernardo.cl');
+      const target = isInspector
+        ? '/(tabs)/inspector/inspectorHome'
+        : '/(tabs)/citizen/citizenHome';
+      router.replace(target as any);
       return; // Mantener Splash hasta que cambien los segmentos
     }
 
@@ -99,20 +107,23 @@ function RootLayoutNav() {
   }, [navReady, minSplashElapsed, splashVisible, splashOpacity, splashScale, appOpacity, appTranslateY, appScale]);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Animated.View
-        style={{
-          flex: 1,
-          opacity: appOpacity,
-          transform: [
-            { translateY: appTranslateY },
-            { scale: appScale },
-          ],
-        }}
-      >
-        <Slot />
-      </Animated.View>
-      <StatusBar style="auto" />
+    <>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Animated.View
+          style={{
+            flex: 1,
+            opacity: appOpacity,
+            transform: [
+              { translateY: appTranslateY },
+              { scale: appScale },
+            ],
+          }}
+        >
+          <Slot />
+        </Animated.View>
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      </ThemeProvider>
+
       {splashVisible && (
         <Animated.View
           pointerEvents="auto"
@@ -124,7 +135,7 @@ function RootLayoutNav() {
           <SplashScreen />
         </Animated.View>
       )}
-    </ThemeProvider>
+    </>
   );
 }
 

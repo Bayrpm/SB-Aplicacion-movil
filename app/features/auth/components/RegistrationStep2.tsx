@@ -1,3 +1,4 @@
+import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -9,6 +10,11 @@ interface RegistrationStep2Props {
 }
 
 export function RegistrationStep2({ onNext, onSkip, onBack, initialData }: RegistrationStep2Props) {
+  const labelColor = useThemeColor({}, 'text');
+  const placeholderColor = useThemeColor({ light: '#9CA3AF', dark: '#FFFFFF' }, 'icon');
+  const inputBg = useThemeColor({ light: '#F8F9FA', dark: '#000000' }, 'background');
+  const inputBorder = useThemeColor({ light: '#E9ECEF', dark: '#FFFFFF' }, 'icon');
+  const inputTextColor = useThemeColor({}, 'text');
   const [telefono, setTelefono] = useState(initialData?.telefono || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -75,16 +81,20 @@ export function RegistrationStep2({ onNext, onSkip, onBack, initialData }: Regis
   return (
     <View style={styles.container}>
       <View style={styles.inputSection}>
-        <Text style={styles.label}>Teléfono (Opcional)</Text>
+        <Text style={[styles.label, { color: labelColor }]}>Teléfono (Opcional)</Text>
         <TextInput
-          style={[styles.input, errors.telefono && styles.inputError]}
+          style={[
+            styles.input,
+            { backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor },
+            errors.telefono && styles.inputError,
+          ]}
           value={telefono}
           onChangeText={handlePhoneChange}
           placeholder="+56 9 1234 5678"
           keyboardType="phone-pad"
           autoComplete="tel"
           maxLength={17} // +56 9 1234 5678
-          placeholderTextColor="#999"
+          placeholderTextColor={placeholderColor}
         />
         {errors.telefono && (
           <Text style={styles.errorText}>{errors.telefono}</Text>

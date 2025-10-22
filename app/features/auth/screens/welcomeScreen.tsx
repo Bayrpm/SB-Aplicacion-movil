@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { Animated, Platform, StyleSheet, Text, TouchableOpacity, useWindowDimensions } from 'react-native';
+import { Animated, Platform, StyleSheet, Text, TouchableOpacity, useColorScheme, useWindowDimensions } from 'react-native';
 import BaseAuthLayout from '../components/BaseAuthLayout';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -40,8 +40,11 @@ export default function WelcomeScreen() {
     router.push(route as any);
   };
 
+  const scheme = useColorScheme();
+  const logoShift = scheme === 'dark' ? 12 : 0;
+
   return (
-    <BaseAuthLayout title="Bienvenido" showLogo={true} logoSize={responsive.widthCategory === 'compact' ? 0.72 : 0.60}>
+    <BaseAuthLayout title="Bienvenido" showLogo={true} logoSize={responsive.widthCategory === 'compact' ? 0.72 : 0.60} logoShift={logoShift}>
       <Animated.View 
         style={[
           styles.buttonGroup,
@@ -49,14 +52,17 @@ export default function WelcomeScreen() {
         ]}
       >
         <TouchableOpacity
-          style={[styles.pillButton, { height: buttonH, width: buttonW }]}
+          style={[styles.pillButton, { height: buttonH, width: buttonW, backgroundColor: '#0A4A90' }]}
           onPress={() => handleNavigation('/(auth)/signIn')}
           activeOpacity={0.8}
         >
           <Text allowFontScaling={false} style={[styles.pillButtonText, { fontSize: responsive.fontSize ? responsive.fontSize(18) : Math.max(18, Math.min(20, 0.024 * height)) } ]}>Iniciar sesión</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.pillButton, { height: buttonH, width: buttonW }]}
+          style={[
+            styles.pillButton,
+            { height: buttonH, width: buttonW, backgroundColor: '#0A4A90' }
+          ]}
           onPress={() => handleNavigation('/(auth)/signUp')}
           activeOpacity={0.8}
         >

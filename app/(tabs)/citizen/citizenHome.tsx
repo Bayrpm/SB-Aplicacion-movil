@@ -42,7 +42,7 @@ export default function HomeScreen() {
       
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="defaultSemiBold">¡Bienvenido!</ThemedText>
-        <ThemedText>Usuario autenticado: {user?.email}</ThemedText>
+        <ThemedText>Usuario Ciudadano autenticado: {user?.email}</ThemedText>
         
         <TouchableOpacity style={styles.button} onPress={handleSignOut}>
           <ThemedText style={styles.buttonText}>Cerrar sesión</ThemedText>

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Animated, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import BaseAuthLayout from '../components/BaseAuthLayout';
 import { RegistrationStep1 } from '../components/RegistrationStep1';
@@ -98,6 +98,8 @@ export default function SignUpScreen() {
     hasErrors: currentStepHasErrors,
   });
 
+  // Mostrar overlay de carga durante el registro
+
   const { widthCategory, heightCategory, cardHeight, cardTop, titleTop, spacingConfig } = responsiveLayout;
   // Top ratio para Step3 sensible al tamaño de pantalla: no tocará teléfonos pequeños
   const step3TopRatio = React.useMemo(() => {
@@ -171,6 +173,38 @@ export default function SignUpScreen() {
     activeInput,
     getCardHeight,
   });
+
+  // Local loading guard to ensure overlay visible at least MIN ms
+  const localLoadingRef = React.useRef<boolean>(false);
+  const [localLoading, setLocalLoading] = React.useState(false);
+  const localLoadingStart = React.useRef<number | null>(null);
+  const localTimerRef = React.useRef<number | null>(null);
+  const MIN_LOADING_MS = 900;
+
+  const startLocalLoading = () => {
+    localLoadingRef.current = true;
+    localLoadingStart.current = Date.now();
+    setLocalLoading(true);
+  };
+
+  const stopLocalLoading = () => {
+    const started = localLoadingStart.current ?? 0;
+    const elapsed = Date.now() - started;
+    const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+    if (remaining > 0) {
+      // @ts-ignore
+      localTimerRef.current = setTimeout(() => {
+        localLoadingRef.current = false;
+        setLocalLoading(false);
+        localLoadingStart.current = null;
+        localTimerRef.current = null;
+      }, remaining) as unknown as number;
+    } else {
+      localLoadingRef.current = false;
+      setLocalLoading(false);
+      localLoadingStart.current = null;
+    }
+  };
 
   // Debug refs to inspect scroll behavior and sizes
   // Debug helpers removed after confirmation
@@ -568,6 +602,13 @@ export default function SignUpScreen() {
           </TouchableOpacity>
         </View>
       </View>
+  {(loading || localLoading) && (
+    <Modal visible transparent animationType="fade" hardwareAccelerated={Platform.OS === 'android'} statusBarTranslucent onRequestClose={() => {}}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)' }}>
+  <ActivityIndicator size={120} color="#0A4A90" />
+      </View>
+    </Modal>
+  )}
     </View>
   );
 }

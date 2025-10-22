@@ -1,3 +1,4 @@
+import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -12,6 +13,11 @@ interface RegistrationStep3Props {
 }
 
 export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }: RegistrationStep3Props) {
+  const labelColor = useThemeColor({}, 'text');
+  const placeholderColor = useThemeColor({ light: '#9CA3AF', dark: '#FFFFFF' }, 'icon');
+  const inputBg = useThemeColor({ light: '#F8F9FA', dark: '#000000' }, 'background');
+  const inputBorder = useThemeColor({ light: '#E9ECEF', dark: '#FFFFFF' }, 'icon');
+  const inputTextColor = useThemeColor({}, 'text');
   const [email, setEmail] = useState(initialData?.email || '');
   const [password, setPassword] = useState(initialData?.password || '');
   const passwordRef = useRef<TextInput | null>(null);
@@ -83,16 +89,16 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
   return (
     <View style={styles.container}>
       <View style={styles.inputSection}>
-        <Text style={styles.label}>Email</Text>
+        <Text style={[styles.label, { color: labelColor }]}>Email</Text>
         <TextInput
-          style={[styles.input, errors.email && styles.inputError]}
+          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor }, errors.email && styles.inputError]}
           value={email}
           onChangeText={setEmail}
           placeholder="tu@email.com"
           keyboardType="email-address"
           autoCapitalize="none"
           autoComplete="email"
-          placeholderTextColor="#999"
+          placeholderTextColor={placeholderColor}
           onFocus={() => {
             // No disparar el handler global aquí para evitar el scroll automático
             // cuando el usuario solo toca el campo email.
@@ -109,18 +115,18 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
       </View>
 
       <View style={styles.inputSection}>
-        <Text style={styles.label}>Contraseña</Text>
-        <View style={[styles.passwordContainer, errors.password && styles.inputError]}>
+        <Text style={[styles.label, { color: labelColor }]}>Contraseña</Text>
+        <View style={[styles.passwordContainer, { backgroundColor: inputBg, borderColor: inputBorder }, errors.password && styles.inputError]}>
           <TextInput
             ref={passwordRef}
-            style={[styles.passwordInput]}
+            style={[styles.passwordInput, { color: inputTextColor }]}
             value={password}
             onChangeText={setPassword}
             placeholder="Tu contraseña"
             secureTextEntry={!showPassword}
             autoCapitalize="none"
             autoComplete="new-password"
-            placeholderTextColor="#999"
+            placeholderTextColor={placeholderColor}
             underlineColorAndroid="transparent"
             onFocus={() => {
               if (typeof (global as any).handleInputFocus === 'function') {
@@ -141,7 +147,7 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
             <Ionicons
               name={showPassword ? 'eye-off' : 'eye'}
               size={22}
-              color="#0A4A90"
+              color={useThemeColor({ light: '#0A4A90', dark: '#BFC7CC' }, 'tint')}
             />
           </TouchableOpacity>
         </View>

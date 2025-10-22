@@ -1,7 +1,9 @@
+import { ThemedView } from '@/components/themed-view';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { Alert, Animated, Dimensions, Image, Keyboard, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { signInUser } from '../api/auth.api';
 import BaseAuthLayout from '../components/BaseAuthLayout';
@@ -10,10 +12,43 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 const { width, height } = Dimensions.get('window');
 
 export default function SignInScreen() {
+  const scheme = useColorScheme();
+  const placeholderColor = useThemeColor({ light: '#9CA3AF', dark: '#FFFFFF' }, 'icon');
+  const tintColor = useThemeColor({ light: '#0A4A90', dark: '#BFC7CC' }, 'tint');
+  const logoSource = scheme === 'dark' ? require('@/assets/images/img_logo_blanco.png') : require('@/assets/images/img_logo.png');
+  const labelColor = useThemeColor({}, 'text');
+  const inputBg = useThemeColor({ light: '#F8F9FA', dark: '#000000' }, 'background');
+  const inputBorder = useThemeColor({ light: '#E9ECEF', dark: '#FFFFFF' }, 'icon');
+  const inputTextColor = useThemeColor({}, 'text');
   const [step, setStep] = React.useState(1); // 1: email, 2: password
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [isLoading, setIsLoading] = React.useState(false);
+  const loadingTimerRef = React.useRef<number | null>(null);
+  const loadingStartRef = React.useRef<number | null>(null);
+  const MIN_LOADING_MS = 900;
+
+  const startLoading = () => {
+    loadingStartRef.current = Date.now();
+    setIsLoading(true);
+  };
+
+  const stopLoading = () => {
+    const started = loadingStartRef.current ?? 0;
+    const elapsed = Date.now() - started;
+    const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+    if (remaining > 0) {
+      // @ts-ignore setTimeout returns number in RN
+      loadingTimerRef.current = setTimeout(() => {
+        setIsLoading(false);
+        loadingStartRef.current = null;
+        loadingTimerRef.current = null;
+      }, remaining) as unknown as number;
+    } else {
+      setIsLoading(false);
+      loadingStartRef.current = null;
+    }
+  };
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const router = useRouter();
@@ -198,14 +233,15 @@ export default function SignInScreen() {
       return;
     }
     
-    setIsLoading(true);
+    // garantizar duración mínima del overlay
+    startLoading();
     try {
       const result = await signInUser(email, password);
       if (result.error) {
         // Mostrar el mensaje de error retornado por la API
         const message = result.error.message || 'Credenciales incorrectas';
         Alert.alert('Error', message);
-        setIsLoading(false);
+        stopLoading();
         return;
       }
       // Animación de salida rápida (opcional) y dejar que el layout principal redirija
@@ -222,12 +258,14 @@ export default function SignInScreen() {
         }),
       ]).start(() => {
         // No navegar manualmente, el layout principal lo hará automáticamente
+        // detener el overlay local después de la animación
+        stopLoading();
       });
     } catch (error) {
       // En caso de error inesperado
       console.error('Error al iniciar sesión:', error);
       Alert.alert('Error', 'Ocurrió un error al iniciar sesión');
-      setIsLoading(false);
+      stopLoading();
     }
   };
 
@@ -313,8 +351,9 @@ export default function SignInScreen() {
   }
 
   // Logo dentro del ScrollView para que se mueva junto con inputs
-  const logoW = Math.min(safeContentW, 0.60 * cardW);
-  const logoH = 0.15 * currentCardHeight;
+  const logoScale = scheme === 'dark' ? 1.25 : 1; // aumentar en dark mode
+  const logoW = Math.min(safeContentW, 0.60 * cardW) * logoScale;
+  const logoH = 0.15 * currentCardHeight * logoScale;
 
   const measureAndScrollTo = (inputRef: React.RefObject<TextInput | null>) => {
     // Only attempt programmatic scroll when keyboard is visible and for password (step 2).
@@ -384,10 +423,13 @@ export default function SignInScreen() {
   // keep responsiveLayout object for footer math
   const responsiveLayout = useResponsiveLayout({ currentStep: step, keyboardVisible, keyboardHeight, hasErrors: false });
 
+  // Mostrar overlay de carga local mientras se realiza el sign in
+
 
 
   return (
-    <Animated.View style={{ flex: 1, opacity: screenFadeAnim }}>
+    <ThemedView style={{ flex: 1 }}>
+      <Animated.View style={{ flex: 1, opacity: screenFadeAnim }}>
       <BaseAuthLayout 
         title="Bienvenido" 
         showLogo={false}
@@ -423,7 +465,7 @@ export default function SignInScreen() {
         {/* Logo que se mueve junto con inputs */}
         <View style={styles.logoBlock}>
           <Image
-            source={require('@/assets/images/img_logo.png')}
+            source={logoSource}
             style={{ width: logoW, height: logoH }}
             resizeMode="contain"
           />
@@ -441,11 +483,14 @@ export default function SignInScreen() {
           {step === 1 ? (
             // Paso 1: Email
             <>
-              <Text style={styles.label}>Correo electrónico</Text>
+              <Text style={[styles.label, { color: labelColor }]}>Correo electrónico</Text>
               <View style={{ width: finalFieldW, alignSelf: 'center' }}>
                 <TextInput
                   ref={emailInputRef}
-                  style={[styles.input, { width: '100%' }]}
+                  style={[
+                    styles.input,
+                    { width: '100%', backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor },
+                  ]}
                   placeholder="ejemplo@correo.com"
                   value={email}
                   onChangeText={setEmail}
@@ -455,7 +500,7 @@ export default function SignInScreen() {
                   autoCorrect={false}
                   allowFontScaling={false}
                   multiline={false}
-                  placeholderTextColor="#999"
+                  placeholderTextColor={placeholderColor}
                 />
               </View>
             </>
@@ -463,17 +508,17 @@ export default function SignInScreen() {
             // Paso 2: Password con animaciones en cascada
             <>
               <Animated.Text 
-                style={[styles.emailInfo, { opacity: emailInfoAnim }]}
+                style={[styles.emailInfo, { opacity: emailInfoAnim, color: labelColor }]}
               >
                 Iniciando sesión como:
               </Animated.Text>
               <Animated.Text 
-                style={[styles.emailDisplay, { opacity: emailDisplayAnim }]}
+                style={[styles.emailDisplay, { opacity: emailDisplayAnim, color: labelColor }]}
               >
                 {email}
               </Animated.Text>
               <Animated.Text 
-                style={[styles.label, { opacity: passwordLabelAnim }]}
+                style={[styles.label, { color: labelColor, opacity: passwordLabelAnim }]}
               >
                 Contraseña
               </Animated.Text>
@@ -489,13 +534,18 @@ export default function SignInScreen() {
                         inputRange: [0, 1],
                         outputRange: [20, 0],
                       })
-                    }]
+                    }],
+                    backgroundColor: inputBg,
+                    borderColor: inputBorder,
                   }
                 ]}
               >
                 <TextInput
                   ref={passwordInputRef}
-                  style={[styles.passwordInput, { paddingRight: 52, paddingLeft: 12 }]}
+                  style={[
+                    styles.passwordInput,
+                    { paddingRight: 52, paddingLeft: 12, color: inputTextColor, backgroundColor: 'transparent', borderWidth: 0 },
+                  ]}
                   placeholder="Contraseña"
                   value={password}
                   onChangeText={setPassword}
@@ -505,7 +555,7 @@ export default function SignInScreen() {
                   autoCorrect={false}
                   allowFontScaling={false}
                   multiline={false}
-                  placeholderTextColor="#999"
+                  placeholderTextColor={placeholderColor}
                 />
                 <TouchableOpacity
                   style={[styles.showPasswordButton, { position: 'absolute', right: 12 }]}
@@ -515,7 +565,7 @@ export default function SignInScreen() {
                   <Ionicons
                     name={showPassword ? 'eye-off' : 'eye'}
                     size={22}
-                    color="#0A4A90"
+                    color={tintColor}
                   />
                 </TouchableOpacity>
               </Animated.View>
@@ -590,7 +640,15 @@ export default function SignInScreen() {
       </View>
     );
   })()}
-    </Animated.View>
+  {isLoading && (
+    <Modal visible transparent animationType="fade" hardwareAccelerated={Platform.OS === 'android'} statusBarTranslucent onRequestClose={() => {}}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)' }}>
+  <ActivityIndicator size={120} color="#0A4A90" />
+      </View>
+    </Modal>
+  )}
+      </Animated.View>
+    </ThemedView>
   );
 }
 

@@ -1,3 +1,4 @@
+import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -9,6 +10,11 @@ interface RegistrationStep1Props {
 }
 
 export function RegistrationStep1({ onNext, onCancel, initialData, onInputFocus }: RegistrationStep1Props) {
+  const labelColor = useThemeColor({}, 'text');
+  const placeholderColor = useThemeColor({ light: '#9CA3AF', dark: '#FFFFFF' }, 'icon');
+  const inputBg = useThemeColor({ light: '#F8F9FA', dark: '#000000' }, 'background');
+  const inputBorder = useThemeColor({ light: '#E9ECEF', dark: '#FFFFFF' }, 'icon');
+  const inputTextColor = useThemeColor({}, 'text');
   const [nombre, setNombre] = useState(initialData?.nombre || '');
   const [apellido, setApellido] = useState(initialData?.apellido || '');
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -61,15 +67,19 @@ export function RegistrationStep1({ onNext, onCancel, initialData, onInputFocus 
   return (
     <View style={styles.container}>
       <View style={styles.inputSection}>
-        <Text style={styles.label}>Nombre</Text>
+        <Text style={[styles.label, { color: labelColor }]}>Nombre</Text>
         <TextInput
-          style={[styles.input, errors.nombre && styles.inputError]}
+          style={[
+            styles.input,
+            { backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor },
+            errors.nombre && styles.inputError,
+          ]}
           value={nombre}
           onChangeText={setNombre}
-          placeholder="Juan Carlos"
+          placeholder="Nombre"
           autoCapitalize="words"
           autoComplete="name"
-          placeholderTextColor="#999"
+          placeholderTextColor={placeholderColor}
           onFocus={() => (global as any).handleInputFocus?.('nombre')}
           onBlur={() => (global as any).handleInputBlur?.()}
         />
@@ -79,15 +89,19 @@ export function RegistrationStep1({ onNext, onCancel, initialData, onInputFocus 
       </View>
 
       <View style={styles.inputSection}>
-        <Text style={styles.label}>Apellido</Text>
+        <Text style={[styles.label, { color: labelColor }]}>Apellido</Text>
         <TextInput
-          style={[styles.input, errors.apellido && styles.inputError]}
+          style={[
+            styles.input,
+            { backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor },
+            errors.apellido && styles.inputError,
+          ]}
           value={apellido}
           onChangeText={setApellido}
-          placeholder="Pérez González"
+          placeholder="Apellido"
           autoCapitalize="words"
           autoComplete="family-name"
-          placeholderTextColor="#999"
+          placeholderTextColor={placeholderColor}
           onFocus={() => {
             if (typeof onInputFocus === 'function') {
               onInputFocus('apellido');

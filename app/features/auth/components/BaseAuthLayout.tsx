@@ -1,7 +1,8 @@
+import { useThemeColor } from '@/hooks/use-theme-color';
 import { StoryScript_400Regular, useFonts as useStoryScript } from '@expo-google-fonts/story-script';
 import { Image } from 'expo-image';
 import React from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, View, useColorScheme } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 const { width, height } = Dimensions.get('window');
@@ -19,6 +20,7 @@ interface BaseAuthLayoutProps {
   cardWidth?: number;
   cardPadding?: number;
   hideBottomBand?: boolean; // oculta la banda inferior azul
+  logoShift?: number; // desplazamiento vertical extra del logo en px (opcional)
   titleTop?: number; // posición personalizada del título
 }
 
@@ -35,9 +37,16 @@ export default function BaseAuthLayout({
   cardWidth = 0.84,
   cardPadding = 0.03,
   hideBottomBand = false,
+  logoShift,
   titleTop,
 }: BaseAuthLayoutProps) {
-  const [storyLoaded] = useStoryScript({ StoryScript_400Regular });
+    const [storyLoaded] = useStoryScript({ StoryScript_400Regular });
+  const scheme = useColorScheme();
+  // Fondo y card: en modo oscuro el fondo debe ser negro y la card un gris oscuro
+  const containerBg = scheme === 'dark' ? '#000000' : useThemeColor({}, 'background');
+  const cardBg = scheme === 'dark' ? '#111418' : useThemeColor({}, 'background');
+    const topFill = useThemeColor({ light: '#6FB0DF', dark: '#072F4A' }, 'tint');
+    const bottomFill = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint');
   
   // Cálculos para el título
   const marginX = width * 0.08;
@@ -90,15 +99,30 @@ export default function BaseAuthLayout({
   const contentStyleStep3 = {};
 
   // Cálculos para el logo - dinámico basado en logoSize
-  const logoW = showLogo ? logoSize * cardW : 0;
-  const logoH = showLogo ? (logoSize * 0.20) * cardH : 0; // Proporcional al logoSize
-  const logoShiftY = showLogo ? 0 : 0;
+  // Increase logo size in dark mode slightly but clamp to avoid giant logos
+  const baseLogoScale = scheme === 'dark' ? 1.15 : 1;
+  // When logo is inside content (logoInContent) we should be conservative
+  const contentLogoScale = logoInContent ? Math.min(baseLogoScale, 1.05) : baseLogoScale;
+  const logoScale = contentLogoScale;
+  // Compute logo dimensions but clamp to reasonable max values relative to card
+  const rawLogoW = showLogo ? logoSize * cardW * logoScale : 0;
+  const maxLogoW = Math.round(cardW * 0.6);
+  const logoW = Math.min(rawLogoW, maxLogoW);
+  const rawLogoH = showLogo ? (logoSize * 0.20) * cardH * logoScale : 0; // Proporcional al logoSize
+  const maxLogoH = Math.round(cardH * 0.25);
+  const logoH = Math.min(rawLogoH, maxLogoH);
+  const logoShiftY = showLogo ? (typeof logoShift === 'number' ? logoShift : 0) : 0;
+
+  // logo swap: use white logo in dark mode for better contrast
+  const logoSource = scheme === 'dark'
+    ? require('@/assets/images/img_logo_blanco.png')
+    : require('@/assets/images/img_logo.png');
 
   return (
-    <View style={styles.container}>
+  <View style={[styles.container, { backgroundColor: containerBg }]}>
       {/* Curva azul superior */}
       <Svg style={styles.topSection} width={width} height={height}>
-        <Path d={azulSuperiorPath()} fill="#6FB0DF" />
+        <Path d={azulSuperiorPath()} fill={topFill} />
       </Svg>
 
       {/* Título "Bienvenido" */}
@@ -128,6 +152,7 @@ export default function BaseAuthLayout({
             height: cardH,
             borderRadius: cardRadius,
             padding: cardPaddingPx,
+            backgroundColor: cardBg,
             ...(typeof cardBottomPx === 'number' ? { bottom: cardBottomPx } : { top: cardTopPx }),
           },
         ]}
@@ -136,7 +161,7 @@ export default function BaseAuthLayout({
         {showLogo && !logoInContent && (
           <View style={[styles.logoContainer, { transform: [{ translateY: logoShiftY }] }]}>
             <Image
-              source={require('@/assets/images/img_logo.png')}
+              source={logoSource}
               style={[styles.logo, { width: logoW, height: logoH }]}
               contentFit="contain"
             />
@@ -158,7 +183,7 @@ export default function BaseAuthLayout({
           {logoInContent && showLogo && (
             <View style={[styles.logoInContentContainer, { marginBottom: 2 }]}> 
               <Image
-                source={require('@/assets/images/img_logo.png')}
+                source={logoSource}
                 style={[styles.logo, { width: logoW, height: logoH }]}
                 contentFit="contain"
               />
@@ -173,7 +198,7 @@ export default function BaseAuthLayout({
         <Svg style={styles.bottomBand} width={width + 2} height={height}>
           <Path
             d={`M 0 ${height * (0.86 + (1 - 0.86) * 0.2)} L ${width + 1} ${height * (0.78 + (1 - 0.78) * 0.2)} L ${width + 1} ${height} L 0 ${height} Z`}
-            fill="#0A4A90"
+            fill={bottomFill}
           />
         </Svg>
       )}
