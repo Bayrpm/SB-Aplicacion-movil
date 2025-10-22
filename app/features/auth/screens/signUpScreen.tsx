@@ -605,7 +605,7 @@ export default function SignUpScreen() {
   {(loading || localLoading) && (
     <Modal visible transparent animationType="fade" hardwareAccelerated={Platform.OS === 'android'} statusBarTranslucent onRequestClose={() => {}}>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)' }}>
-  <ActivityIndicator size={120} color="#0A4A90" />
+  <ActivityIndicator size={Platform.OS === 'android' ? 120 : 'large'} color="#0A4A90" />
       </View>
     </Modal>
   )}
