@@ -27,7 +27,7 @@ export default function TabTwoScreen() {
           Explore
         </ThemedText>
       </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
+      <ThemedText>This Citizen includes example code to help you get started.</ThemedText>
     
     </ParallaxScrollView>
   );

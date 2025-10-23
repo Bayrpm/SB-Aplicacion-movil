@@ -1,6 +1,6 @@
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
 
 interface RegistrationStep1Props {
   onNext: (data: { nombre: string; apellido: string }) => void;
@@ -12,7 +12,9 @@ interface RegistrationStep1Props {
 export function RegistrationStep1({ onNext, onCancel, initialData, onInputFocus }: RegistrationStep1Props) {
   const labelColor = useThemeColor({}, 'text');
   const placeholderColor = useThemeColor({ light: '#9CA3AF', dark: '#FFFFFF' }, 'icon');
+  const scheme = useColorScheme();
   const inputBg = useThemeColor({ light: '#F8F9FA', dark: '#000000' }, 'background');
+  const errorBg = scheme === 'dark' ? '#222' : '#fff';
   const inputBorder = useThemeColor({ light: '#E9ECEF', dark: '#FFFFFF' }, 'icon');
   const inputTextColor = useThemeColor({}, 'text');
   const [nombre, setNombre] = useState(initialData?.nombre || '');
@@ -71,15 +73,14 @@ export function RegistrationStep1({ onNext, onCancel, initialData, onInputFocus 
         <TextInput
           style={[
             styles.input,
-            { backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor },
-            errors.nombre && styles.inputError,
+            { backgroundColor: inputBg, borderColor: errors.nombre ? '#EF4444' : inputBorder, color: inputTextColor },
           ]}
           value={nombre}
           onChangeText={setNombre}
           placeholder="Nombre"
           autoCapitalize="words"
           autoComplete="name"
-          placeholderTextColor={placeholderColor}
+          placeholderTextColor={errors.nombre ? '#EF4444' : placeholderColor}
           onFocus={() => (global as any).handleInputFocus?.('nombre')}
           onBlur={() => (global as any).handleInputBlur?.()}
         />
@@ -93,15 +94,14 @@ export function RegistrationStep1({ onNext, onCancel, initialData, onInputFocus 
         <TextInput
           style={[
             styles.input,
-            { backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor },
-            errors.apellido && styles.inputError,
+            { backgroundColor: inputBg, borderColor: errors.apellido ? '#EF4444' : inputBorder, color: inputTextColor },
           ]}
           value={apellido}
           onChangeText={setApellido}
           placeholder="Apellido"
           autoCapitalize="words"
           autoComplete="family-name"
-          placeholderTextColor={placeholderColor}
+          placeholderTextColor={errors.apellido ? '#EF4444' : placeholderColor}
           onFocus={() => {
             if (typeof onInputFocus === 'function') {
               onInputFocus('apellido');

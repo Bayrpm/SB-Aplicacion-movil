@@ -6,7 +6,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { checkEmailExists, signInUser } from '../api/auth.api';
+import { signInUser } from '../api/auth.api';
 import BaseAuthLayout from '../components/BaseAuthLayout';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -218,25 +218,12 @@ export default function SignInScreen() {
         AppAlert.alert('Error', 'Por favor ingresa un correo electrónico válido');
         return;
       }
-      // Verificar existencia del correo en la BDD antes de avanzar
-      try {
-        startLoading();
-        const exists = await checkEmailExists(email);
-        stopLoading();
-        if (!exists) {
-          AppAlert.alert('Cuenta no encontrada', 'No existe una cuenta registrada con ese correo.');
-          return;
-        }
-        setStep(2);
-        // Auto-focus ultra rápido en el input de contraseña
-        setTimeout(() => {
-          passwordInputRef.current?.focus();
-        }, 20);
-      } catch (e) {
-        stopLoading();
-        console.error('Error verificando email:', e);
-        AppAlert.alert('Error', 'Ocurrió un error verificando el correo. Intenta de nuevo.');
-      }
+      // Avanzar directamente al paso de contraseña tras validar el formato del email
+      setStep(2);
+      // Auto-focus ultra rápido en el input de contraseña
+      setTimeout(() => {
+        passwordInputRef.current?.focus();
+      }, 20);
     } else {
       handleSignIn();
     }

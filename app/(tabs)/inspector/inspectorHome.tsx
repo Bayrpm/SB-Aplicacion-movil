@@ -1,6 +1,7 @@
 import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 
 import { useAuth } from '@/app/features/auth';
@@ -10,6 +11,7 @@ import { ThemedView } from '@/components/themed-view';
 
 export default function HomeScreen() {
   const { user, isInspector, inspectorLoading, signOut } = useAuth();
+  const router = useRouter();
 
   const handleSignOut = async () => {
     AppAlert.alert(
@@ -23,7 +25,8 @@ export default function HomeScreen() {
           onPress: async () => {
             try {
               await signOut();
-              } catch (error: any) {
+              router.replace('/(auth)');
+            } catch (error: any) {
               const msg = mapSupabaseErrorMessage(error?.message);
               AppAlert.alert('Error', msg);
             }

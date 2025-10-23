@@ -1,17 +1,17 @@
 import { Stack } from 'expo-router';
+import { useColorScheme } from 'react-native';
 
 export default function AuthLayout() {
+  const scheme = useColorScheme();
   return (
-    <Stack 
-      screenOptions={{ 
+    <Stack
+      screenOptions={{
         headerShown: false,
         animation: 'slide_from_right',
         animationDuration: 250,
         gestureEnabled: true,
         gestureDirection: 'horizontal',
-  // Make the stack content background transparent so each screen's own
-  // background paints without a white flash during transitions.
-  contentStyle: { backgroundColor: 'transparent' },
+        contentStyle: { backgroundColor: scheme === 'dark' ? '#000' : '#fff' },
       }}
     >
       <Stack.Screen 

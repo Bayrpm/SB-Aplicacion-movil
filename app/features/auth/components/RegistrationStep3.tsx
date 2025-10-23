@@ -1,7 +1,7 @@
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme, View } from 'react-native';
 import { registrationStep3Schema } from '../schemas/registration.schema';
 import type { RegistrationStep3Data } from '../types';
 
@@ -15,7 +15,9 @@ interface RegistrationStep3Props {
 export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }: RegistrationStep3Props) {
   const labelColor = useThemeColor({}, 'text');
   const placeholderColor = useThemeColor({ light: '#9CA3AF', dark: '#FFFFFF' }, 'icon');
+  const scheme = useColorScheme();
   const inputBg = useThemeColor({ light: '#F8F9FA', dark: '#000000' }, 'background');
+  const errorBg = scheme === 'dark' ? '#222' : '#fff';
   const inputBorder = useThemeColor({ light: '#E9ECEF', dark: '#FFFFFF' }, 'icon');
   const inputTextColor = useThemeColor({}, 'text');
   const [email, setEmail] = useState(initialData?.email || '');
@@ -91,14 +93,14 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
       <View style={styles.inputSection}>
         <Text style={[styles.label, { color: labelColor }]}>Email</Text>
         <TextInput
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor }, errors.email && styles.inputError]}
+          style={[styles.input, { backgroundColor: inputBg, borderColor: errors.email ? '#EF4444' : inputBorder, color: inputTextColor }]}
+          placeholderTextColor={errors.email ? '#EF4444' : placeholderColor}
           value={email}
           onChangeText={setEmail}
           placeholder="tu@email.com"
           keyboardType="email-address"
           autoCapitalize="none"
           autoComplete="email"
-          placeholderTextColor={placeholderColor}
           onFocus={() => {
             // No disparar el handler global aquí para evitar el scroll automático
             // cuando el usuario solo toca el campo email.
@@ -116,7 +118,7 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
 
       <View style={styles.inputSection}>
         <Text style={[styles.label, { color: labelColor }]}>Contraseña</Text>
-        <View style={[styles.passwordContainer, { backgroundColor: inputBg, borderColor: inputBorder }, errors.password && styles.inputError]}>
+  <View style={[styles.passwordContainer, { backgroundColor: inputBg, borderColor: errors.password ? '#EF4444' : inputBorder }]}> 
           <TextInput
             ref={passwordRef}
             style={[styles.passwordInput, { color: inputTextColor }]}

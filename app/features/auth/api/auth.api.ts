@@ -32,23 +32,8 @@ export function mapSupabaseErrorMessage(errorMessage?: string | null): string {
   // Mensaje por defecto: devolvemos una versión en español para no exponer texto en inglés
   return 'Ocurrió un error. Intenta de nuevo.';
 }
-/**
- * Verifica si un email ya está registrado verificando en la tabla de perfiles
- */
-export async function checkEmailExists(email: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('perfiles_ciudadanos')
-    .select('email')
-    .eq('email', email.toLowerCase())
-    .limit(1);
-
-  if (error) {
-    console.warn('Error verificando email:', error);
-    return false; // En caso de error, permitir continuar
-  }
-
-  return data && data.length > 0;
-}
+// NOTA: Se recomienda migrar la columna email a CITEXT + UNIQUE en la base de datos para unicidad y comparación case-insensitive.
+// Se elimina el pre-chequeo de email antes de signUp. El error se maneja en signUpUser.
 
 /**
  * Registra un nuevo usuario en Supabase Auth con metadatos
@@ -58,6 +43,7 @@ export async function signUpUser(email: string, password: string, userData?: {
   apellido?: string;
   telefono?: string;
 }) {
+  // Estandarizar email a lowercase
   const metadataToSend = {
     name: userData?.nombre || '',
     last_name: userData?.apellido || '',
@@ -65,7 +51,7 @@ export async function signUpUser(email: string, password: string, userData?: {
   };
 
   const { data, error } = await supabase.auth.signUp({
-    email,
+    email: email.toLowerCase(),
     password,
     options: {
       data: metadataToSend
@@ -105,11 +91,7 @@ export async function signInUser(email: string, password: string) {
 /**
  * Obtiene el perfil del ciudadano actual
  */
-export async function getCurrentCitizenProfile(userId: string) {
-  // Deprecated: delegate to getUserProfile for unified data access
-  const result = await getUserProfile(userId);
-  return { data: result.profile, error: result.error };
-}
+
 
 /**
  * Comprueba si un usuario (por id) está marcado como inspector en la tabla `inspectores`.
@@ -124,17 +106,18 @@ export async function isUserInspector(userId: string): Promise<boolean> {
       return rpc.data;
     }
   } catch {}
-  // 2) Fallback: COUNT sin traer filas
+  // 2) Fallback: existencia booleana con .maybeSingle()
   try {
-    const { error, count } = await supabase
+    const { data, error } = await supabase
       .from('inspectores')
-      .select('id', { head: true, count: 'exact' })
-      .eq('usuario_id', userId);
+      .select('id')
+      .eq('usuario_id', userId)
+      .limit(1)
+      .maybeSingle();
     if (error) {
-      console.warn('[Auth] isUserInspector fallback error', error);
       return false;
     }
-    return (count ?? 0) > 0;
+    return !!data;
   } catch {
     return false;
   }
@@ -146,68 +129,25 @@ export async function isUserInspector(userId: string): Promise<boolean> {
  */
 export async function getUserProfile(userId: string) {
   try {
-    // Intentamos traer el perfil y la relación con inspectores en una sola llamada.
-    // Supabase permite seleccionar relaciones si existen FK configuradas.
-    const { data, error } = await supabase
+    // Consulta simple del perfil (sin embed ambiguo)
+    const { data: profile, error: profileError } = await supabase
       .from('perfiles_ciudadanos')
-      .select('*, inspectores(id)')
+      .select('*')
+      .eq('usuario_id', userId)
+      .maybeSingle();
+
+    // Consulta existencia booleana de inspector
+    const { data: inspectorData, error: inspectorError } = await supabase
+      .from('inspectores')
+      .select('id')
       .eq('usuario_id', userId)
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (error) {
-      // Si la relación no está configurada o hay error, intentamos fallback
+    const isInspector = !!inspectorData;
+    const error = profileError ?? inspectorError ?? null;
 
-      // Fallback: obtener perfil y comprobar inspectores por separado
-      const { data: profileData, error: profErr } = await supabase
-        .from('perfiles_ciudadanos')
-        .select('*')
-        .eq('usuario_id', userId)
-        .single();
-
-      const { data: inspData, error: inspErr } = await supabase
-        .from('inspectores')
-        .select('id')
-        .eq('usuario_id', userId)
-        .limit(1);
-
-      const isInspector = Array.isArray(inspData) && inspData.length > 0;
-
-      return { profile: profileData ?? null, isInspector, error: profErr ?? inspErr ?? error };
-    }
-
-    // data may include inspectores relation
-    const profile = data as any;
-
-    // Consulta directa a la tabla inspectores por usuario_id
-
-    let isInspector = false;
-    try {
-      // Consulta con eq
-      const { data: inspDataEq } = await supabase
-        .from('inspectores')
-        .select('id, usuario_id')
-        .eq('usuario_id', userId)
-        .limit(1);
-
-      // Consulta con ilike
-      const { data: inspDataIlike } = await supabase
-        .from('inspectores')
-        .select('id, usuario_id')
-        .ilike('usuario_id', userId)
-        .limit(1);
-
-      isInspector = (Array.isArray(inspDataEq) && inspDataEq.length > 0) || (Array.isArray(inspDataIlike) && inspDataIlike.length > 0);
-    } catch (e) {
-      isInspector = false;
-    }
-
-    // Remove inspectores relation from returned profile to keep shape consistent
-    if (profile && profile.inspectores) {
-      delete profile.inspectores;
-    }
-
-    return { profile: profile ?? null, isInspector, error: null };
+    return { profile: profile ?? null, isInspector, error };
   } catch (_e) {
     return { profile: null, isInspector: false, error: _e };
   }
