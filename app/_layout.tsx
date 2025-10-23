@@ -6,6 +6,7 @@ import { Animated, Easing, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, SplashScreen, useAuth } from '@/app/features/auth';
+import AlertBox from '@/components/ui/AlertBox';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export const unstable_settings = {
@@ -14,7 +15,7 @@ export const unstable_settings = {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { session, loading } = useAuth();
+  const { session, loading, isInspector, inspectorLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   // Mantener la Splash visible hasta que la navegación esté alineada con el estado de auth
@@ -42,16 +43,17 @@ function RootLayoutNav() {
     const inAuthGroup = segments[0]?.includes('auth');
 
     // Si el grupo actual no coincide con el estado de auth, redirigir.
-    // Para evitar unmatched routes, navegamos directamente a la ruta
-    // completa del rol (inspector o citizen) cuando haya sesión.
     if (!session && !inAuthGroup) {
       router.replace('/(auth)' as any);
       return; // Mantener Splash hasta que cambien los segmentos
     }
+
+    // Si hay sesión y estamos en el grupo de auth, esperar la resolución del rol
+    // desde el AuthProvider (isInspector/inspectorLoading). Incluir estos valores
+    // en las dependencias para que la navegación se re-evalúe cuando cambien.
     if (session && inAuthGroup) {
-      // Determinar rol por dominio de email
-      const email = session.user?.email ?? '';
-      const isInspector = email.toLowerCase().endsWith('@sanbernardo.cl');
+      if (inspectorLoading) return; // esperar a que termine la comprobación
+
       const target = isInspector
         ? '/(tabs)/inspector/inspectorHome'
         : '/(tabs)/citizen/citizenHome';
@@ -61,7 +63,7 @@ function RootLayoutNav() {
 
     // Si estamos alineados (grupo correcto según auth), ya podemos salir del Splash
     setNavReady(true);
-  }, [session, segments, loading]);
+  }, [session, segments, loading, isInspector, inspectorLoading]);
 
   // Iniciar animación cuando navegación esté lista y se cumplan los 5s mínimos
   useEffect(() => {
@@ -106,21 +108,38 @@ function RootLayoutNav() {
     }
   }, [navReady, minSplashElapsed, splashVisible, splashOpacity, splashScale, appOpacity, appTranslateY, appScale]);
 
+  // Exponer el estado de splash a nivel global para que otros componentes
+  // (por ejemplo el TabLayout) sepan si la splash está visible y eviten
+  // mostrar overlays/modal sobre ella.
+  useEffect(() => {
+    try {
+      (global as any).__APP_SPLASH_VISIBLE__ = splashVisible;
+    } catch (e) {
+      // noop
+    }
+  }, [splashVisible]);
+
   return (
     <>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Animated.View
-          style={{
-            flex: 1,
-            opacity: appOpacity,
-            transform: [
-              { translateY: appTranslateY },
-              { scale: appScale },
-            ],
-          }}
-        >
-          <Slot />
-        </Animated.View>
+        {/* Only render the app Slot once the splash is fully hidden to avoid
+            overlays/modal components (like Tabs' ActivityIndicator) from
+            appearing on top of the splash. This prevents the loading overlay
+            during cold start when session exists. */}
+          {/* Render the app Slot only after the splash has finished its animation
+              to avoid any mismatch between the native splash and RN content. */}
+          <Animated.View
+            style={{
+              flex: 1,
+              opacity: appOpacity,
+              transform: [
+                { translateY: appTranslateY },
+                { scale: appScale },
+              ],
+            }}
+          >
+            <Slot />
+          </Animated.View>
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       </ThemeProvider>
 
@@ -143,6 +162,10 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <RootLayoutNav />
+      {/* Mount global AlertBox so calls to Alert.alert(...) can be redirected if desired */}
+      <AlertBox />
     </AuthProvider>
   );
 }
+
+// NOTE: removed global monkey-patch of RN Alert.alert to prefer explicit migration to AppAlert

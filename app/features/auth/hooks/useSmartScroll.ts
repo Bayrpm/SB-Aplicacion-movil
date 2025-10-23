@@ -108,7 +108,7 @@ export function useSmartScroll({
     const resetPosition = (currentStep === 1 && !keyboardVisible) ? 0 : ((currentStep === 1 || currentStep === 3) ? getSpacerOffset() : 0);
     try {
       scrollViewRef.current?.scrollTo({ y: resetPosition, animated: false });
-    } catch (e) {
+    } catch (_e) {
       // noop
     }
   }, [currentStep, getSpacerOffset, keyboardVisible]);

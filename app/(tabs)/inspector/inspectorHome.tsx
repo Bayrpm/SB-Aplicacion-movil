@@ -1,5 +1,7 @@
+import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { Image } from 'expo-image';
-import { Alert, StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity } from 'react-native';
 
 import { useAuth } from '@/app/features/auth';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
@@ -7,10 +9,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 
 export default function HomeScreen() {
-  const { user, signOut } = useAuth();
+  const { user, isInspector, inspectorLoading, signOut } = useAuth();
 
   const handleSignOut = async () => {
-    Alert.alert(
+    AppAlert.alert(
       'Cerrar sesión',
       '¿Estás seguro que deseas cerrar sesión?',
       [
@@ -21,8 +23,9 @@ export default function HomeScreen() {
           onPress: async () => {
             try {
               await signOut();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
+              } catch (error: any) {
+              const msg = mapSupabaseErrorMessage(error?.message);
+              AppAlert.alert('Error', msg);
             }
           },
         },
@@ -39,11 +42,13 @@ export default function HomeScreen() {
           style={styles.reactLogo}
         />
       }>
-      
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="defaultSemiBold">¡Bienvenido!</ThemedText>
-        <ThemedText>Usuario Inspector autenticado: {user?.email}</ThemedText>
-        
+        {inspectorLoading || typeof isInspector === 'undefined' ? null : (
+          <ThemedText>
+            {isInspector ? 'Usuario Inspector autenticado' : 'Usuario Ciudadano autenticado'}: {user?.email}
+          </ThemedText>
+        )}
         <TouchableOpacity style={styles.button} onPress={handleSignOut}>
           <ThemedText style={styles.buttonText}>Cerrar sesión</ThemedText>
         </TouchableOpacity>

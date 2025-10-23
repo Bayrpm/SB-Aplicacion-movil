@@ -1,11 +1,12 @@
 import { ThemedView } from '@/components/themed-view';
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { signInUser } from '../api/auth.api';
+import { checkEmailExists, signInUser } from '../api/auth.api';
 import BaseAuthLayout from '../components/BaseAuthLayout';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -205,23 +206,37 @@ export default function SignInScreen() {
     }
   }, [step]);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step === 1) {
       if (!email.trim()) {
-        Alert.alert('Error', 'Por favor ingresa tu correo electrónico');
+        AppAlert.alert('Error', 'Por favor ingresa tu correo electrónico');
         return;
       }
       // Validación básica de email
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
-        Alert.alert('Error', 'Por favor ingresa un correo electrónico válido');
+        AppAlert.alert('Error', 'Por favor ingresa un correo electrónico válido');
         return;
       }
-      setStep(2);
-      // Auto-focus ultra rápido en el input de contraseña
-      setTimeout(() => {
-        passwordInputRef.current?.focus();
-      }, 20);
+      // Verificar existencia del correo en la BDD antes de avanzar
+      try {
+        startLoading();
+        const exists = await checkEmailExists(email);
+        stopLoading();
+        if (!exists) {
+          AppAlert.alert('Cuenta no encontrada', 'No existe una cuenta registrada con ese correo.');
+          return;
+        }
+        setStep(2);
+        // Auto-focus ultra rápido en el input de contraseña
+        setTimeout(() => {
+          passwordInputRef.current?.focus();
+        }, 20);
+      } catch (e) {
+        stopLoading();
+        console.error('Error verificando email:', e);
+        AppAlert.alert('Error', 'Ocurrió un error verificando el correo. Intenta de nuevo.');
+      }
     } else {
       handleSignIn();
     }
@@ -229,7 +244,7 @@ export default function SignInScreen() {
 
   const handleSignIn = async () => {
     if (!password.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu contraseña');
+      AppAlert.alert('Error', 'Por favor ingresa tu contraseña');
       return;
     }
     
@@ -239,8 +254,8 @@ export default function SignInScreen() {
       const result = await signInUser(email, password);
       if (result.error) {
         // Mostrar el mensaje de error retornado por la API
-        const message = result.error.message || 'Credenciales incorrectas';
-        Alert.alert('Error', message);
+        const message = result.error.message || 'Se han ingresado credenciales incorrectas';
+        AppAlert.alert('Error', message);
         stopLoading();
         return;
       }
@@ -264,7 +279,7 @@ export default function SignInScreen() {
     } catch (error) {
       // En caso de error inesperado
       console.error('Error al iniciar sesión:', error);
-      Alert.alert('Error', 'Ocurrió un error al iniciar sesión');
+      AppAlert.alert('Error', 'Ocurrió un error al iniciar sesión');
       stopLoading();
     }
   };
@@ -291,8 +306,8 @@ export default function SignInScreen() {
           useNativeDriver: true,
         }),
       ]).start(() => {
-        // Navegación después de la animación suave
-        router.back();
+        // Navegación después de la animación suave: replace al welcome group para evitar flash
+        router.replace('/(auth)');
       });
     }
   };
@@ -429,7 +444,7 @@ export default function SignInScreen() {
 
   return (
     <ThemedView style={{ flex: 1 }}>
-      <Animated.View style={{ flex: 1, opacity: screenFadeAnim }}>
+  <Animated.View style={{ flex: 1, opacity: screenFadeAnim }}>
       <BaseAuthLayout 
         title="Bienvenido" 
         showLogo={false}
@@ -476,13 +491,10 @@ export default function SignInScreen() {
           </View>
         </View>
         
-        <Animated.View 
+        <View 
           style={[
             styles.inputSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }]
-            }
+            // keep visual animation for container via opacity/transform on children
           ]}
         >
           {step === 1 ? (
@@ -527,22 +539,10 @@ export default function SignInScreen() {
               >
                 Contraseña
               </Animated.Text>
-              <Animated.View 
+              <View
                 style={[
-                  styles.passwordContainer, 
-                  { 
-                    width: finalFieldW,
-                    alignSelf: 'center',
-                    opacity: passwordInputAnim,
-                    transform: [{
-                      translateY: passwordInputAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [20, 0],
-                      })
-                    }],
-                    backgroundColor: inputBg,
-                    borderColor: inputBorder,
-                  }
+                  styles.passwordContainer,
+                  { width: finalFieldW, alignSelf: 'center', backgroundColor: inputBg, borderColor: inputBorder }
                 ]}
               >
                 <TextInput
@@ -573,10 +573,10 @@ export default function SignInScreen() {
                     color={tintColor}
                   />
                 </TouchableOpacity>
-              </Animated.View>
+      </View>
             </>
           )}
-        </Animated.View>
+    </View>
         </ScrollView>
 
   
@@ -652,6 +652,7 @@ export default function SignInScreen() {
       </View>
     </Modal>
   )}
+  {/* AlertBox provider is mounted globally in app/_layout.tsx; use AppAlert.alert(...) instead */}
       </Animated.View>
     </ThemedView>
   );

@@ -1,7 +1,8 @@
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, Alert, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import BaseAuthLayout from '../components/BaseAuthLayout';
 import { RegistrationStep1 } from '../components/RegistrationStep1';
@@ -259,7 +260,7 @@ export default function SignUpScreen() {
       // Reset inmediato y sin animación (evita saltos y reintentos)
       try {
         resetScrollImmediate();
-      } catch (e) {
+      } catch (_e) {
         // noop
       }
     }
@@ -302,7 +303,21 @@ export default function SignUpScreen() {
 
   const handleBack = () => {
     if (currentStep === 1) {
-      router.back();
+      // Animación suave antes de navegar atrás para mantener consistencia con SignIn
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0.7,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(progressAnim, {
+          toValue: 0.95,
+          duration: 160,
+          useNativeDriver: false,
+        })
+      ]).start(() => {
+          router.back();
+        });
     } else {
       goBack();
     }
@@ -339,7 +354,7 @@ export default function SignUpScreen() {
   const continueSize = React.useMemo(() => {
     try {
       return responsiveLayout.buttonSize ? responsiveLayout.buttonSize(80) : Math.round(width * 0.16);
-    } catch (e) {
+    } catch (_e) {
       return Math.round(width * 0.16);
     }
   }, [responsiveLayout, width]);
@@ -347,7 +362,7 @@ export default function SignUpScreen() {
   const backSize = React.useMemo(() => {
     try {
       return responsiveLayout.buttonSize ? responsiveLayout.buttonSize(50) : Math.round(width * 0.10);
-    } catch (e) {
+    } catch (_e) {
       return Math.round(width * 0.10);
     }
   }, [responsiveLayout, width]);
@@ -417,7 +432,7 @@ export default function SignUpScreen() {
               <ProgressBarMinimal />
             </View>
             <View style={[styles.formContainer, { paddingHorizontal: 22, alignItems: 'center' }]}> 
-              <Animated.View style={[styles.stepContent, { opacity: fadeAnim, width: '100%', maxWidth: 420 }]}> 
+              <View style={[styles.stepContent, { width: '100%', maxWidth: 420 }]}> 
                 <ScrollView
                   ref={scrollViewRef}
                   // Deshabilitar scroll manual mientras el teclado esté visible
@@ -443,7 +458,7 @@ export default function SignUpScreen() {
                     onInputFocus={() => {}}
                   />
                 </ScrollView>
-              </Animated.View>
+              </View>
             </View>
             <View style={[styles.bottomSpacer, { height: keyboardVisible ? 10 : spacingConfig.bottomSpacerHeight }]} />
           </BaseAuthLayout>
@@ -463,7 +478,7 @@ export default function SignUpScreen() {
               <ProgressBarMinimal />
             </View>
             <View style={[styles.formContainer, { paddingHorizontal: 22, alignItems: 'center' }]}> 
-              <Animated.View style={[styles.stepContent, { opacity: fadeAnim, width: '100%', maxWidth: 420 }]}> 
+              <View style={[styles.stepContent, { width: '100%', maxWidth: 420 }]}> 
                 {currentStep === 1 ? (
                   <ScrollView
                     ref={scrollViewRef}
@@ -495,9 +510,9 @@ export default function SignUpScreen() {
                                   // requesting scroll for apellido
                                   scrollViewRef.current.scrollTo({ y, animated: true });
                                 }
-                              } catch (e) {}
-                            }, 120);
-                          } else {
+                              } catch (_e) {
+                                // ignore scroll errors in this best-effort attempt
+                              }
                             // Si el teclado aún no está visible, programar un intento tras un delay
                             // para cubrir casos en que keyboardDidShow se dispara después del focus.
                             const fallbackTimer = setTimeout(() => {
@@ -507,11 +522,12 @@ export default function SignUpScreen() {
                                   // fallback requesting scroll for apellido
                                   scrollViewRef.current.scrollTo({ y, animated: true });
                                 }
-                              } catch (e) {}
+                              } catch (_e) {}
                             }, 360);
                             // Limpiar el timeout si más tarde el teclado aparece y se ejecuta el efecto
                             // (no hacemos seguimiento extra aquí; el timeout es de corta duración)
                             setTimeout(() => clearTimeout(fallbackTimer), 1000);
+                          }, 30);
                           }
                         }
                       }}
@@ -525,7 +541,7 @@ export default function SignUpScreen() {
                     initialData={getStep2Data()}
                   />
                 )}
-              </Animated.View>
+              </View>
             </View>
             <View style={[styles.bottomSpacer, { height: keyboardVisible ? 10 : spacingConfig.bottomSpacerHeight }]} />
           </BaseAuthLayout>
@@ -566,7 +582,7 @@ export default function SignUpScreen() {
               } else if (currentStep === 2) {
                 const currentPhone = (global as any).getCurrentPhone ? (global as any).getCurrentPhone() : '';
                 if (!currentPhone) {
-                  Alert.alert(
+                  AppAlert.alert(
                     '¿Seguro que quieres omitir tu teléfono?',
                     'Podrás agregarlo más tarde en tu perfil.',
                     [
