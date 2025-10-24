@@ -24,6 +24,8 @@ const MAPPING = {
   'notification.fill': 'notifications',
   'location': 'place',
   'location.fill': 'place',
+  // Mapeo personalizado: permite usar el nombre 'hov' desde IconSymbol
+  'hov': 'hov',
 } as unknown as IconMapping;
 
 /**

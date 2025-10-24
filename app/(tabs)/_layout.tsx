@@ -1,30 +1,42 @@
 import { useAuth } from '@/app/features/auth';
+import ReportPickerModal from '@/app/features/report/components/reportPickerModal';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
-import { Tabs, usePathname, useRouter } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-function CentralReportButton(props: BottomTabBarButtonProps) {
+// Some navigator props (sceneContainerStyle) aren't exposed via the typed Tabs from expo-router.
+// We'll keep a typed alias to allow passing JS-only props when necessary.
+const TabsAny = Tabs as any;
+
+function CentralReportButton(props: BottomTabBarButtonProps & { onOpen?: () => void }) {
   const scheme = useColorScheme();
   const borderColor = '#0A4A90';
   const innerBg = scheme === 'dark' ? '#000000' : '#FFFFFF';
-  const pathname = usePathname();
-  // Determinar si el tab está activo comparando la ruta actual con la ruta del botón
-  // El nombre de la ruta del botón se obtiene de props.route.name
-  // El tab de reportar puede ser 'citizenReport' o 'inspectorReport'
-  const isActive = pathname?.includes('citizenReport') || pathname?.includes('inspectorReport');
+  // Usar el estado de accesibilidad que React Navigation pasa a la custom tab button
+  // es más confiable para saber si el tab está seleccionado (focused)
+  const isActive = !!props.accessibilityState?.selected;
   const activeColor = scheme === 'dark' ? '#FFFFFF' : '#0A4A90';
   const inactiveColor = scheme === 'dark' ? '#888888' : '#B0B0B0'; // gris sólido
   const iconColor = isActive ? activeColor : inactiveColor;
   const textColor = isActive ? activeColor : inactiveColor;
+  const handlePress = () => {
+    if (isActive && typeof (props as any).onOpen === 'function') {
+      try { (props as any).onOpen(); } catch (e) {}
+      return;
+    }
+    try { (props as any).onPress?.(); } catch (e) {}
+  };
+
   return (
     <View style={styles.centralButtonWrapper} pointerEvents="box-none">
       <TouchableOpacity
-        onPress={props.onPress}
+        onPress={handlePress}
   activeOpacity={1}
         accessibilityRole="button"
         style={[
@@ -43,7 +55,15 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { user, loading, isInspector, inspectorLoading, roleCheckFailed } = useAuth();
   const [showOverlay, setShowOverlay] = useState(false);
+  const [showReportPicker, setShowReportPicker] = useState(false);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+
+  // En Android la diferencia entre screen y window suele reflejar la navigation bar (soft keys)
+  const navBarHeightAndroid = Platform.OS === 'android' ? Math.max(0, Dimensions.get('screen').height - Dimensions.get('window').height) : 0;
+  const extraBottom = Math.max(insets.bottom || 0, navBarHeightAndroid || 0);
+  const TAB_BAR_BASE = 72; // altura base usada antes
+  const tabBarHeight = TAB_BAR_BASE + extraBottom;
 
   useEffect(() => {
     let mounted = true;
@@ -107,20 +127,31 @@ export default function TabLayout() {
   }
 
   return (
-    <Tabs
+    <>
+  <ReportPickerModal visible={showReportPicker} onClose={() => setShowReportPicker(false)} tabBarHeight={tabBarHeight} />
+    <TabsAny
       initialRouteName={isInspector ? 'inspector/inspectorHome' : 'citizen/citizenHome'}
+      sceneContainerStyle={{ paddingBottom: tabBarHeight }}
       screenOptions={{
+        // Forzar que el contenido de cada pantalla reserve espacio inferior igual a tabBarHeight
+        // note: contentStyle on bottom tabs isn't always typed; we still keep tabBar absolute anchoring
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarShowLabel: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
-          height: 72,
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: extraBottom, // ancla la tab bar justo encima de la barra de navegación del sistema
+          height: TAB_BAR_BASE,
           paddingBottom: 12,
           paddingTop: 8,
           overflow: 'visible',
           backgroundColor: '#0A4A90',
           borderTopWidth: 0,
+          elevation: 12,
+          zIndex: 999,
         },
         tabBarItemStyle: {
           flex: 1,
@@ -153,7 +184,7 @@ export default function TabLayout() {
           !isInspector
             ? {
                 title: 'reportes',
-                tabBarButton: (props) => <CentralReportButton {...props} />, // Usar focused
+                tabBarButton: (props) => <CentralReportButton {...props} onOpen={() => setShowReportPicker(true)} />, // Usar focused
                 tabBarIcon: ({ color }) => (
                   <View style={{ width: 72, height: 52, marginTop: 8, alignItems: 'center', justifyContent: 'center' }}>
                     <IconSymbol size={46} name="location.fill" color={color} />
@@ -239,7 +270,8 @@ export default function TabLayout() {
               }
         }
       />
-    </Tabs>
+  </TabsAny>
+    </>
   );
 }
 

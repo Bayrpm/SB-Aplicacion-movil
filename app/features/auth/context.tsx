@@ -87,7 +87,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session]);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      // Ensure local auth state is cleared immediately so UI reacts to sign-out without waiting
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setIsInspector(undefined);
+      setInspectorLoading(false);
+      setRoleCheckFailed(false);
+      setLoading(false);
+    }
   };
 
   const value: ExtendedAuthContextType = {
