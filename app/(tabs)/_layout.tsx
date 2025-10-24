@@ -1,11 +1,10 @@
 import { useAuth } from '@/app/features/auth';
-import ReportPickerModal from '@/app/features/report/components/reportPickerModal';
+// ReportPickerModal se muestra desde la pantalla `citizenReport` via tabPress
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,22 +13,27 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // We'll keep a typed alias to allow passing JS-only props when necessary.
 const TabsAny = Tabs as any;
 
-function CentralReportButton(props: BottomTabBarButtonProps & { onOpen?: () => void }) {
+function CentralReportButton(props: BottomTabBarButtonProps) {
   const scheme = useColorScheme();
   const borderColor = '#0A4A90';
-  const innerBg = scheme === 'dark' ? '#000000' : '#FFFFFF';
   // Usar el estado de accesibilidad que React Navigation pasa a la custom tab button
-  // es más confiable para saber si el tab está seleccionado (focused)
-  const isActive = !!props.accessibilityState?.selected;
-  const activeColor = scheme === 'dark' ? '#FFFFFF' : '#0A4A90';
-  const inactiveColor = scheme === 'dark' ? '#888888' : '#B0B0B0'; // gris sólido
+  // o, como fallback, comprobar los segmentos de ruta para determinar si
+  // estamos en la pantalla de reportes. Esto evita casos donde accessibilityState
+  // no se propaga inmediatamente.
+  const segments = useSegments();
+  const isActive = !!props.accessibilityState?.selected || (segments as string[]).includes('citizenReport');
+  // El fondo del botón debe seguir el tema del sistema (oscuro/claro).
+  // Solo el icono y el texto cambian de color cuando el tab está activo.
+  // Mantener azul como color principal tanto en light como dark para este tab.
+  const innerBg = scheme === 'dark' ? '#000000' : '#FFFFFF';
+  const BLUE = '#0A4A90';
+  // En modo claro usamos azul activo / azul opaco inactivo.
+  // En modo oscuro usamos blanco activo / blanco opaco inactivo.
+  const activeColor = scheme === 'dark' ? '#FFFFFF' : BLUE;
+  const inactiveColor = scheme === 'dark' ? 'rgba(255,255,255,0.56)' : 'rgba(10,74,144,0.56)';
   const iconColor = isActive ? activeColor : inactiveColor;
   const textColor = isActive ? activeColor : inactiveColor;
   const handlePress = () => {
-    if (isActive && typeof (props as any).onOpen === 'function') {
-      try { (props as any).onOpen(); } catch (e) {}
-      return;
-    }
     try { (props as any).onPress?.(); } catch (e) {}
   };
 
@@ -44,8 +48,8 @@ function CentralReportButton(props: BottomTabBarButtonProps & { onOpen?: () => v
           { borderColor, backgroundColor: innerBg },
         ]}
       >
-        <IconSymbol name="location.fill" size={34} color={iconColor} />
-        <Text style={[styles.centralButtonText, { color: textColor }]}>Reportar</Text>
+  <IconSymbol name="location.fill" size={48} color={iconColor} />
+  <Text style={[styles.centralButtonText, { color: textColor }]}>Reportar</Text>
       </TouchableOpacity>
     </View>
   );
@@ -55,7 +59,6 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { user, loading, isInspector, inspectorLoading, roleCheckFailed } = useAuth();
   const [showOverlay, setShowOverlay] = useState(false);
-  const [showReportPicker, setShowReportPicker] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
@@ -128,14 +131,13 @@ export default function TabLayout() {
 
   return (
     <>
-  <ReportPickerModal visible={showReportPicker} onClose={() => setShowReportPicker(false)} tabBarHeight={tabBarHeight} />
     <TabsAny
       initialRouteName={isInspector ? 'inspector/inspectorHome' : 'citizen/citizenHome'}
       sceneContainerStyle={{ paddingBottom: tabBarHeight }}
       screenOptions={{
         // Forzar que el contenido de cada pantalla reserve espacio inferior igual a tabBarHeight
         // note: contentStyle on bottom tabs isn't always typed; we still keep tabBar absolute anchoring
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+  tabBarActiveTintColor: '#FFFFFF',
         headerShown: false,
         tabBarShowLabel: false,
         tabBarButton: HapticTab,
@@ -184,7 +186,7 @@ export default function TabLayout() {
           !isInspector
             ? {
                 title: 'reportes',
-                tabBarButton: (props) => <CentralReportButton {...props} onOpen={() => setShowReportPicker(true)} />, // Usar focused
+                tabBarButton: (props) => <CentralReportButton {...props} />, // Usar focused
                 tabBarIcon: ({ color }) => (
                   <View style={{ width: 72, height: 52, marginTop: 8, alignItems: 'center', justifyContent: 'center' }}>
                     <IconSymbol size={46} name="location.fill" color={color} />
@@ -271,6 +273,7 @@ export default function TabLayout() {
         }
       />
   </TabsAny>
+  {/* ReportPickerModal se muestra desde la pantalla `citizen/citizenReport` (escucha tabPress) */}
     </>
   );
 }
@@ -303,8 +306,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   centralButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     textTransform: 'none',
   },
 });

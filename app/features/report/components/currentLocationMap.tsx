@@ -93,6 +93,58 @@ const styles = StyleSheet.create({
   },
 });
 
+
+
+// Estilo de mapa oscuro que mantiene POI/íconos visibles
+const DARK_MAP_STYLE = [
+  // Base + labels
+  { elementType: 'geometry', stylers: [{ color: '#0b1627' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#eaf2ff' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0b1627' }] },
+
+  // Agua
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a2740' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#bfe1ff' }] },
+
+  // Límites administrativos
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#23344a' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d6e7ff' }] },
+  { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#c7dbff' }] },
+
+  // Paisaje/edificaciones + POI
+  { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#182e50ff' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#0f1d33' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#deebff' }] },
+  { featureType: 'poi', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#112b1e' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#b8f8d0' }] },
+  { featureType: 'poi.business', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+
+  // Autopistas
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2e3f63' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#5d718c' }] },
+  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#e2eeff' }] },
+
+  // Arteriales
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#22344a' }] },
+  { featureType: 'road.arterial', elementType: 'geometry.stroke', stylers: [{ color: '#3b557a' }] },
+  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#d6e7ff' }] },
+
+  // Calles locales (más detalle)
+  { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#18263e' }] },
+  { featureType: 'road.local', elementType: 'geometry.stroke', stylers: [{ color: '#2b405f' }] },
+  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#cfe2ff' }] },
+
+  // Íconos de vías visibles (coches, giros, etc.)
+  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+
+  // Tránsito
+  { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#3a7bd5' }] },
+  { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#eaf2ff' }] },
+  { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+];
+
+
 export default function CurrentLocationMap() {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
@@ -358,6 +410,11 @@ export default function CurrentLocationMap() {
   // ======== Handlers de gestos/región ========
   const onPanDrag = () => {
     userGestureRef.current = true; // viene de usuario
+    // Si el usuario inicia un pan, desactivar inmediatamente el modo "follow"
+    if (isFollowingRef.current) {
+      isFollowingRef.current = false;
+      setIsFollowing(false);
+    }
     if (isPanningRef.current) return;
     isPanningRef.current = true;
     if (rafRef.current == null) rafRef.current = requestAnimationFrame(rafLoop);
@@ -444,10 +501,13 @@ export default function CurrentLocationMap() {
         showsUserLocation
         showsMyLocationButton={false}
         loadingEnabled
+  // Aplicar estilo similar a Google Maps en Android cuando el sistema está en dark
+  // En iOS dejamos el estilo por defecto (Apple Maps puede interpretarlo distinto)
+  customMapStyle={scheme === 'dark' && Platform.OS === 'android' ? DARK_MAP_STYLE : undefined}
         onRegionChange={onRegionChange}
         onRegionChangeComplete={onRegionChangeComplete}
         onPanDrag={onPanDrag}
-        onTouchStart={() => { startRaf(); userGestureRef.current = true; setIsCentered(false); }}
+  onTouchStart={() => { startRaf(); userGestureRef.current = true; if (isFollowingRef.current) { isFollowingRef.current = false; setIsFollowing(false); } setIsCentered(false); }}
         onTouchEnd={() => { setTimeout(() => stopRaf(), 80); }}
         showsCompass={false}
       />
