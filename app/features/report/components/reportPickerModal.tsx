@@ -19,10 +19,11 @@ import type { ReportCategory } from '../types';
 type Props = {
   visible: boolean;
   onClose: () => void;
+  onSelect?: (cat: ReportCategory) => void;
   tabBarHeight?: number;
 };
 
-export default function ReportPickerModal({ visible, onClose, tabBarHeight }: Props) {
+export default function ReportPickerModal({ visible, onClose, onSelect, tabBarHeight }: Props) {
   const router = useRouter();
   const categories = useReportCategories();
   const insets = useSafeAreaInsets();
@@ -65,6 +66,11 @@ export default function ReportPickerModal({ visible, onClose, tabBarHeight }: Pr
 
   const handleSelect = (cat: ReportCategory) => {
     onClose();
+    // Si el padre proveyó onSelect, lo llamamos (preferible para manejar localmente
+    // la apertura del formulario). Si no, caemos al comportamiento anterior.
+    if (typeof onSelect === 'function') {
+      try { onSelect(cat); return; } catch {}
+    }
     try {
       router.push({ pathname: '/citizen/citizenReport', params: { categoryId: String(cat.id) } });
     } catch {
@@ -96,8 +102,9 @@ export default function ReportPickerModal({ visible, onClose, tabBarHeight }: Pr
       statusBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={[styles.absoluteRoot, { top: 0, bottom: 0 }]} pointerEvents="box-none">
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose} />
+      <View style={[styles.absoluteRoot, { top: 0, bottom: 0 }]}>
+        {/* overlay visual only: no onPress so taps outside no cierran el modal */}
+        <View style={styles.overlay} />
 
         {/* Panel */}
         <View
@@ -105,7 +112,6 @@ export default function ReportPickerModal({ visible, onClose, tabBarHeight }: Pr
             styles.containerAbsolute,
             { top: 0, maxHeight: maxPanelHeight, paddingTop: SAFE_TOP, zIndex: 1001 },
           ]}
-          pointerEvents="box-none"
         >
           {/* Botón cancelar: más abajo y más grande */}
           <TouchableOpacity
@@ -179,7 +185,9 @@ export default function ReportPickerModal({ visible, onClose, tabBarHeight }: Pr
                     ]}
                   >
                     <MaterialCommunityIcons
-                      name={(ICON_MAP[c.id] as any) ?? 'map-marker'}
+                      // Prefer `icon` provisto por la categoría (desde la BDD). Si no existe,
+                      // usamos el mapa de respaldo por id. Finalmente fallback 'map-marker'.
+                      name={(c as any).icon ?? (ICON_MAP[c.id] as any) ?? 'map-marker'}
                       size={moderateScale(30)}
                       color="#fff"
                     />

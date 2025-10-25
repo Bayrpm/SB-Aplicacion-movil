@@ -1,5 +1,6 @@
 import { useAuth } from '@/app/features/auth';
 // ReportPickerModal se muestra desde la pantalla `citizenReport` via tabPress
+import { useReportModal } from '@/app/features/report/context';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -61,6 +62,7 @@ export default function TabLayout() {
   const [showOverlay, setShowOverlay] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isReportFormOpen } = useReportModal();
 
   // En Android la diferencia entre screen y window suele reflejar la navigation bar (soft keys)
   const navBarHeightAndroid = Platform.OS === 'android' ? Math.max(0, Dimensions.get('screen').height - Dimensions.get('window').height) : 0;
@@ -154,6 +156,7 @@ export default function TabLayout() {
           borderTopWidth: 0,
           elevation: 12,
           zIndex: 999,
+          display: isReportFormOpen ? 'none' : 'flex',
         },
         tabBarItemStyle: {
           flex: 1,

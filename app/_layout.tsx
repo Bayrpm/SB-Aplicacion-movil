@@ -6,6 +6,7 @@ import { Animated, Easing, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, SplashScreen, useAuth } from '@/app/features/auth';
+import { ReportModalProvider } from '@/app/features/report/context';
 import AlertBox from '@/components/ui/AlertBox';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -138,7 +139,9 @@ function RootLayoutNav() {
               ],
             }}
           >
-            <Slot />
+            <ReportModalProvider>
+              <Slot />
+            </ReportModalProvider>
           </Animated.View>
         <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
       </ThemeProvider>
