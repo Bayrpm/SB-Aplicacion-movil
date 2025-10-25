@@ -87,18 +87,46 @@ export async function createReport(payload: {
   coords_x?: number | null;
   coords_y?: number | null;
   categoria_publica_id?: number | null;
+  // optional administrative fields - when available include them
+  estado_id?: number | null;
+  inspector_id?: number | null;
+  consentir_publicacion?: boolean | null;
+  prioridad?: string | null;
+  cuadrante_id?: number | null;
 }) {
   try {
+    // Normalize fields to match DB expectations
+    const anon = Boolean(payload.anonimo);
+    const ubicacion_texto = payload.ubicacion_texto ?? null;
+
+    // DB now uses double precision (float8) for coords_x/coords_y. We accept
+    // real lat/lon values and round to 6 decimals before inserting.
+    let coords_x: number | null = null;
+    let coords_y: number | null = null;
+    if (typeof payload.coords_x === 'number' && Number.isFinite(payload.coords_x)) {
+      coords_x = Number(payload.coords_x.toFixed(6));
+    }
+    if (typeof payload.coords_y === 'number' && Number.isFinite(payload.coords_y)) {
+      coords_y = Number(payload.coords_y.toFixed(6));
+    }
+
     const insertObj: any = {
       ciudadano_id: payload.ciudadano_id,
       titulo: payload.titulo,
       descripcion: payload.descripcion,
-      anonimo: payload.anonimo,
-      ubicacion_texto: payload.ubicacion_texto ?? null,
-      coords_x: payload.coords_x ?? null,
-      coords_y: payload.coords_y ?? null,
+      anonimo: anon,
+      ubicacion_texto,
+      coords_x: coords_x ?? null,
+      coords_y: coords_y ?? null,
       categoria_publica_id: payload.categoria_publica_id ?? null,
     };
+
+    // Include optional administrative fields only when explicitly provided
+    if (Object.prototype.hasOwnProperty.call(payload, 'estado_id')) insertObj.estado_id = payload.estado_id;
+    if (Object.prototype.hasOwnProperty.call(payload, 'inspector_id')) insertObj.inspector_id = payload.inspector_id;
+    if (Object.prototype.hasOwnProperty.call(payload, 'consentir_publicacion')) insertObj.consentir_publicacion = payload.consentir_publicacion;
+    if (Object.prototype.hasOwnProperty.call(payload, 'prioridad')) insertObj.prioridad = payload.prioridad;
+    if (Object.prototype.hasOwnProperty.call(payload, 'cuadrante_id')) insertObj.cuadrante_id = payload.cuadrante_id;
 
     const { data, error } = await supabase.from('denuncias').insert(insertObj).select('*');
     if (error) {

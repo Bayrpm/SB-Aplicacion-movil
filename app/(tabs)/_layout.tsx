@@ -63,6 +63,7 @@ export default function TabLayout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isReportFormOpen } = useReportModal();
+  const segments = useSegments();
 
   // En Android la diferencia entre screen y window suele reflejar la navigation bar (soft keys)
   const navBarHeightAndroid = Platform.OS === 'android' ? Math.max(0, Dimensions.get('screen').height - Dimensions.get('window').height) : 0;
@@ -89,8 +90,17 @@ export default function TabLayout() {
   // Navegar al tab correcto cuando el rol se define
   useEffect(() => {
     if (!loading && !inspectorLoading && typeof isInspector === 'boolean') {
-      const routePath = isInspector ? '/inspector/inspectorHome' : '/citizen/citizenHome';
-      router.replace(routePath);
+      // Only redirect to the default tab on initial launch (when we're not
+      // already inside a citizen/inspector segment). This prevents the effect
+      // from forcing navigation to citizenHome when the user returns from a
+      // full-screen editor (like editLocation) which should return to
+      // the previous tab/stack.
+  const segs = (segments as string[]) || [];
+  const alreadyInside = segs.includes('citizen') || segs.includes('inspector');
+      if (!alreadyInside) {
+        const routePath = isInspector ? '/inspector/inspectorHome' : '/citizen/citizenHome';
+        router.replace(routePath);
+      }
     }
   }, [loading, inspectorLoading, isInspector, router]);
 

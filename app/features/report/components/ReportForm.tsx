@@ -24,11 +24,23 @@ import { createReport } from '../api/report.api';
 import { useReportModal } from '../context';
 import { useReportCategories } from '../hooks/useReportCategories';
 import type { ReportCategory } from '../types';
+import { setLocationEditCallback } from '../types/locationBridge';
+import { setReportFormSnapshot } from '../types/reportFormBridge';
 
 type Props = { onClose?: () => void; categoryId?: number; onBack?: () => void; };
 type TIRef = React.RefObject<TextInput | null>;
 
-export default function ReportForm({ onClose, categoryId, onBack }: Props) {
+type InitialData = {
+  titulo?: string;
+  descripcion?: string;
+  anonimo?: boolean;
+  ubicacionTexto?: string;
+  coords?: { x?: number; y?: number };
+};
+
+type PropsExtended = Props & { initialData?: InitialData };
+
+export default function ReportForm({ onClose, categoryId, onBack, initialData }: PropsExtended) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
@@ -42,6 +54,16 @@ export default function ReportForm({ onClose, categoryId, onBack }: Props) {
   const [descripcion, setDescripcion] = useState('');
   const [anonimo, setAnonimo] = useState(false);
   const [ubicacionTexto, setUbicacionTexto] = useState('');
+
+  // Inicializar desde initialData si está presente
+  useEffect(() => {
+    if (!initialData) return;
+    if (initialData.titulo) setTitulo(initialData.titulo);
+    if (initialData.descripcion) setDescripcion(initialData.descripcion);
+    if (typeof initialData.anonimo === 'boolean') setAnonimo(initialData.anonimo);
+    if (initialData.ubicacionTexto) setUbicacionTexto(initialData.ubicacionTexto);
+    if (initialData.coords) setCoords(initialData.coords);
+  }, [initialData]);
 
   const [coords, setCoords] = useState<{ x?: number; y?: number }>({});
   const [submitting, setSubmitting] = useState(false);
@@ -124,6 +146,18 @@ export default function ReportForm({ onClose, categoryId, onBack }: Props) {
     } finally { setSubmitting(false); }
   };
 
+  // Obtener ubicación automático al abrir el formulario
+  useEffect(() => {
+    // Si initialData proviene de editLocation (tiene ubicacionTexto o coords),
+    // no debemos sobrescribirla con la ubicación del dispositivo. Solo pedir
+    // la ubicación automática si no hay información previa.
+    const hasInitialLocation = Boolean(initialData && (initialData.ubicacionTexto || (initialData.coords && (initialData.coords.x || initialData.coords.y))));
+    if (hasInitialLocation) return;
+    // intenta obtener ubicación sin necesidad de que el usuario presione
+    // esto pedirá permiso la primera vez si no está otorgado
+    (async () => { try { await handleUseCurrentLocation(); } catch {} })();
+  }, [initialData]);
+
   // ===== Escalado
   const { height: windowH, width: windowW } = Dimensions.get('window');
   const BASE_W = 390, BASE_H = 844;
@@ -133,6 +167,14 @@ export default function ReportForm({ onClose, categoryId, onBack }: Props) {
   const SAFE_TOP = insets.top + ms(8);
   const maxPanelHeight = Math.max(240, windowH - SAFE_TOP - 80);
   const TOP_OFFSET = Math.max(ms(32), Math.min(ms(96), (Math.max(0, maxPanelHeight - SAFE_TOP) * (windowW > windowH ? 0.06 : 0.10))));
+
+  // Responsive measurements para footer
+  const REPORT_BTN_W = Math.round(Math.min(140, Math.max(100, windowW * 0.34)));
+  const LEFT_RESERVED_PADDING = REPORT_BTN_W + ms(24); // espacio reservado en el grupo izquierdo
+  const MAX_BADGE_WIDTH = Math.round(windowW * 0.42);
+
+  // Tamaño de fuente dinámico para el texto de ubicación (intentar que quepa sin cambiar botones)
+  const locFontSize = ms(ubicacionTexto?.length > 120 ? 11 : ubicacionTexto?.length > 80 ? 12 : ubicacionTexto?.length > 50 ? 13 : 15);
 
   // ===== Scroll y refs
   const scrollRef = useRef<ScrollView | null>(null);
@@ -223,6 +265,70 @@ export default function ReportForm({ onClose, categoryId, onBack }: Props) {
       });
     } else if (focusedRef.current === 'desc') {
       ensureVisibleByCaret();
+    }
+  };
+
+  // ===== Obtener y mostrar dirección actual
+  const handleUseCurrentLocation = async () => {
+    try {
+      const { requestForegroundPermissionsAsync, getCurrentPositionAsync, reverseGeocodeAsync } = await import('expo-location');
+      const perm = await requestForegroundPermissionsAsync();
+      if (perm.status !== 'granted') {
+        AppAlert.alert('Ubicación', 'Permiso denegado para acceder a la ubicación.');
+        return;
+      }
+
+      const loc = await getCurrentPositionAsync({ accuracy: 3 });
+      setCoords({ x: Number(loc.coords.latitude.toFixed(4)), y: Number(loc.coords.longitude.toFixed(4)) });
+
+      const places = await reverseGeocodeAsync({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+      const p = places?.[0] ?? null;
+      if (!p) {
+        setUbicacionTexto('Ubicación desconocida');
+        return;
+      }
+
+      // Formateo avanzado: queremos "Calle Nombre 123, 800000 Ciudad, Región"
+      // 1) Detectar número de casa/portal en `name` o al final de `street`.
+      let streetRaw = (p.street || p.name || '').trim();
+      let number = '';
+
+      // Si `p.name` es solo número, usarlo como número
+      if (p.name && /^\d+$/.test(String(p.name).trim())) {
+        number = String(p.name).trim();
+        streetRaw = (p.street || '').trim();
+      } else {
+        // Detectar número al final del `name` si `street` existe
+        const mNameNum = String(p.name || '').trim().match(/(\d+)$/);
+        if (mNameNum && p.street) {
+          number = mNameNum[1];
+          streetRaw = (p.street || '').trim();
+        } else {
+          // Si la street termina en número, separarlo
+          const mStreetNum = streetRaw.match(/^(.*?)[,\s]+(\d+)\s*$/);
+          if (mStreetNum) {
+            streetRaw = (mStreetNum[1] || '').trim();
+            number = mStreetNum[2] || '';
+          }
+        }
+      }
+
+      // Expandir abreviaturas comunes al inicio
+      streetRaw = streetRaw
+        .replace(/^\s*(Av\.?|Av)\s+/i, 'Avenida ')
+        .replace(/^\s*(C\.?|Calle|C)\s+/i, 'Calle ')
+        .replace(/^\s*(Pje\.?|Pje)\s+/i, 'Pasaje ')
+        .replace(/^\s*(Gral\.?|Gral)\s+/i, 'General ')
+        .replace(/^\s*(Bv\.?|Bvar\.?|Bulevar|Bulev)\s+/i, 'Bulevar ');
+
+      const streetAndNumber = [streetRaw, number].filter(Boolean).join(' ').trim();
+      const postalCity = [p.postalCode, p.city].filter(Boolean).join(' ');
+      const region = p.region || '';
+
+      const pretty = [streetAndNumber, postalCity, region].filter(Boolean).join(', ').trim();
+      setUbicacionTexto(pretty || 'Mi ubicación');
+    } catch (err) {
+      AppAlert.alert('Ubicación', 'No se pudo obtener la ubicación. Intenta de nuevo.');
     }
   };
 
@@ -359,10 +465,32 @@ export default function ReportForm({ onClose, categoryId, onBack }: Props) {
               <MaterialCommunityIcons name="image" size={20} color="#0A4A90" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.footerLocationBtnFull} onPress={() => setUbicacionTexto(s => (s?.trim() ? s : 'Ubicación actual'))}>
+            <TouchableOpacity
+              style={styles.footerLocationBtnFull}
+              onPress={() => {
+                try {
+                  const lat = coords.x ?? '';
+                  const lng = coords.y ?? '';
+                  const addr = encodeURIComponent(ubicacionTexto ?? '');
+                  // persistimos snapshot para restaurar el formulario cuando volvamos
+                  try { setReportFormSnapshot({ titulo, descripcion, anonimo, ubicacionTexto, coords, categoryId }); } catch {}
+                  // registrar callback por si el ReportForm aún estuviera montado (fallback)
+                  setLocationEditCallback(({ ubicacionTexto: u, coords: c }) => {
+                    setUbicacionTexto(u ?? '');
+                    setCoords(c ?? {});
+                  });
+                  // cerrar el modal primero para forzar el unmount (y que el tab bar vuelva a mostrarse)
+                  try { onClose?.(); } catch {}
+                  // esperar un tick para permitir el unmount, luego navegar al editor
+                  setTimeout(() => {
+                    try { router.push((`/features/report/components/editLocation?lat=${lat}&lng=${lng}&addr=${addr}`) as any); } catch (e) { console.warn(e); }
+                  }, 120);
+                } catch (e) { console.warn(e); }
+              }}
+            >
               <MaterialCommunityIcons name="map-marker" size={20} color="#0A4A90" style={{ marginRight: 8 }} />
-              <Text style={styles.footerLocationTextFull} numberOfLines={1} ellipsizeMode="tail">
-                {ubicacionTexto?.trim() ? ubicacionTexto : 'Ubicación actual'}
+              <Text style={[styles.footerLocationTextFull, { fontSize: locFontSize }]} numberOfLines={4} ellipsizeMode="tail">
+                {ubicacionTexto?.trim() ? ubicacionTexto : 'Obteniendo ubicación…'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -370,7 +498,7 @@ export default function ReportForm({ onClose, categoryId, onBack }: Props) {
           <View style={{ height: 1, backgroundColor: '#fff', width: '100%', marginVertical: 8 }} />
 
           <View style={styles.footerBottomRowFull}>
-            <View style={styles.leftFooterGroup}>
+            <View style={[styles.leftFooterGroup, { paddingRight: LEFT_RESERVED_PADDING }] }>
               <TouchableOpacity
                 style={[styles.anonFooterBtnFull, anonimo ? styles.anonFooterBtnActive : styles.anonFooterBtnInactive]}
                 onPress={() => setAnonimo(v => !v)}
@@ -378,13 +506,13 @@ export default function ReportForm({ onClose, categoryId, onBack }: Props) {
                 <FontAwesome5 name="user-secret" solid size={20} color={anonimo ? '#0A4A90' : 'rgba(10,74,144,0.28)'} />
               </TouchableOpacity>
                 {anonimo ? (
-                  <View style={styles.anonymousBadge}>
+                  <View style={[styles.anonymousBadge, { maxWidth: MAX_BADGE_WIDTH }]}>
                     <Text style={styles.anonymousBadgeTxt} numberOfLines={1} ellipsizeMode="tail">Reporte Anónimo</Text>
                   </View>
                 ) : null}
             </View>
 
-            <TouchableOpacity style={styles.reportFooterBtnFull} onPress={handleSubmit} disabled={submitting}>
+            <TouchableOpacity style={[styles.reportFooterBtnFull, { width: REPORT_BTN_W }]} onPress={handleSubmit} disabled={submitting}>
               <MaterialCommunityIcons name="send" size={18} color="#0A4A90" style={{ marginRight: 8 }} />
               <Text style={styles.reportFooterTxtFull}>{submitting ? 'Enviando…' : 'Reportar'}</Text>
             </TouchableOpacity>
@@ -399,19 +527,19 @@ const styles = StyleSheet.create({
   overlayFull: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)' },
   navbar: { width: '100%', backgroundColor: '#0A4A90', borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 
-  footerAbsolute: { position: 'absolute', left: 0, right: 0, backgroundColor: '#0A4A90', paddingHorizontal: 12, paddingTop: 6 },
+  footerAbsolute: { position: 'absolute', left: 0, right: 0, backgroundColor: '#0A4A90', paddingHorizontal: 12, paddingTop: 8 },
   footerTopRowInner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
-  footerCircleBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-  footerLocationBtnFull: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, paddingHorizontal: 12, height: 48 },
-  footerLocationTextFull: { color: '#0A4A90', fontSize: 14, flexShrink: 1, textAlign: 'right' },
-  footerBottomRowFull: { position: 'relative', flexDirection: 'row', alignItems: 'center', marginTop: 0, height: 48 },
-  anonFooterBtnFull: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  footerCircleBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  footerLocationBtnFull: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 12, height: 56, paddingVertical: 6 },
+  footerLocationTextFull: { color: '#0A4A90', fontSize: 15, flexShrink: 1, textAlign: 'left' },
+  footerBottomRowFull: { position: 'relative', flexDirection: 'row', alignItems: 'center', marginTop: 0, height: 56 },
+  anonFooterBtnFull: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   anonFooterBtnActive: { backgroundColor: '#fff', borderWidth: 0, shadowColor: '#0A4A90', shadowOpacity: 0.12, shadowRadius: 6, elevation: 2 },
   anonFooterBtnInactive: { backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 0, borderColor: 'rgba(10,74,144,0.06)' },
   
   reportFooterTxtFull: { color: '#0A4A90', fontWeight: '700', fontSize: 16 },
-  leftFooterGroup: { position: 'relative', flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 180 },
-  anonymousBadge: { backgroundColor: '#fff', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 14, width: 120, minHeight: 36, justifyContent: 'center', marginLeft: 2, zIndex: 5, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
-  anonymousBadgeTxt: { color: '#003366', fontSize: 13, fontWeight: '800', flexShrink: 0, includeFontPadding: true, textAlign: 'left', lineHeight: 18 },
-  reportFooterBtnFull: { position: 'absolute', right: 12, top: '50%', width: 130, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderRadius: 8, height: 44, paddingHorizontal: 12, zIndex: 20, transform: [{ translateY: -22 }] },
+  leftFooterGroup: { position: 'relative', flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 200 },
+  anonymousBadge: { backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, minHeight: 40, justifyContent: 'center', marginLeft: 6, zIndex: 5, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
+  anonymousBadgeTxt: { color: '#003366', fontSize: 13, fontWeight: '800', flexShrink: 1, includeFontPadding: true, textAlign: 'left', lineHeight: 18 },
+  reportFooterBtnFull: { position: 'absolute', right: 12, top: '50%', width: 140, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderRadius: 8, height: 52, paddingHorizontal: 12, zIndex: 20, transform: [{ translateY: -26 }] },
 });
