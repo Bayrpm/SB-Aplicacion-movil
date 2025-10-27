@@ -39,7 +39,8 @@ const getLogo = (id?: string) => {
     case 'carabineros': return require('@/assets/images/carabineros.png');
     case 'samu':        return require('@/assets/images/samu.png');
     case 'bomberos':    return require('@/assets/images/bomberos.png');
-    case 'pdi':         return require('@/assets/images/pdi.png');
+  // Temporarily use a safe fallback image while we fix the original pdi asset
+    case 'pdi':         return require('@/assets/images/pdi_investigaciones.png');
     case 'seguridad':   return require('@/assets/images/seguridad.png');
     default:            return require('@/assets/images/icon.png');
   }
