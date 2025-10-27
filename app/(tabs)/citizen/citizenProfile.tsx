@@ -1,47 +1,92 @@
-import { StyleSheet } from 'react-native';
+import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
+import { StyleSheet, TouchableOpacity } from 'react-native';
 
+import { useAuth } from '@/app/features/auth';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
 
-export default function TabTwoScreen() {
+export default function HomeScreen() {
+  const { user, isInspector, inspectorLoading, signOut } = useAuth();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    AppAlert.alert(
+      'Cerrar sesión',
+      '¿Estás seguro que deseas cerrar sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar sesión',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+              router.replace('/(auth)');
+            } catch (error: any) {
+              const msg = mapSupabaseErrorMessage(error?.message);
+              AppAlert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
+      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
       headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
+        <Image
+          source={require('@/assets/images/partial-react-logo.png')}
+          style={styles.reactLogo}
         />
       }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
+      <ThemedView style={styles.stepContainer}>
+        <ThemedText type="defaultSemiBold">¡Bienvenido!</ThemedText>
+        {inspectorLoading || typeof isInspector === 'undefined' ? null : (
+          <ThemedText>
+            {isInspector ? 'Usuario Inspector autenticado' : 'Usuario Ciudadano autenticado'}: {user?.email}
+          </ThemedText>
+        )}
+        <TouchableOpacity style={styles.button} onPress={handleSignOut}>
+          <ThemedText style={styles.buttonText}>Cerrar sesión</ThemedText>
+        </TouchableOpacity>
       </ThemedView>
-      <ThemedText>This Citizen includes example code to help you get started.</ThemedText>
-    
     </ParallaxScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
-  },
   titleContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
+  },
+  stepContainer: {
+    gap: 8,
+    marginBottom: 8,
+  },
+  reactLogo: {
+    height: 178,
+    width: 290,
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+  },
+  button: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -7,7 +7,8 @@ import React from 'react';
 import { ActivityIndicator, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { signInUser } from '../api/auth.api';
-import BaseAuthLayout from '../components/BaseAuthLayout';
+import BaseAuthLayout from '../components/baseAuthLayout';
+import { useAuth } from '../context';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const { width, height } = Dimensions.get('window');
@@ -53,6 +54,7 @@ export default function SignInScreen() {
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const router = useRouter();
+  const auth = useAuth();
   const scrollViewRef = React.useRef<ScrollView>(null);
   const emailInputRef = React.useRef<TextInput>(null);
   const passwordInputRef = React.useRef<TextInput>(null);
@@ -218,12 +220,44 @@ export default function SignInScreen() {
         AppAlert.alert('Error', 'Por favor ingresa un correo electrónico válido');
         return;
       }
-      // Avanzar directamente al paso de contraseña tras validar el formato del email
-      setStep(2);
-      // Auto-focus ultra rápido en el input de contraseña
-      setTimeout(() => {
-        passwordInputRef.current?.focus();
-      }, 20);
+      // Comprobar existencia del correo antes de pedir la contraseña
+      startLoading();
+      try {
+        const res = await signInUser(email, ''); // password vacío = existencia
+        if (res.error) {
+          const msg = res.error?.message || 'Ocurrió un error al verificar el correo';
+          AppAlert.alert('Error', msg);
+          stopLoading();
+          return;
+        }
+        if (!res.exists) {
+          AppAlert.alert(
+            'Cuenta no encontrada',
+            'No existe una cuenta asociada a este correo. ¿Deseas registrarte?',
+            [
+              { text: 'No', style: 'cancel' },
+              {
+                text: 'Registrarme',
+                onPress: () => {
+                  try { router.push('/(auth)/signUp'); } catch (e) {}
+                },
+              },
+            ]
+          );
+          stopLoading();
+          return;
+        }
+        // Si existe, avanzar al paso de contraseña
+        setStep(2);
+        // Auto-focus ultra rápido en el input de contraseña
+        setTimeout(() => {
+          passwordInputRef.current?.focus();
+        }, 20);
+      } catch (e) {
+        AppAlert.alert('Error', 'Ocurrió un error al verificar el correo');
+      } finally {
+        stopLoading();
+      }
     } else {
       handleSignIn();
     }
@@ -239,6 +273,7 @@ export default function SignInScreen() {
     startLoading();
     try {
       const result = await signInUser(email, password);
+  // Resultado del signIn disponible en `result` (no se imprime en consola en prod)
       if (result.error) {
         // Mostrar el mensaje de error retornado por la API
         const message = result.error.message || 'Se han ingresado credenciales incorrectas';
@@ -246,6 +281,23 @@ export default function SignInScreen() {
         stopLoading();
         return;
       }
+      // Actualizar rápidamente el provider con el resultado obtenido para
+      // evitar condiciones de carrera en la elección del tab.
+      try {
+        auth?.setAuthState?.({ profile: result.profile ?? null, isInspector: typeof result.isInspector === 'boolean' ? result.isInspector : undefined });
+      } catch (e) {
+        // noop
+      }
+      // Navegar inmediatamente al tab correspondiente para evitar flashes
+      try {
+        if (typeof result.isInspector === 'boolean') {
+          const target = result.isInspector ? '/inspector/inspectorHome' : '/citizen/citizenHome';
+          router.replace(target as any);
+        }
+      } catch (e) {
+        // noop
+      }
+
       // Animación de salida rápida (opcional) y dejar que el layout principal redirija
       Animated.parallel([
         Animated.timing(screenFadeAnim, {

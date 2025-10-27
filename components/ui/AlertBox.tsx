@@ -31,6 +31,12 @@ export const Alert = {
 export default function AlertBox() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
+  // Colors adaptados al tema
+  const backgroundColor = isDark ? '#0B0C0D' : '#FFFFFF';
+  const titleColor = isDark ? '#E6EEF8' : '#0A4A90';
+  const messageColor = isDark ? '#E6EEF8' : '#0F1724';
+  const primaryColor = '#0A4A90';
+  const transparentTextColor = isDark ? '#FFFFFF' : primaryColor;
   const [state, setState] = React.useState<AlertPayload>({ visible: false, title: '', message: '' });
 
   React.useEffect(() => {
@@ -44,9 +50,9 @@ export default function AlertBox() {
   return (
     <Modal visible={state.visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={[styles.box, { backgroundColor: isDark ? '#0B0C0D' : '#FFFFFF', borderColor: '#0A4A90' }]}> 
-          <Text style={[styles.title, { color: '#0A4A90' }]} numberOfLines={2}>{state.title}</Text>
-          <Text style={[styles.message, { color: isDark ? '#E6EEF8' : '#0F1724' }]}>{state.message}</Text>
+        <View style={[styles.box, { backgroundColor, borderColor: primaryColor }]}> 
+          <Text style={[styles.title, { color: titleColor }]} numberOfLines={2}>{state.title}</Text>
+          <Text style={[styles.message, { color: messageColor }]}>{state.message}</Text>
           <View style={styles.buttonsRow}>
             {(state.buttons && state.buttons.length > 0 ? state.buttons : [{ text: 'Aceptar' }]).map((b, idx) => {
               const isDestructive = b.style === 'destructive';
@@ -59,9 +65,14 @@ export default function AlertBox() {
                     onClose();
                   }}
                   activeOpacity={0.8}
-                  style={[styles.button, isDestructive ? styles.buttonDestructive : {}, isCancel ? styles.buttonCancel : {}]}
+                  style={isDestructive ? styles.buttonDestructive : isCancel ? [styles.buttonCancel, { borderColor: primaryColor }] : styles.button}
                 >
-                  <Text style={[styles.buttonText, isDestructive ? styles.buttonTextDestructive : {}]}>{b.text}</Text>
+                  <Text style={[
+                    styles.buttonText,
+                    // cancel/transparent text applied before destructive so destructive can override
+                    isCancel ? [styles.buttonTextTransparent, { color: transparentTextColor }] : {},
+                    isDestructive ? styles.buttonTextDestructive : {},
+                  ]}>{b.text}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -81,7 +92,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   box: {
-    minWidth: 260,
+    width: '90%',
     maxWidth: 520,
     borderRadius: 14,
     borderWidth: 2,
@@ -117,7 +128,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: 16,
   },
   buttonsRow: {
     flexDirection: 'row',
@@ -127,14 +138,28 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   buttonDestructive: {
-    backgroundColor: 'transparent',
+    backgroundColor: '#FF3B30',
     borderWidth: 0,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
   },
   buttonCancel: {
     backgroundColor: 'transparent',
     borderWidth: 0,
+    borderColor: '#0A4A90',
+    // keep same padding as filled button but transparent
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   buttonTextDestructive: {
-    color: '#FF3B30',
+    color: '#ffffffff',  
+  },
+  // Text style for transparent buttons so they are visible on white background
+  buttonTextTransparent: {
+    color: '#0A4A90',
+    fontWeight: '700',
+    fontSize: 16,
   },
 });

@@ -63,7 +63,7 @@ export async function signUpUser(email: string, password: string, userData?: {
     const translated = mapSupabaseErrorMessage(error.message);
     return { data: null, error: { message: translated }, user: null, session: null };
   }
-  
+
   return { data, error: null, user: data.user, session: data.session };
 }
 /**
@@ -71,26 +71,71 @@ export async function signUpUser(email: string, password: string, userData?: {
 Inicia sesión con email y contraseña
 */
 export async function signInUser(email: string, password: string) {
+  // Si no se envía contraseña (step 1), sólo comprobamos existencia del email
+  if (!password) {
+    try {
+      const emailNorm = email?.toLowerCase?.() ?? email;
+      // Intentar validar existencia usando la tabla de perfiles (si existe)
+      const { data: profileByEmail, error: profileByEmailError } = await supabase
+        .from('perfiles_ciudadanos')
+        .select('usuario_id, email')
+        .ilike('email', emailNorm)
+        .maybeSingle();
+
+      if (profileByEmailError) {
+        return { profile: null, isInspector: false, error: profileByEmailError, session: null, user: null, exists: false };
+      }
+
+      const exists = !!profileByEmail;
+      return { profile: null, isInspector: false, error: null, session: null, user: null, exists };
+    } catch (e) {
+      return { profile: null, isInspector: false, error: e as any, session: null, user: null, exists: false };
+    }
+  }
+
+  // 1) Intentar autenticar con supabase
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
+  // Si hay un error de autenticación, normalizar el mensaje y retornarlo en español
   if (error) {
-    // Traducir el mensaje de error antes de retornarlo
     const translated = mapSupabaseErrorMessage(error.message);
-    return { data: null, error: { message: translated } };
+    return { profile: null, isInspector: false, error: { message: translated }, session: data?.session ?? null, user: data?.user ?? null };
   }
 
-  return { data, error: null };
+  const userId = data?.user?.id;
+
+  // Si no hay usuario en la respuesta, retornamos sin profile
+  if (!userId) {
+    return { profile: null, isInspector: false, error: null, session: data?.session ?? null, user: data?.user ?? null };
+  }
+
+  try {
+    // Consulta simple del perfil (sin embed ambiguo)
+    const { data: profile, error: profileError } = await supabase
+      .from('perfiles_ciudadanos')
+      .select('*')
+      .eq('usuario_id', userId)
+      .maybeSingle();
+
+    // Consulta existencia booleana de inspector
+    const { data: inspectorData, error: inspectorError } = await supabase
+      .from('inspectores')
+      .select('id')
+      .eq('usuario_id', userId)
+      .limit(1)
+      .maybeSingle();
+
+    const isInspector = !!inspectorData;
+    const combinedError = profileError ?? inspectorError ?? null;
+
+    return { profile: profile ?? null, isInspector, error: combinedError, session: data?.session ?? null, user: data?.user ?? null, exists: true };
+  } catch (e) {
+    return { profile: null, isInspector: false, error: e as any, session: data?.session ?? null, user: data?.user ?? null, exists: true };
+  }
 }
-
-
-
-
-/**
- * Obtiene el perfil del ciudadano actual
- */
 
 
 /**
@@ -105,7 +150,7 @@ export async function isUserInspector(userId: string): Promise<boolean> {
     if (!rpc.error && typeof rpc.data === 'boolean') {
       return rpc.data;
     }
-  } catch {}
+  } catch { }
   // 2) Fallback: existencia booleana con .maybeSingle()
   try {
     const { data, error } = await supabase
@@ -124,41 +169,26 @@ export async function isUserInspector(userId: string): Promise<boolean> {
 }
 
 /**
- * Obtiene el perfil del usuario (perfiles_ciudadanos) y si es inspector.
- * Devuelve { profile, isInspector, error }.
- */
-export async function getUserProfile(userId: string) {
-  try {
-    // Consulta simple del perfil (sin embed ambiguo)
-    const { data: profile, error: profileError } = await supabase
-      .from('perfiles_ciudadanos')
-      .select('*')
-      .eq('usuario_id', userId)
-      .maybeSingle();
-
-    // Consulta existencia booleana de inspector
-    const { data: inspectorData, error: inspectorError } = await supabase
-      .from('inspectores')
-      .select('id')
-      .eq('usuario_id', userId)
-      .limit(1)
-      .maybeSingle();
-
-    const isInspector = !!inspectorData;
-    const error = profileError ?? inspectorError ?? null;
-
-    return { profile: profile ?? null, isInspector, error };
-  } catch (_e) {
-    return { profile: null, isInspector: false, error: _e };
-  }
-}
-
-/**
  * Cierra la sesión del usuario
  */
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  return { error };
+  try {
+    // Intenta sign out "completo" usando helper que además limpia AsyncStorage
+    // importamos dinámicamente para evitar ciclos de dependencia
+    const mod = await import('@/app/shared/lib/supabase');
+    if (mod && mod.clearAuthSession) {
+      const res = await mod.clearAuthSession();
+      return { error: null, removedKeys: res.removed };
+    }
+  } catch (e) {
+    try {
+      const { error } = await supabase.auth.signOut();
+      return { error };
+    } catch (err) {
+      return { error: err };
+    }
+  }
+  return { error: null };
 }
 
 

@@ -15,6 +15,34 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+/**
+ * Limpia cualquier rastro de sesión en Supabase + AsyncStorage.
+ * Hace signOut, detiene el autoRefresh y borra claves relacionadas con auth.
+ */
+export async function clearAuthSession() {
+  try {
+    // Intenta cerrar sesión en el servidor
+    await supabase.auth.signOut();
+  } catch (e) {
+    // noop
+  }
+
+  try {
+    supabase.auth.stopAutoRefresh();
+  } catch (e) {}
+
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const authKeys = keys.filter((k) => /supabase|session|refresh|auth|token/i.test(k));
+    if (authKeys.length) {
+      await AsyncStorage.multiRemove(authKeys);
+    }
+    return { removed: authKeys };
+  } catch (e) {
+    return { removed: [] };
+  }
+}
+
 async function handleAppState(state: string) {
   if (state === 'active') {
     try {

@@ -1,7 +1,7 @@
-import { supabase } from '@/app/shared/lib/supabase';
+import { clearAuthSession, supabase } from '@/app/shared/lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getUserProfile } from './api/auth.api';
+// No traer signInUser aquí: se usa únicamente en la pantalla de SignIn.
 
 interface AuthContextType {
   session: Session | null;
@@ -20,6 +20,8 @@ interface ExtendedAuthContextType extends AuthContextType {
   inspectorLoading: boolean;
   profile: UserProfile | null;
   roleCheckFailed?: boolean;
+  // Permite actualizar rápidamente el estado de perfil/rol desde flows externos (p.ej. SignIn)
+  setAuthState?: (payload: { profile: UserProfile | null; isInspector: boolean | undefined }) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,13 +62,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         return;
       }
-
+      // Obtener perfil e inspector directamente usando el id del usuario de la sesión
       setInspectorLoading(true);
       try {
-        const res = await getUserProfile(session.user.id);
+        const userId = session.user.id;
+        const [{ data: profile, error: profileError }, { data: inspectorData, error: inspectorError }] = await Promise.all([
+          supabase
+            .from('perfiles_ciudadanos')
+            .select('*')
+            .eq('usuario_id', userId)
+            .maybeSingle(),
+          supabase
+            .from('inspectores')
+            .select('id')
+            .eq('usuario_id', userId)
+            .limit(1)
+            .maybeSingle(),
+        ]);
+
         if (!mounted) return;
-  setProfile(res.profile ?? null);
-  setIsInspector(typeof res.isInspector === 'boolean' ? res.isInspector : undefined);
+
+        setProfile(profile ?? null);
+        setIsInspector(!!inspectorData);
         setRoleCheckFailed(false);
       } catch (e) {
         if (mounted) {
@@ -88,7 +105,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      // Attempt a full clear of server session + local storage
+      try {
+        await clearAuthSession();
+      } catch (_) {
+        await supabase.auth.signOut();
+      }
     } finally {
       // Ensure local auth state is cleared immediately so UI reacts to sign-out without waiting
       setSession(null);
@@ -110,6 +132,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     inspectorLoading,
     profile,
     roleCheckFailed,
+    setAuthState: ({ profile: p, isInspector: ins }) => {
+      setProfile(p ?? null);
+      setIsInspector(ins);
+      setInspectorLoading(false);
+    },
   };
 
   return (

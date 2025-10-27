@@ -90,11 +90,7 @@ export default function TabLayout() {
   // Navegar al tab correcto cuando el rol se define
   useEffect(() => {
     if (!loading && !inspectorLoading && typeof isInspector === 'boolean') {
-      // Only redirect to the default tab on initial launch (when we're not
-      // already inside a citizen/inspector segment). This prevents the effect
-      // from forcing navigation to citizenHome when the user returns from a
-      // full-screen editor (like editLocation) which should return to
-      // the previous tab/stack.
+
   const segs = (segments as string[]) || [];
   const alreadyInside = segs.includes('citizen') || segs.includes('inspector');
       if (!alreadyInside) {
@@ -143,6 +139,11 @@ export default function TabLayout() {
 
   return (
     <>
+  {/* Background panel under the tab bar to avoid seeing app content through it.
+    Use full tabBarHeight and anchor to bottom:0 so it always covers the area
+    regardless of extraBottom/platform differences. */}
+  <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: tabBarHeight, backgroundColor: '#222', zIndex: 998 }} />
+
     <TabsAny
       initialRouteName={isInspector ? 'inspector/inspectorHome' : 'citizen/citizenHome'}
       sceneContainerStyle={{ paddingBottom: tabBarHeight }}

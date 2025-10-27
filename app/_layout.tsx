@@ -1,3 +1,4 @@
+import { useThemeColor } from '@/hooks/use-theme-color';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -53,7 +54,9 @@ function RootLayoutNav() {
     // desde el AuthProvider (isInspector/inspectorLoading). Incluir estos valores
     // en las dependencias para que la navegación se re-evalúe cuando cambien.
     if (session && inAuthGroup) {
-      if (inspectorLoading) return; // esperar a que termine la comprobación
+      // Esperar siempre hasta que `isInspector` sea un booleano definido o hasta
+      // que el provider indique que sigue cargando la comprobación.
+      if (inspectorLoading || typeof isInspector !== 'boolean') return; // esperar a que termine la comprobación
 
       const target = isInspector
         ? '/(tabs)/inspector/inspectorHome'
@@ -143,7 +146,13 @@ function RootLayoutNav() {
               <Slot />
             </ReportModalProvider>
           </Animated.View>
-        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+        {/* Make the native status bar opaque and match the app background to
+            avoid RN content showing through under the status bar when scrolling. */}
+        <StatusBar
+          style={colorScheme === 'dark' ? 'light' : 'dark'}
+          translucent={false}
+          backgroundColor={useThemeColor({}, 'background')}
+        />
       </ThemeProvider>
 
       {splashVisible && (

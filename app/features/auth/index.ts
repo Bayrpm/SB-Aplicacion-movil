@@ -8,10 +8,10 @@ export { default as SplashScreen } from './screens/splashScreen';
 export { default as WelcomeScreen } from './screens/welcomeScreen';
 
 // Components
-export { ProgressIndicator } from './components/ProgressIndicator';
-export { RegistrationStep1 } from './components/RegistrationStep1';
-export { RegistrationStep2 } from './components/RegistrationStep2';
-export { RegistrationStep3 } from './components/RegistrationStep3';
+export { ProgressIndicator } from './components/progressIndicator';
+export { RegistrationStep1 } from './components/registrationStep1';
+export { RegistrationStep2 } from './components/registrationStep2';
+export { RegistrationStep3 } from './components/registrationStep3';
 
 // Hooks
 export { useRegistration } from './hooks/useRegistration';
