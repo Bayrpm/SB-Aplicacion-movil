@@ -1,7 +1,7 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { registrationStep3Schema } from '../schemas/registration.schema';
 import type { RegistrationStep3Data } from '../types';
 
@@ -15,9 +15,9 @@ interface RegistrationStep3Props {
 export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }: RegistrationStep3Props) {
   const labelColor = useThemeColor({}, 'text');
   const placeholderColor = useThemeColor({ light: '#9CA3AF', dark: '#FFFFFF' }, 'icon');
-  const scheme = useColorScheme();
+
   const inputBg = useThemeColor({ light: '#F8F9FA', dark: '#000000' }, 'background');
-  const errorBg = scheme === 'dark' ? '#222' : '#fff';
+
   const inputBorder = useThemeColor({ light: '#E9ECEF', dark: '#FFFFFF' }, 'icon');
   const inputTextColor = useThemeColor({}, 'text');
   const [email, setEmail] = useState(initialData?.email || '');
