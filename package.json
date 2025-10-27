@@ -5,8 +5,8 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "dev:docker:build": "docker compose -f docker-compose.dev.yml build",
@@ -24,7 +24,6 @@
     "@supabase/supabase-js": "^2.58.0",
     "expo": "~54.0.12",
     "expo-constants": "~18.0.9",
-    "expo-dev-client": "~6.0.16",
     "expo-font": "~14.0.8",
     "expo-haptics": "~15.0.7",
     "expo-image": "~3.0.8",
