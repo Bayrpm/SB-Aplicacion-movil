@@ -1,15 +1,41 @@
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { FontAwesome } from '@expo/vector-icons';
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import HomeCard from './HomeCard';
 
 export default function FollowSection() {
   const scheme = useColorScheme() ?? 'light';
 
   const onPress = (which: string) => {
-    // placeholder: abrir url con Linking.openURL(...) en un futuro
-    console.log('follow', which);
+    // abrir url correspondiente
+    try {
+      let url = '';
+      switch (which) {
+        case 'instagram':
+          url = 'https://www.instagram.com/sanbernardocl/';
+          break;
+        case 'facebook':
+          url = 'https://www.facebook.com/sanbernardocl/?_rdc=1&_rdr#';
+          break;
+        case 'youtube':
+          url = 'https://www.youtube.com/@sanbernardo.onlinetv';
+          break;
+        case 'x':
+          url = 'https://x.com/SanBernardocl';
+          break;
+        default:
+          url = '';
+      }
+      if (url) {
+        Linking.openURL(url).catch(() => {
+          AppAlert.alert('Error', 'No se pudo abrir el enlace');
+        });
+      }
+    } catch (e) {
+      console.warn('follow error', e);
+    }
   };
 
   return (
@@ -17,16 +43,17 @@ export default function FollowSection() {
       <HomeCard title="Síguenos" description="Mantente informado y participa en nuestras redes" hideIcon hideAction titleAlign="center">
         <View style={styles.buttonsRow}>
           <Pressable style={[styles.iconBtn, { backgroundColor: '#E4405F' }]} onPress={() => onPress('instagram')}>
-            <FontAwesome name="instagram" size={20} color="#fff" />
+            <IconSymbol name="instagram" size={20} color="#fff" />
           </Pressable>
           <Pressable style={[styles.iconBtn, { backgroundColor: '#1877F2' }]} onPress={() => onPress('facebook')}>
-            <FontAwesome name="facebook" size={20} color="#fff" />
+            <IconSymbol name="facebook" size={20} color="#fff" />
           </Pressable>
           <Pressable style={[styles.iconBtn, { backgroundColor: '#FF0000' }]} onPress={() => onPress('youtube')}>
-            <FontAwesome name="youtube" size={20} color="#fff" />
+            <IconSymbol name="youtube" size={20} color="#fff" />
           </Pressable>
           <Pressable style={[styles.iconBtn, { backgroundColor: '#000' }]} onPress={() => onPress('x')}>
-            <FontAwesome name="twitter" size={20} color="#fff" />
+            {/* X (antes Twitter) */}
+            <IconSymbol name="x-twitter" size={20} color="#fff" />
           </Pressable>
         </View>
       </HomeCard>

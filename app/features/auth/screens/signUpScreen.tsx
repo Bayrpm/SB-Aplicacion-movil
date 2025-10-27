@@ -1,5 +1,5 @@
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { Ionicons } from '@expo/vector-icons';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Animated, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
@@ -564,7 +564,7 @@ export default function SignUpScreen() {
             onPress={handleBack}
             activeOpacity={0.8}
           >
-            <Ionicons name="arrow-back" size={backIcon} color="#0A4A90" />
+            <IconSymbol name="arrow-back" size={backIcon} color="#0A4A90" />
           </TouchableOpacity>
           <TouchableOpacity
             style={[

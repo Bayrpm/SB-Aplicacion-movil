@@ -1,23 +1,22 @@
 import { useAuth } from '@/app/features/auth/context';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    Keyboard,
-    Modal,
-    PixelRatio,
-    Platform,
-    Alert as RNAlert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Keyboard,
+  Modal,
+  PixelRatio,
+  Platform,
+  Alert as RNAlert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createReport } from '../api/report.api';
@@ -346,10 +345,10 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
             <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ width: ms(120), flexDirection: 'row', alignItems: 'center' }}>
                 <TouchableOpacity onPress={() => { if (typeof onBack === 'function') onBack(); else onClose?.(); }} style={{ padding: ms(10) }} accessibilityRole="button">
-                  <MaterialCommunityIcons name="arrow-left" size={ms(26)} color="#fff" />
+                  <IconSymbol name="arrow-left" size={ms(26)} color="#fff" />
                 </TouchableOpacity>
                 <View style={{ marginLeft: ms(8), width: ms(52), height: ms(52), borderRadius: ms(26), backgroundColor: '#0A4A90', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' }}>
-                  {catLoading ? <ActivityIndicator size="small" color="#fff" /> : <MaterialCommunityIcons name={(localCategory as any)?.icon ?? 'map-marker'} size={ms(24)} color="#fff" />}
+                  {catLoading ? <ActivityIndicator size="small" color="#fff" /> : <IconSymbol name={(localCategory as any)?.icon ?? 'map-marker'} size={ms(24)} color="#fff" />}
                 </View>
               </View>
 
@@ -361,7 +360,7 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
 
               <View style={{ width: ms(56), alignItems: 'flex-end' }}>
                 <TouchableOpacity onPress={() => onClose?.()} style={{ padding: ms(10) }} accessibilityRole="button">
-                  <MaterialCommunityIcons name="close" size={ms(26)} color="#fff" />
+                  <IconSymbol name="close" size={ms(26)} color="#fff" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -458,11 +457,11 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
         >
           <View style={styles.footerTopRowInner}>
             <TouchableOpacity style={styles.footerCircleBtn} onPress={() => AppAlert.alert('Próximamente', 'Función de cámara disponible próximamente')}>
-              <MaterialCommunityIcons name="camera" size={20} color="#0A4A90" />
+              <IconSymbol name="camera" size={20} color="#0A4A90" />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.footerCircleBtn} onPress={() => AppAlert.alert('Próximamente', 'Función de selección de foto disponible próximamente')}>
-              <MaterialCommunityIcons name="image" size={20} color="#0A4A90" />
+              <IconSymbol name="image" size={20} color="#0A4A90" />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -488,7 +487,7 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
                 } catch (e) { console.warn(e); }
               }}
             >
-              <MaterialCommunityIcons name="map-marker" size={20} color="#0A4A90" style={{ marginRight: 8 }} />
+              <IconSymbol name="map-marker" size={20} color="#0A4A90" style={{ marginRight: 8 }} />
               <Text style={[styles.footerLocationTextFull, { fontSize: locFontSize }]} numberOfLines={4} ellipsizeMode="tail">
                 {ubicacionTexto?.trim() ? ubicacionTexto : 'Obteniendo ubicación…'}
               </Text>
@@ -499,11 +498,11 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
 
           <View style={styles.footerBottomRowFull}>
             <View style={[styles.leftFooterGroup, { paddingRight: LEFT_RESERVED_PADDING }] }>
-              <TouchableOpacity
+                <TouchableOpacity
                 style={[styles.anonFooterBtnFull, anonimo ? styles.anonFooterBtnActive : styles.anonFooterBtnInactive]}
                 onPress={() => setAnonimo(v => !v)}
               >
-                <FontAwesome5 name="user-secret" solid size={20} color={anonimo ? '#0A4A90' : 'rgba(10,74,144,0.28)'} />
+                <IconSymbol name="user-secret" size={20} color={anonimo ? '#0A4A90' : 'rgba(10,74,144,0.28)'} />
               </TouchableOpacity>
                 {anonimo ? (
                   <View style={[styles.anonymousBadge, { maxWidth: MAX_BADGE_WIDTH }]}>
@@ -513,7 +512,7 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
             </View>
 
             <TouchableOpacity style={[styles.reportFooterBtnFull, { width: REPORT_BTN_W }]} onPress={handleSubmit} disabled={submitting}>
-              <MaterialCommunityIcons name="send" size={18} color="#0A4A90" style={{ marginRight: 8 }} />
+              <IconSymbol name="send" size={18} color="#0A4A90" style={{ marginRight: 8 }} />
               <Text style={styles.reportFooterTxtFull}>{submitting ? 'Enviando…' : 'Reportar'}</Text>
             </TouchableOpacity>
           </View>
@@ -530,7 +529,6 @@ const styles = StyleSheet.create({
   footerAbsolute: { position: 'absolute', left: 0, right: 0, backgroundColor: '#0A4A90', paddingHorizontal: 12, paddingTop: 8 },
   footerTopRowInner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
   footerCircleBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', marginRight: 8 },
-  footerLocationBtnFull: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 12, height: 56, paddingVertical: 6 },
   footerLocationTextFull: { color: '#0A4A90', fontSize: 15, flexShrink: 1, textAlign: 'left' },
   footerBottomRowFull: { position: 'relative', flexDirection: 'row', alignItems: 'center', marginTop: 0, height: 56 },
   anonFooterBtnFull: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
@@ -539,7 +537,8 @@ const styles = StyleSheet.create({
   
   reportFooterTxtFull: { color: '#0A4A90', fontWeight: '700', fontSize: 16 },
   leftFooterGroup: { position: 'relative', flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, paddingRight: 200 },
-  anonymousBadge: { backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, minHeight: 40, justifyContent: 'center', marginLeft: 6, zIndex: 5, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
-  anonymousBadgeTxt: { color: '#003366', fontSize: 13, fontWeight: '800', flexShrink: 1, includeFontPadding: true, textAlign: 'left', lineHeight: 18 },
+  anonymousBadge: { backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, minHeight: 40, justifyContent: 'center', marginLeft: 1, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
+  anonymousBadgeTxt: { color: '#0A4A90', fontWeight: '700', fontSize: 14 },
+  footerLocationBtnFull: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 },
   reportFooterBtnFull: { position: 'absolute', right: 12, top: '50%', width: 140, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderRadius: 8, height: 52, paddingHorizontal: 12, zIndex: 20, transform: [{ translateY: -26 }] },
 });

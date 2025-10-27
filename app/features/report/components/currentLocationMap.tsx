@@ -1,7 +1,6 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+// usamos IconSymbol centralizado en lugar de importar familias directamente
 import * as Location from 'expo-location';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Dimensions, Easing, PixelRatio, Platform, StyleSheet, Text, View } from 'react-native';
@@ -525,11 +524,11 @@ export default function CurrentLocationMap() {
         >
           <View style={styles.compassContent} pointerEvents="none">
             <Animated.View style={{ transform: [{ rotate: animatedRotationRef.current.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) }] }}>
-              <MaterialCommunityIcons name="compass-rose" size={COMPASS_ICON_SIZE} color="#fff" />
+              <IconSymbol name="compass-rose" size={COMPASS_ICON_SIZE} color="#fff" />
             </Animated.View>
             <View style={styles.compassLabels} pointerEvents="none">
               <View style={styles.northWrapper} pointerEvents="none">
-                <MaterialIcons name="arrow-drop-up" size={NS_ARROW_SIZE} color={cardinal === 'N' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowAbsolute, styles.arrowNorthAbs, { opacity: cardinal === 'N' ? 1 : 0.9 }]} />
+                <IconSymbol name="arrow-drop-up" size={NS_ARROW_SIZE} color={cardinal === 'N' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowAbsolute, styles.arrowNorthAbs, { opacity: cardinal === 'N' ? 1 : 0.9 }]} />
                 <Text style={[styles.compassLabel, { color: cardinal === 'N' ? '#fff' : 'rgba(255,255,255,0.6)' }]}>N</Text>
               </View>
               <View style={styles.neWrapper} pointerEvents="none">
@@ -542,7 +541,7 @@ export default function CurrentLocationMap() {
                 <View style={[styles.diag, styles.diagSE, { backgroundColor: cardinal === 'SE' ? '#fff' : 'rgba(255,255,255,0.6)' }]} />
               </View>
               <View style={styles.southWrapper} pointerEvents="none">
-                <MaterialIcons name="arrow-drop-up" size={NS_ARROW_SIZE} color={cardinal === 'S' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowAbsolute, styles.arrowSouthAbs, { opacity: cardinal === 'S' ? 1 : 0.9 }]} />
+                <IconSymbol name="arrow-drop-up" size={NS_ARROW_SIZE} color={cardinal === 'S' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowAbsolute, styles.arrowSouthAbs, { opacity: cardinal === 'S' ? 1 : 0.9 }]} />
                 <Text style={[styles.compassLabel, { color: cardinal === 'S' ? '#fff' : 'rgba(255,255,255,0.6)' }]}>S</Text>
               </View>
               <View style={styles.soWrapper} pointerEvents="none">
@@ -563,12 +562,12 @@ export default function CurrentLocationMap() {
           style={styles.fab}
           accessibilityLabel="Centrar ubicación"
         >
-          <MaterialIcons name={isCentered ? 'my-location' : 'location-searching'} size={FAB_ICON_SIZE} color="#fff" />
+          <IconSymbol name={isCentered ? 'my-location' : 'location-searching'} size={FAB_ICON_SIZE} color="#fff" />
         </Button>
 
         <View style={styles.arrowEOContainer} pointerEvents="none">
-          <MaterialIcons name="arrow-drop-up" size={EO_ARROW_SIZE} color={cardinal === 'E' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowEO, styles.arrowEastEO, { opacity: cardinal === 'E' ? 1 : 0.9 }]} />
-          <MaterialIcons name="arrow-drop-up" size={EO_ARROW_SIZE} color={cardinal === 'O' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowEO, styles.arrowWestEO, { opacity: cardinal === 'O' ? 1 : 0.9 }]} />
+      <IconSymbol name="arrow-drop-up" size={EO_ARROW_SIZE} color={cardinal === 'E' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowEO, styles.arrowEastEO, { opacity: cardinal === 'E' ? 1 : 0.9 }]} />
+      <IconSymbol name="arrow-drop-up" size={EO_ARROW_SIZE} color={cardinal === 'O' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowEO, styles.arrowWestEO, { opacity: cardinal === 'O' ? 1 : 0.9 }]} />
         </View>
       </View>
     </View>

@@ -1,5 +1,5 @@
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { Ionicons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme, View } from 'react-native';
 import { registrationStep3Schema } from '../schemas/registration.schema';
@@ -146,11 +146,7 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
             activeOpacity={0.7}
             accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
           >
-            <Ionicons
-              name={showPassword ? 'eye-off' : 'eye'}
-              size={22}
-              color={useThemeColor({ light: '#0A4A90', dark: '#BFC7CC' }, 'tint')}
-            />
+            <IconSymbol name={showPassword ? 'eye-off' : 'eye'} size={22} color={useThemeColor({ light: '#0A4A90', dark: '#BFC7CC' }, 'tint')} />
           </TouchableOpacity>
         </View>
         {/* No mostrar el error de validación de contraseña aquí, solo los requisitos */}
@@ -159,11 +155,7 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
           {passwordRules.map((rule, idx) => (
             <View key={idx} style={styles.passwordRuleRow}>
               <View style={{ marginRight: 6 }}>
-                <Ionicons
-                  name={rule.valid ? 'checkmark-circle' : 'close-circle'}
-                  size={14}
-                  color={rule.valid ? '#22C55E' : '#EF4444'}
-                />
+                <IconSymbol name={rule.valid ? 'checkmark-circle' : 'close-circle'} size={14} color={rule.valid ? '#22C55E' : '#EF4444'} />
               </View>
               <Text style={{
                 color: rule.valid ? '#22C55E' : '#EF4444',

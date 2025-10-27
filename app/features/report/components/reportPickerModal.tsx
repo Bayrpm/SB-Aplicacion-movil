@@ -1,4 +1,4 @@
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -42,17 +42,16 @@ export default function ReportPickerModal({ visible, onClose, onSelect, tabBarHe
   const maxPanelHeight = Math.max(240, windowHeight - insets.top - 80);
 
   // Tamaños (agrandados)
-  const ITEM_HEIGHT = moderateScale(112);
+  const ITEM_HEIGHT = moderateScale(128);
   const ICON_WRAPPER_SIZE = moderateScale(76);
-  const ICON_SIZE = moderateScale(30);
   const TITLE_SIZE = moderateScale(22);
-  const LABEL_SIZE = moderateScale(15);
+  const LABEL_SIZE = moderateScale(19);
 
   // Botón cancelar: más grande que antes
-  const CLOSE_SIZE = moderateScale(18); // antes 16
-  const CLOSE_PAD_H = moderateScale(18); // antes 14
-  const CLOSE_PAD_V = moderateScale(12); // antes 10
-  const CLOSE_RADIUS = moderateScale(10); // antes 8
+  const CLOSE_SIZE = moderateScale(18); 
+  const CLOSE_PAD_H = moderateScale(18); 
+  const CLOSE_PAD_V = moderateScale(12); 
+  const CLOSE_RADIUS = moderateScale(10); 
 
   // === Empuje vertical (contenido) ===
   const isLandscape = windowWidth > windowHeight;
@@ -63,6 +62,10 @@ export default function ReportPickerModal({ visible, onClose, onSelect, tabBarHe
   const TOP_OFFSET_MIN = moderateScale(32);
   const TOP_OFFSET_MAX = moderateScale(96);
   const TOP_OFFSET = clamp(AVAILABLE * TOP_OFFSET_PCT, TOP_OFFSET_MIN, TOP_OFFSET_MAX);
+  // Empujamos un poco menos el contenido hacia abajo para que título y categorías
+  // queden más arriba en la pantalla (ajuste suave). TOP_OFFSET_PUSH nunca será
+  // mayor que TOP_OFFSET y tiene un mínimo razonable.
+  const TOP_OFFSET_PUSH = Math.max(Math.min(TOP_OFFSET - moderateScale(40), TOP_OFFSET), moderateScale(8));
 
   const handleSelect = (cat: ReportCategory) => {
     onClose();
@@ -147,7 +150,7 @@ export default function ReportPickerModal({ visible, onClose, onSelect, tabBarHe
             nestedScrollEnabled
           >
             {/* Empuje superior para ubicar el título y la grilla más abajo */}
-            <View style={{ height: TOP_OFFSET }} />
+            <View style={{ height: TOP_OFFSET_PUSH }} />
 
             <Text
               style={[
@@ -168,7 +171,7 @@ export default function ReportPickerModal({ visible, onClose, onSelect, tabBarHe
               {categories.map((c) => (
                 <TouchableOpacity
                   key={c.id}
-                  style={[styles.item, { height: ITEM_HEIGHT, marginVertical: moderateScale(10) }]}
+                  style={[styles.item, { height: ITEM_HEIGHT, marginVertical: moderateScale(8), paddingTop: moderateScale(6) }]}
                   onPress={() => handleSelect(c)}
                   accessibilityRole="button"
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
@@ -184,11 +187,11 @@ export default function ReportPickerModal({ visible, onClose, onSelect, tabBarHe
                       },
                     ]}
                   >
-                    <MaterialCommunityIcons
+                    <IconSymbol
                       // Prefer `icon` provisto por la categoría (desde la BDD). Si no existe,
                       // usamos el mapa de respaldo por id. Finalmente fallback 'map-marker'.
                       name={(c as any).icon ?? (ICON_MAP[c.id] as any) ?? 'map-marker'}
-                      size={moderateScale(30)}
+                      size={moderateScale(50)}
                       color="#fff"
                     />
                   </View>

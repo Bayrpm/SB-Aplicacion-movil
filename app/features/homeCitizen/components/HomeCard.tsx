@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import React from 'react';
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -73,7 +73,7 @@ export default function HomeCard({
           {/* Decorative icon optional */}
           {!hideIcon ? (
             <View style={styles.leftDecor} pointerEvents="none">
-              <Ionicons name="megaphone-outline" size={28} color={accent} />
+              <IconSymbol name="megaphone-outline" size={28} color={accent} />
             </View>
           ) : null}
 

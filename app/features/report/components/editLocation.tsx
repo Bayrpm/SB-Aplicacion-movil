@@ -1,20 +1,19 @@
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  Keyboard,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    Keyboard,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -499,18 +498,18 @@ export default function EditLocationScreen() {
           style={styles.navBtn}
           accessibilityRole="button"
         >
-          <MaterialCommunityIcons name="arrow-left" size={28} color="#fff" />
+          <IconSymbol name="arrow-left" size={28} color="#fff" />
         </TouchableOpacity>
         <View style={[styles.navTitleWrap, { flex: 1, alignItems: 'center', justifyContent: 'center' }]}>
-          <MaterialIcons name="edit-location-alt" size={18} color="#fff" style={{ marginRight: 8 }} />
+          <IconSymbol name="edit-location-alt" size={18} color="#fff" style={{ marginRight: 8 }} />
           <Text style={styles.navTitle}>Editar ubicación</Text>
         </View>
         <View style={{ width: 44 }} />
       </View>
 
       {/* Search bar */}
-      <View style={[styles.searchRow, { top: NAV_HEIGHT + 8, height: SEARCH_H }]}>
-        <View style={styles.searchLeft}><MaterialIcons name="search" size={20} color="#999" /></View>
+  <View style={[styles.searchRow, { top: NAV_HEIGHT + 8, height: SEARCH_H }]}>
+  <View style={styles.searchLeft}><IconSymbol name="search" size={20} color="#999" /></View>
         <TextInput
           ref={searchRef}
           value={searchText}
@@ -532,7 +531,7 @@ export default function EditLocationScreen() {
               style={styles.iconBtn}
               accessibilityLabel="Borrar búsqueda"
             >
-              <MaterialIcons name="close" size={20} color="#666" />
+              <IconSymbol name="close" size={20} color="#666" />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -589,12 +588,12 @@ export default function EditLocationScreen() {
 
         {/* Marker fijo al centro */}
         <View pointerEvents="none" style={styles.centerMarkerWrap}>
-          <MaterialIcons name="edit-location-alt" size={48} color="#0A4A90" />
+          <IconSymbol name="edit-location-alt" size={48} color="#0A4A90" />
         </View>
 
         {/* FAB centrar en mi ubicación */}
         <TouchableOpacity style={[styles.centerFab, { bottom: tabBarHeightLocal + footerHeight + 12 }]} onPress={centerToMyLocation} accessibilityLabel="Centrar ubicación">
-          <MaterialIcons name="my-location" size={22} color="#fff" />
+          <IconSymbol name="my-location" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 

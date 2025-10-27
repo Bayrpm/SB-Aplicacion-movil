@@ -1,7 +1,7 @@
 import { ThemedView } from '@/components/themed-view';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
@@ -606,11 +606,7 @@ export default function SignInScreen() {
                   onPress={() => setShowPassword(!showPassword)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons
-                    name={showPassword ? 'eye-off' : 'eye'}
-                    size={22}
-                    color={tintColor}
-                  />
+                  <IconSymbol name={showPassword ? 'eye-off' : 'eye'} size={22} color={tintColor} />
                 </TouchableOpacity>
       </View>
             </>
@@ -656,7 +652,7 @@ export default function SignInScreen() {
             onPress={handleBack}
             activeOpacity={0.8}
           >
-            <Ionicons name="arrow-back" size={backIcon} color="#0A4A90" />
+            <IconSymbol name="arrow-back" size={backIcon} color="#0A4A90" />
           </TouchableOpacity>
           <TouchableOpacity
             style={[
