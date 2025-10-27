@@ -2,13 +2,13 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Image } from 'expo-image';
 import React, { useMemo, useRef } from 'react';
 import {
-    Dimensions,
-    FlatList,
-    Linking,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  Dimensions,
+  FlatList,
+  Linking,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 type Item = {
@@ -39,8 +39,8 @@ const getLogo = (id?: string) => {
     case 'carabineros': return require('@/assets/images/carabineros.png');
     case 'samu':        return require('@/assets/images/samu.png');
     case 'bomberos':    return require('@/assets/images/bomberos.png');
-    case 'pdi':         return require('@/assets/images/PDI.png');
-    case 'seguridad':   return require('@/assets/images/Seguridad.png');
+    case 'pdi':         return require('@/assets/images/pdi.png');
+    case 'seguridad':   return require('@/assets/images/seguridad.png');
     default:            return require('@/assets/images/icon.png');
   }
 };
