@@ -4,7 +4,14 @@
     "version": ">= 1.0.0"
   },
   "build": {
-    "production": {
+    "internal-apk": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "development": {
+      "developmentClient": true,
       "android": {
         "buildType": "apk"
       }
@@ -15,8 +22,7 @@
         "buildType": "apk"
       }
     },
-    "development": {
-      "developmentClient": true,
+    "production": {
       "android": {
         "buildType": "apk"
       }
