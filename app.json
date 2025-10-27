@@ -20,7 +20,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.SBAplicacionmovil"
+      "package": "com.wolfxthax.SBAplicacionmovil"
     },
     "web": {
       "output": "static",
