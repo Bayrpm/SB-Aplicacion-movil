@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
 import { Animated, Platform, StyleSheet, Text, TouchableOpacity, useColorScheme, useWindowDimensions } from 'react-native';
-import BaseAuthLayout from '../components/BaseAuthLayout';
+import BaseAuthLayout from '../components/baseAuthLayout';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 

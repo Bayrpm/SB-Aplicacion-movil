@@ -1,73 +1,76 @@
 import { Image } from 'expo-image';
-import { Alert, StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAuth } from '@/app/features/auth';
+import EmergencyCarousel from '@/app/features/homeCitizen/components/EmergencyCarousel';
+import FollowSection from '@/app/features/homeCitizen/components/FollowSection';
+import HomeCard from '@/app/features/homeCitizen/components/HomeCard';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export default function HomeScreen() {
-  const { user, signOut } = useAuth();
+export default function CitizenHome() {
+  const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? 'light';
+  const logoSource = scheme === 'dark'
+    ? require('@/assets/images/img_logo_blanco.png')
+    : require('@/assets/images/img_logo.png');
 
-  const handleSignOut = async () => {
-    Alert.alert(
-      'Cerrar sesión',
-      '¿Estás seguro que deseas cerrar sesión?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Cerrar sesión',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await signOut();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            }
-          },
-        },
-      ]
-    );
-  };
+  // Texto para la card. Separado en título y descripción para destacar el principal.
+  const cardTitle = 'Tú voz importa, denuncia y apoya a tu comunidad.';
+  const cardDescription = 'Juntos construimos un San Bernardo más seguro. Cada denuncia cuenta para mejorar nuestros barrios.';
+
+  // Calcular alturas en función del logo para evitar huecos grandes
+  const LOGO_HEIGHT = 88;
+  const headerWrapperHeight = LOGO_HEIGHT + Math.max(8, Math.round(insets.top * 0.6));
 
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
+      headerBackgroundColor={{ dark: '#000000ff', light: '#ffffff' }}
+      headerHeight={headerWrapperHeight}
       headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="defaultSemiBold">¡Bienvenido!</ThemedText>
-        <ThemedText>Usuario Ciudadano autenticado: {user?.email}</ThemedText>
-        
-        <TouchableOpacity style={styles.button} onPress={handleSignOut}>
-          <ThemedText style={styles.buttonText}>Cerrar sesión</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
+        <View style={{ height: headerWrapperHeight, justifyContent: 'flex-start', alignItems: 'center', paddingTop: Math.max(6, Math.round(insets.top * 0.6)) }}>
+          <Image source={logoSource} style={[styles.logo, { height: LOGO_HEIGHT }]} contentFit="contain" />
+        </View>
+      }
+    >
+  <View style={[styles.container, { backgroundColor: scheme === 'dark' ? '#000000ff' : '#fff', paddingBottom: insets.bottom + 64 }]}> 
+        {/* Logo + HomeCard ahora forman parte del scroll (arriba) */}
+        <View style={{ alignItems: 'center', width: '100%' }}>
+          <View style={{ width: '100%', marginTop: 4 }}>
+            <HomeCard title={cardTitle} description={cardDescription} buttonText="Conoce más" onPress={() => { /* abrir info */ }} />
+          </View>
+        </View>
+
+        {/* Sección: Números de emergencia */}
+        <View style={{ marginTop: 8, width: '100%' }}>
+          <ThemedText style={styles.sectionTitle}>Números de emergencia</ThemedText>
+          <EmergencyCarousel items={[
+            { id: 'seguridad', number: '800202840' },
+            { id: 'carabineros', number: '133' },
+            { id: 'samu', number: '131' },
+            { id: 'bomberos', number: '132' },
+            { id: 'pdi', number: '134' },
+          ]} />
+        </View>
+
+        {/* Sección: Síguenos */}
+        <FollowSection />
+      </View>
     </ParallaxScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
+  container: {
     gap: 8,
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  logo: {
+    width: 220,
+    height: 96,
+    alignSelf: 'center',
+    marginTop: 8,
   },
   button: {
     backgroundColor: '#FF3B30',
@@ -80,5 +83,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 12,
   },
 });

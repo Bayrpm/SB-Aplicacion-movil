@@ -1,12 +1,12 @@
-﻿import { useRouter } from 'expo-router';
+﻿import { Alert as AppAlert } from '@/components/ui/AlertBox';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert } from 'react-native';
-import { createCitizenProfile, signUpUser } from '../api/auth.api';
+import { signUpUser } from '../api/auth.api';
 import { registrationStep3Schema } from '../schemas/registration.schema';
 import type {
-    RegistrationStep1Data,
-    RegistrationStep2Data,
-    RegistrationStep3Data
+  RegistrationStep1Data,
+  RegistrationStep2Data,
+  RegistrationStep3Data
 } from '../types';
 
 export function useRegistration() {
@@ -65,7 +65,7 @@ export function useRegistration() {
           if (err.message) msgs.push(err.message);
         });
         const message = msgs.length > 0 ? msgs.join('\n') : 'La contraseña no cumple los requisitos';
-        Alert.alert('Error en la contraseña', message);
+  AppAlert.alert('Error en la contraseña', message);
         setLoading(false);
         return;
       }
@@ -74,7 +74,7 @@ export function useRegistration() {
     }
 
     if (!step1 || !step3Data) {
-      Alert.alert('Error en el registro', 'Datos de registro incompletos');
+  AppAlert.alert('Error en el registro', 'Datos de registro incompletos');
       setLoading(false);
       return;
     }
@@ -110,13 +110,13 @@ export function useRegistration() {
           }
         }
 
-        Alert.alert(errorTitle, errorMessage);
+  AppAlert.alert(errorTitle, errorMessage);
         setLoading(false);
         return;
       }
 
       if (!authResult.user) {
-        Alert.alert('Error en el registro', 'No se pudo crear el usuario');
+  AppAlert.alert('Error en el registro', 'No se pudo crear el usuario');
         setLoading(false);
         return;
       }
@@ -124,7 +124,7 @@ export function useRegistration() {
       
     } catch (error) {
       console.error('❌ Error en el registro:', error);
-      Alert.alert('Error en el registro', 'Ocurrió un error inesperado durante el registro');
+  AppAlert.alert('Error en el registro', 'Ocurrió un error inesperado durante el registro');
       setLoading(false);
       return;
     }
@@ -133,7 +133,7 @@ export function useRegistration() {
       // El perfil se creará automáticamente por el trigger de Supabase
       // Solo si no hay sesión (requiere verificación de email)
       if (!authResult.session) {
-        Alert.alert(
+        AppAlert.alert(
           '¡Registro exitoso!',
           'Se ha enviado un correo para verificar tu cuenta. Por favor, revisa tu bandeja de entrada y verifica tu email para activar tu cuenta.',
           [{ 
@@ -146,21 +146,8 @@ export function useRegistration() {
           }]
         );
       } else {
-        // Si hay sesión inmediata, crear perfil manualmente por si acaso
-        const profileResult = await createCitizenProfile({
-          usuario_id: authResult.user.id,
-          nombre: step1.nombre,
-          apellido: step1.apellido,
-          email: step3Data.email,
-          telefono: step2?.telefono || undefined
-        });
-
-        if (profileResult.error && !profileResult.error.message?.includes('ya está registrado')) {
-          console.error('Error creando perfil:', profileResult.error);
-          // No fallar aquí porque el trigger debería haberlo creado
-        }
-
-        Alert.alert(
+      
+        AppAlert.alert(
           '¡Bienvenido!',
           'Tu cuenta ha sido creada exitosamente.',
           [{ 
@@ -176,7 +163,7 @@ export function useRegistration() {
     } catch (error) {
       console.error('Error en proceso post-registro:', error);
       // Aún mostrar éxito porque el usuario se creó
-      Alert.alert(
+      AppAlert.alert(
         '¡Registro exitoso!',
         'Se ha enviado un correo para verificar tu cuenta. Por favor, revisa tu bandeja de entrada para activar tu cuenta.',
         [{ 

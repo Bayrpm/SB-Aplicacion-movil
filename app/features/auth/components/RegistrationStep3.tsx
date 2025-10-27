@@ -1,5 +1,5 @@
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { Ionicons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { registrationStep3Schema } from '../schemas/registration.schema';
@@ -15,7 +15,9 @@ interface RegistrationStep3Props {
 export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }: RegistrationStep3Props) {
   const labelColor = useThemeColor({}, 'text');
   const placeholderColor = useThemeColor({ light: '#9CA3AF', dark: '#FFFFFF' }, 'icon');
+
   const inputBg = useThemeColor({ light: '#F8F9FA', dark: '#000000' }, 'background');
+
   const inputBorder = useThemeColor({ light: '#E9ECEF', dark: '#FFFFFF' }, 'icon');
   const inputTextColor = useThemeColor({}, 'text');
   const [email, setEmail] = useState(initialData?.email || '');
@@ -91,14 +93,14 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
       <View style={styles.inputSection}>
         <Text style={[styles.label, { color: labelColor }]}>Email</Text>
         <TextInput
-          style={[styles.input, { backgroundColor: inputBg, borderColor: inputBorder, color: inputTextColor }, errors.email && styles.inputError]}
+          style={[styles.input, { backgroundColor: inputBg, borderColor: errors.email ? '#EF4444' : inputBorder, color: inputTextColor }]}
+          placeholderTextColor={errors.email ? '#EF4444' : placeholderColor}
           value={email}
           onChangeText={setEmail}
           placeholder="tu@email.com"
           keyboardType="email-address"
           autoCapitalize="none"
           autoComplete="email"
-          placeholderTextColor={placeholderColor}
           onFocus={() => {
             // No disparar el handler global aquí para evitar el scroll automático
             // cuando el usuario solo toca el campo email.
@@ -116,7 +118,7 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
 
       <View style={styles.inputSection}>
         <Text style={[styles.label, { color: labelColor }]}>Contraseña</Text>
-        <View style={[styles.passwordContainer, { backgroundColor: inputBg, borderColor: inputBorder }, errors.password && styles.inputError]}>
+  <View style={[styles.passwordContainer, { backgroundColor: inputBg, borderColor: errors.password ? '#EF4444' : inputBorder }]}> 
           <TextInput
             ref={passwordRef}
             style={[styles.passwordInput, { color: inputTextColor }]}
@@ -144,11 +146,7 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
             activeOpacity={0.7}
             accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
           >
-            <Ionicons
-              name={showPassword ? 'eye-off' : 'eye'}
-              size={22}
-              color={useThemeColor({ light: '#0A4A90', dark: '#BFC7CC' }, 'tint')}
-            />
+            <IconSymbol name={showPassword ? 'eye-off' : 'eye'} size={22} color={useThemeColor({ light: '#0A4A90', dark: '#BFC7CC' }, 'tint')} />
           </TouchableOpacity>
         </View>
         {/* No mostrar el error de validación de contraseña aquí, solo los requisitos */}
@@ -157,11 +155,7 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
           {passwordRules.map((rule, idx) => (
             <View key={idx} style={styles.passwordRuleRow}>
               <View style={{ marginRight: 6 }}>
-                <Ionicons
-                  name={rule.valid ? 'checkmark-circle' : 'close-circle'}
-                  size={14}
-                  color={rule.valid ? '#22C55E' : '#EF4444'}
-                />
+                <IconSymbol name={rule.valid ? 'checkmark-circle' : 'close-circle'} size={14} color={rule.valid ? '#22C55E' : '#EF4444'} />
               </View>
               <Text style={{
                 color: rule.valid ? '#22C55E' : '#EF4444',

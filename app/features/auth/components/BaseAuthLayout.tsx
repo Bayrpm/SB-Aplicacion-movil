@@ -52,8 +52,10 @@ export default function BaseAuthLayout({
   const defaultBottomFill = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint');
 
   // Fondo y card: en modo oscuro el fondo debe ser negro y la card un gris oscuro
-  const containerBg = scheme === 'dark' ? '#000000' : defaultBackground;
-  const cardBg = scheme === 'dark' ? '#111418' : defaultBackground;
+  // Fondo general negro en dark, blanco en light
+  const containerBg = scheme === 'dark' ? '#000' : '#fff';
+  // Card también oscura en dark
+  const cardBg = scheme === 'dark' ? '#111418' : '#fff';
   const topFill = defaultTopFill;
   const bottomFill = defaultBottomFill;
   
@@ -163,7 +165,6 @@ export default function BaseAuthLayout({
             padding: cardPaddingPx,
             backgroundColor: cardBg,
             ...(typeof cardBottomPx === 'number' ? { bottom: cardBottomPx } : { top: cardTopPx }),
-            // Allow parent to request clipping of overflowing children (useful when keyboard moves content)
             ...(clipOverflow ? { overflow: 'hidden' } : { overflow: 'visible' }),
           },
         ]}
@@ -220,7 +221,6 @@ export default function BaseAuthLayout({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   topSection: {
     position: 'absolute',
@@ -242,7 +242,6 @@ const styles = StyleSheet.create({
   card: {
     position: 'absolute',
     left: (width - 0.84 * width) / 2,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -251,7 +250,7 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     elevation: 6,
     zIndex: 2,
-    overflow: 'visible', // Permitir que el ScrollView funcione correctamente
+    overflow: 'visible',
   },
   bottomBand: {
     position: 'absolute',

@@ -1,12 +1,14 @@
 import { ThemedView } from '@/components/themed-view';
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { signInUser } from '../api/auth.api';
-import BaseAuthLayout from '../components/BaseAuthLayout';
+import BaseAuthLayout from '../components/baseAuthLayout';
+import { useAuth } from '../context';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const { width, height } = Dimensions.get('window');
@@ -52,6 +54,7 @@ export default function SignInScreen() {
   const [keyboardVisible, setKeyboardVisible] = React.useState(false);
   const [showPassword, setShowPassword] = React.useState(false);
   const router = useRouter();
+  const auth = useAuth();
   const scrollViewRef = React.useRef<ScrollView>(null);
   const emailInputRef = React.useRef<TextInput>(null);
   const passwordInputRef = React.useRef<TextInput>(null);
@@ -205,23 +208,56 @@ export default function SignInScreen() {
     }
   }, [step]);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step === 1) {
       if (!email.trim()) {
-        Alert.alert('Error', 'Por favor ingresa tu correo electrónico');
+        AppAlert.alert('Error', 'Por favor ingresa tu correo electrónico');
         return;
       }
       // Validación básica de email
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
-        Alert.alert('Error', 'Por favor ingresa un correo electrónico válido');
+        AppAlert.alert('Error', 'Por favor ingresa un correo electrónico válido');
         return;
       }
-      setStep(2);
-      // Auto-focus ultra rápido en el input de contraseña
-      setTimeout(() => {
-        passwordInputRef.current?.focus();
-      }, 20);
+      // Comprobar existencia del correo antes de pedir la contraseña
+      startLoading();
+      try {
+        const res = await signInUser(email, ''); // password vacío = existencia
+        if (res.error) {
+          const msg = res.error?.message || 'Ocurrió un error al verificar el correo';
+          AppAlert.alert('Error', msg);
+          stopLoading();
+          return;
+        }
+        if (!res.exists) {
+          AppAlert.alert(
+            'Cuenta no encontrada',
+            'No existe una cuenta asociada a este correo. ¿Deseas registrarte?',
+            [
+              { text: 'No', style: 'cancel' },
+              {
+                text: 'Registrarme',
+                onPress: () => {
+                  try { router.push('/(auth)/signUp'); } catch (e) {}
+                },
+              },
+            ]
+          );
+          stopLoading();
+          return;
+        }
+        // Si existe, avanzar al paso de contraseña
+        setStep(2);
+        // Auto-focus ultra rápido en el input de contraseña
+        setTimeout(() => {
+          passwordInputRef.current?.focus();
+        }, 20);
+      } catch (e) {
+        AppAlert.alert('Error', 'Ocurrió un error al verificar el correo');
+      } finally {
+        stopLoading();
+      }
     } else {
       handleSignIn();
     }
@@ -229,7 +265,7 @@ export default function SignInScreen() {
 
   const handleSignIn = async () => {
     if (!password.trim()) {
-      Alert.alert('Error', 'Por favor ingresa tu contraseña');
+      AppAlert.alert('Error', 'Por favor ingresa tu contraseña');
       return;
     }
     
@@ -237,13 +273,31 @@ export default function SignInScreen() {
     startLoading();
     try {
       const result = await signInUser(email, password);
+  // Resultado del signIn disponible en `result` (no se imprime en consola en prod)
       if (result.error) {
         // Mostrar el mensaje de error retornado por la API
-        const message = result.error.message || 'Credenciales incorrectas';
-        Alert.alert('Error', message);
+        const message = result.error.message || 'Se han ingresado credenciales incorrectas';
+        AppAlert.alert('Error', message);
         stopLoading();
         return;
       }
+      // Actualizar rápidamente el provider con el resultado obtenido para
+      // evitar condiciones de carrera en la elección del tab.
+      try {
+        auth?.setAuthState?.({ profile: result.profile ?? null, isInspector: typeof result.isInspector === 'boolean' ? result.isInspector : undefined });
+      } catch (e) {
+        // noop
+      }
+      // Navegar inmediatamente al tab correspondiente para evitar flashes
+      try {
+        if (typeof result.isInspector === 'boolean') {
+          const target = result.isInspector ? '/inspector/inspectorHome' : '/citizen/citizenHome';
+          router.replace(target as any);
+        }
+      } catch (e) {
+        // noop
+      }
+
       // Animación de salida rápida (opcional) y dejar que el layout principal redirija
       Animated.parallel([
         Animated.timing(screenFadeAnim, {
@@ -264,7 +318,7 @@ export default function SignInScreen() {
     } catch (error) {
       // En caso de error inesperado
       console.error('Error al iniciar sesión:', error);
-      Alert.alert('Error', 'Ocurrió un error al iniciar sesión');
+      AppAlert.alert('Error', 'Ocurrió un error al iniciar sesión');
       stopLoading();
     }
   };
@@ -291,8 +345,8 @@ export default function SignInScreen() {
           useNativeDriver: true,
         }),
       ]).start(() => {
-        // Navegación después de la animación suave
-        router.back();
+        // Navegación después de la animación suave: replace al welcome group para evitar flash
+        router.replace('/(auth)');
       });
     }
   };
@@ -429,7 +483,7 @@ export default function SignInScreen() {
 
   return (
     <ThemedView style={{ flex: 1 }}>
-      <Animated.View style={{ flex: 1, opacity: screenFadeAnim }}>
+  <Animated.View style={{ flex: 1, opacity: screenFadeAnim }}>
       <BaseAuthLayout 
         title="Bienvenido" 
         showLogo={false}
@@ -476,13 +530,10 @@ export default function SignInScreen() {
           </View>
         </View>
         
-        <Animated.View 
+        <View 
           style={[
             styles.inputSection,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }]
-            }
+            // keep visual animation for container via opacity/transform on children
           ]}
         >
           {step === 1 ? (
@@ -527,22 +578,10 @@ export default function SignInScreen() {
               >
                 Contraseña
               </Animated.Text>
-              <Animated.View 
+              <View
                 style={[
-                  styles.passwordContainer, 
-                  { 
-                    width: finalFieldW,
-                    alignSelf: 'center',
-                    opacity: passwordInputAnim,
-                    transform: [{
-                      translateY: passwordInputAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [20, 0],
-                      })
-                    }],
-                    backgroundColor: inputBg,
-                    borderColor: inputBorder,
-                  }
+                  styles.passwordContainer,
+                  { width: finalFieldW, alignSelf: 'center', backgroundColor: inputBg, borderColor: inputBorder }
                 ]}
               >
                 <TextInput
@@ -567,16 +606,12 @@ export default function SignInScreen() {
                   onPress={() => setShowPassword(!showPassword)}
                   activeOpacity={0.7}
                 >
-                  <Ionicons
-                    name={showPassword ? 'eye-off' : 'eye'}
-                    size={22}
-                    color={tintColor}
-                  />
+                  <IconSymbol name={showPassword ? 'eye-off' : 'eye'} size={22} color={tintColor} />
                 </TouchableOpacity>
-              </Animated.View>
+      </View>
             </>
           )}
-        </Animated.View>
+    </View>
         </ScrollView>
 
   
@@ -617,7 +652,7 @@ export default function SignInScreen() {
             onPress={handleBack}
             activeOpacity={0.8}
           >
-            <Ionicons name="arrow-back" size={backIcon} color="#0A4A90" />
+            <IconSymbol name="arrow-back" size={backIcon} color="#0A4A90" />
           </TouchableOpacity>
           <TouchableOpacity
             style={[
@@ -652,6 +687,7 @@ export default function SignInScreen() {
       </View>
     </Modal>
   )}
+  {/* AlertBox provider is mounted globally in app/_layout.tsx; use AppAlert.alert(...) instead */}
       </Animated.View>
     </ThemedView>
   );
