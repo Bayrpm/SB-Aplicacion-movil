@@ -21,23 +21,23 @@ export default function CitizenHome() {
   const cardDescription = 'Juntos construimos un San Bernardo más seguro. Cada denuncia cuenta para mejorar nuestros barrios.';
 
   // Calcular alturas en función del logo para evitar huecos grandes
-  const LOGO_HEIGHT = 88;
-  const headerWrapperHeight = LOGO_HEIGHT + Math.max(8, Math.round(insets.top * 0.6));
+  const LOGO_HEIGHT = 120;
+  const headerWrapperHeight = LOGO_HEIGHT + Math.max(24, Math.round(insets.top * 0.8)) + 24;
 
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ dark: '#000000ff', light: '#ffffff' }}
       headerHeight={headerWrapperHeight}
       headerImage={
-        <View style={{ height: headerWrapperHeight, justifyContent: 'flex-start', alignItems: 'center', paddingTop: Math.max(6, Math.round(insets.top * 0.6)) }}>
-          <Image source={logoSource} style={[styles.logo, { height: LOGO_HEIGHT }]} contentFit="contain" />
+        <View style={{ height: headerWrapperHeight, justifyContent: 'flex-start', alignItems: 'center', paddingTop: Math.max(48, Math.round(insets.top * 1.2)), paddingBottom: 24 }}>
+          <Image source={logoSource} style={[styles.logo, { height: LOGO_HEIGHT, marginTop: 12 }]} contentFit="contain" />
         </View>
       }
     >
-  <View style={[styles.container, { backgroundColor: scheme === 'dark' ? '#000000ff' : '#fff', paddingBottom: insets.bottom + 64 }]}> 
+  <View style={[styles.container, { backgroundColor: scheme === 'dark' ? '#000000ff' : '#fff', paddingBottom: insets.bottom + 96 }]}> 
         {/* Logo + HomeCard ahora forman parte del scroll (arriba) */}
         <View style={{ alignItems: 'center', width: '100%' }}>
-          <View style={{ width: '100%', marginTop: 4 }}>
+          <View style={{ width: '100%', marginTop: 20 }}>
             <HomeCard title={cardTitle} description={cardDescription} buttonText="Conoce más" onPress={() => { /* abrir info */ }} />
           </View>
         </View>
@@ -67,10 +67,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   logo: {
-    width: 220,
-    height: 96,
+    width: 260,
+    height: 120,
     alignSelf: 'center',
-    marginTop: 8,
+    marginTop: 12,
+    marginBottom: 12,
   },
   button: {
     backgroundColor: '#FF3B30',

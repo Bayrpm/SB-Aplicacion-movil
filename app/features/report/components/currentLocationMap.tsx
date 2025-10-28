@@ -4,7 +4,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import * as Location from 'expo-location';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Dimensions, Easing, PixelRatio, Platform, StyleSheet, Text, View } from 'react-native';
-import MapView, { Region } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../../../../components/Button';
 import { IconSymbol } from '../../../../components/ui/icon-symbol';
@@ -479,6 +479,7 @@ export default function CurrentLocationMap() {
       <MapView
         ref={mapRef}
         style={styles.map}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         initialRegion={{
           // Fallback mínimo: si por alguna razón no entra ensureInitialCenter,
           // esto al menos no se ve “a lo lejos”.
