@@ -175,9 +175,7 @@ export default function EditLocationScreen() {
   // ===== Providers =====
   const GOOGLE_API_KEY =
     (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string) ||
-    (Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string) ||
-    (Constants.manifest?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string) ||
-    'AIzaSyA6l8VwtFzdBMibanrIeRE8jZO1QaqHhZw'; // fallback proporcionado
+    (Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string);
 
   const fetchGoogleAutocomplete = useCallback(async (input: string, signal?: AbortSignal): Promise<SuggestItem[]> => {
     if (!input) return [];
