@@ -1,5 +1,5 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://raw.githubusercontent.com/expo/eas-cli/main/packages/eas-json/schema/eas.schema.json",
   "cli": {
     "version": ">= 1.0.0"
   },
@@ -8,23 +8,10 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      }
-    },
-    "development": {
-      "developmentClient": true,
-      "android": {
-        "buildType": "apk"
-      }
-    },
-    "staging": {
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk"
-      }
-    },
-    "production": {
-      "android": {
-        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://reckatoibnucblyibsih.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJlY2thdG9pYm51Y2JseWlic2loIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5OTIxODksImV4cCI6MjA3NDU2ODE4OX0._yGNVMG1bh1M2QM_YJs1fbMY8GqOmD1YfccA8gFDick"
       }
     }
   }
