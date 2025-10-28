@@ -345,6 +345,7 @@ export default function EditLocationScreen() {
     debounceRef.current = setTimeout(() => {
       if (searchText !== lastQueryRef.current) {
         lastQueryRef.current = searchText;
+        // No cerrar el teclado al mostrar el loading
         runAutocomplete(searchText);
       }
     }, 300);
@@ -391,7 +392,7 @@ export default function EditLocationScreen() {
       AppAlert.alert('Búsqueda', 'Error al buscar la dirección.');
     } finally {
       setSuggestLoading(false);
-      setIsTyping(false);
+      // No cerrar el teclado ni cambiar isTyping aquí, solo limpiar sugerencias
       setSuggestions([]);
     }
   };
@@ -493,11 +494,8 @@ export default function EditLocationScreen() {
       {/* Search bar */}
       <View style={[styles.searchRow, { top: NAV_HEIGHT + 8, height: SEARCH_H }]}>
         <View style={styles.searchLeft}><IconSymbol name="search" size={20} color="#999" /></View>
-        {(suggestLoading || revLoading) ? (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', height: SEARCH_H }}>
-            <ActivityIndicator size="small" color="#0A4A90" />
-          </View>
-        ) : (
+        {/* El loader se muestra, pero no se cierra el teclado */}
+        <View style={{ flex: 1, justifyContent: 'center' }}>
           <TextInput
             ref={searchRef}
             value={searchText}
@@ -510,7 +508,12 @@ export default function EditLocationScreen() {
             style={styles.searchInput}
             returnKeyType="search"
           />
-        )}
+          {(suggestLoading || revLoading) && (
+            <View pointerEvents="none" style={styles.searchLoaderOverlay}>
+              <ActivityIndicator size="small" color="#0A4A90" />
+            </View>
+          )}
+        </View>
         <View style={styles.searchRight}>
           {searchText && !suggestLoading && !revLoading ? (
             <TouchableOpacity
@@ -560,7 +563,8 @@ export default function EditLocationScreen() {
               }
             }}
             onRegionChange={() => {
-              if (isTyping) {
+              // Solo cerrar el teclado si el usuario está interactuando con el mapa Y no está escribiendo en la barra
+              if (isTyping && !suggestLoading && !revLoading) {
                 setIsTyping(false);
                 setSuggestions([]);
                 Keyboard.dismiss();
