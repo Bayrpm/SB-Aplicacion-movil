@@ -2,9 +2,9 @@ import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import EmergencyCarousel from '@/app/features/homeCitizen/components/EmergencyCarousel';
-import FollowSection from '@/app/features/homeCitizen/components/FollowSection';
-import HomeCard from '@/app/features/homeCitizen/components/HomeCard';
+import EmergencyCarousel from '@/app/features/homeCitizen/components/emergencyCarousel';
+import FollowSection from '@/app/features/homeCitizen/components/followSection';
+import HomeCard from '@/app/features/homeCitizen/components/homeCard';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { useColorScheme } from '@/hooks/use-color-scheme';

@@ -3,7 +3,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import React from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
-import HomeCard from './HomeCard';
+import HomeCard from './homeCard';
 
 export default function FollowSection() {
   const scheme = useColorScheme() ?? 'light';
