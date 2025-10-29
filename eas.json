@@ -9,10 +9,6 @@
       "channel": "despliegue",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://reckatoibnucblyibsih.supabase.co",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyA5sYlITI5q9EsZIGAMW7EC1WXbewNmn2Q"
       }
     }
   }

@@ -4,7 +4,6 @@
     "slug": "SB-Aplicacion-movil",
     "version": "1.0.0",
     "orientation": "portrait",
-    "jsEngine": "hermes",
     "icon": "./assets/images/img_logo.png",
     "scheme": "sbaplicacionmovil",
     "userInterfaceStyle": "automatic",
