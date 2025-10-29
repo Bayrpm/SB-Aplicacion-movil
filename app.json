@@ -14,6 +14,9 @@
         "NSCameraUsageDescription": "La app necesita acceder a la cámara para tomar fotos y videos.",
         "NSPhotoLibraryUsageDescription": "La app necesita acceder a la galería para seleccionar fotos y videos.",
         "NSMicrophoneUsageDescription": "La app necesita acceder al micrófono para grabar audio en videos."
+      },
+      "config": {
+        "googleMapsApiKey": "process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
       }
     },
     "android": {
@@ -23,19 +26,25 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-        "permissions": [
-          "ACCESS_FINE_LOCATION",
-          "ACCESS_COARSE_LOCATION",
-          "CAMERA",
-          "READ_EXTERNAL_STORAGE",
-          "WRITE_EXTERNAL_STORAGE",
-          "READ_MEDIA_IMAGES",
-          "READ_MEDIA_VIDEO"
-        ],
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.wolfxthax.SBAplicacionmovil"
+      "package": "com.wolfxthax.sbaplicacionmovil",
+      "config": {
+        "googleMaps": {
+          "apiKey": "process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
+        }
+      }
     },
+    
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
@@ -53,6 +62,12 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permite a SanBernardo APP usar tu ubicación."
+        }
       ]
     ],
     "experiments": {
@@ -68,7 +83,6 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    
     "updates": {
       "url": "https://u.expo.dev/fc7331a3-dda8-4ded-b288-398c4e9f71e8"
     }
