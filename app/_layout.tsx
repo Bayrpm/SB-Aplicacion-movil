@@ -6,54 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
-// Mostrar si Hermes está activo en entornos de desarrollo para facilitar debugging
-if (__DEV__) {
-  try {
-    // global.HermesInternal es una señal común para detectar Hermes
-    // eslint-disable-next-line no-console
-    console.log('Hermes?', !!(global as any).HermesInternal);
-  } catch (e) {
-    // noop
-  }
-}
-
 import { AuthProvider, SplashScreen, useAuth } from '@/app/features/auth';
 import { ReportModalProvider } from '@/app/features/report/context';
 import AlertBox from '@/components/ui/AlertBox';
-import ErrorBoundary from '@/components/ui/ErrorBoundary';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-
-// DEV: global JS handlers para capturar errores no atrapados y promesas rechazadas
-if (typeof __DEV__ !== 'undefined' && __DEV__) {
-  try {
-    // Global handler para errores no atrapados (React Native)
-    const globalAny: any = global;
-    const originalHandler = globalAny.ErrorUtils?.getGlobalHandler?.();
-    if (globalAny.ErrorUtils && typeof globalAny.ErrorUtils.setGlobalHandler === 'function') {
-      globalAny.ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
-        // eslint-disable-next-line no-console
-        console.error('[GLOBAL ERROR]', isFatal ? 'FATAL' : 'NON-FATAL', error?.message || error, error?.stack || error);
-        try { if (originalHandler) originalHandler(error, isFatal); } catch (e) {}
-      });
-    }
-
-    // Capturar promesas no manejadas
-    if (typeof (globalThis as any)?.addEventListener === 'function') {
-      (globalThis as any).addEventListener('unhandledrejection', (ev: any) => {
-        // eslint-disable-next-line no-console
-        console.error('[UNHANDLED PROMISE REJECTION]', ev?.reason || ev);
-      });
-    } else {
-      // Fallback para algunos entornos RN
-      (global as any).onunhandledrejection = (ev: any) => {
-        // eslint-disable-next-line no-console
-        console.error('[UNHANDLED PROMISE REJECTION]', ev?.reason || ev);
-      };
-    }
-  } catch (e) {
-    // noop
-  }
-}
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -217,9 +173,7 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <ErrorBoundary>
-        <RootLayoutNav />
-      </ErrorBoundary>
+      <RootLayoutNav />
       {/* Mount global AlertBox so calls to Alert.alert(...) can be redirected if desired */}
       <AlertBox />
     </AuthProvider>
