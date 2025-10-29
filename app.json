@@ -43,6 +43,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      ["expo-updates", { "checkAutomatically": "ON_LOAD", "autoUpdateTimeout": 0 }],
       "expo-router",
       [
         "expo-splash-screen",
