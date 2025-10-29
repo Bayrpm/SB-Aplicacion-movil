@@ -14,9 +14,6 @@
         "NSCameraUsageDescription": "La app necesita acceder a la cámara para tomar fotos y videos.",
         "NSPhotoLibraryUsageDescription": "La app necesita acceder a la galería para seleccionar fotos y videos.",
         "NSMicrophoneUsageDescription": "La app necesita acceder al micrófono para grabar audio en videos."
-      },
-      "config": {
-        "googleMapsApiKey": "process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
       }
     },
     "android": {
@@ -37,12 +34,8 @@
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.wolfxthax.sbaplicacionmovil",
-      "config": {
-        "googleMaps": {
-          "apiKey": "process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY"
-        }
-      }
+      "package": "com.wolfxthax.sbaplicacionmovil"
+      // ...config eliminado, ahora se gestiona en app.config.js
     },
     
     "web": {
