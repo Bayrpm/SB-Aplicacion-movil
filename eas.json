@@ -6,6 +6,7 @@
   "build": {
     "internal-apk": {
       "distribution": "internal",
+      "channel": "despliegue",
       "android": {
         "buildType": "apk"
       }
