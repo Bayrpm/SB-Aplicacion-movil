@@ -1,26 +1,27 @@
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    FlatList,
-    Keyboard,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Keyboard,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import MapView, { Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { invokeLocationEdit } from '../types/locationBridge';
 import { getReportFormSnapshot, setReportFormSnapshot } from '../types/reportFormBridge';
 
-type SuggestItem = { label: string; lat: number; lon: number; score: number; src: 'photon' | 'nominatim' };
+type SuggestItem = { label: string; lat?: number; lon?: number; score?: number; src: 'photon' | 'nominatim' | 'google'; placeId?: string };
 
 export default function EditLocationScreen() {
   const insets = useSafeAreaInsets();
@@ -52,8 +53,8 @@ export default function EditLocationScreen() {
   const bottomOverlayHeight = Math.max(insets.bottom || 0, Math.min(navBarHeightAndroid || 0, 48));
   const tabBarHeightLocal = bottomOverlayHeight || 0;
 
-  // BBOX Gran Santiago (aprox — minlon,minlat,maxlon,maxlat)
-  const STGO_BBOX = { minlon: -71.20, minlat: -33.95, maxlon: -70.35, maxlat: -33.15 };
+  // BBOX Región Metropolitana (aprox — minlon,minlat,maxlon,maxlat)
+  const STGO_BBOX = { minlon: -71.30, minlat: -33.95, maxlon: -69.90, maxlat: -32.70 };
 
   // Search / suggestions
   const [searchText, setSearchText] = useState(qAddr ? sanitizeShort(qAddr) : '');
@@ -61,11 +62,12 @@ export default function EditLocationScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [suggestions, setSuggestions] = useState<SuggestItem[]>([]);
   const [suggestLoading, setSuggestLoading] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Abort & cache
-  const abortPhoton = useRef<AbortController | null>(null);
-  const abortNominatim = useRef<AbortController | null>(null);
+  // Abort controller único para todas las búsquedas
+  const abortControllerRef = useRef<AbortController | null>(null);
+  // Para control de debounce y última query
+  const debounceRef = useRef<any>(null);
+  const lastQueryRef = useRef<string>('');
   const cacheRef = useRef<Map<string, SuggestItem[]>>(new Map());
 
   // Reverse geocoding
@@ -98,24 +100,43 @@ export default function EditLocationScreen() {
   }
 
   function formatReverseAddress(p: any): string {
-    const street = p?.street || p?.name || '';
-    const number = p?.streetNumber || (p?.name && p?.name !== street ? p.name : '');
-    const streetPart = street ? `${street}${number ? ` ${number}` : ''}` : '';
-    const comuna =
-      p?.city || p?.town || p?.village || p?.municipality || p?.county || p?.district || 'Santiago';
-    return sanitizeShort([streetPart, comuna].filter(Boolean).join(', ')) || 'Mi ubicación';
+    // Solo mostrar 'calle 123, comuna', nunca código postal ni región
+    let street = p?.street || p?.name || '';
+    let number = '';
+    // Detectar número en el nombre si corresponde
+    if (p?.name && /^\d+$/.test(String(p.name).trim())) {
+      number = String(p.name).trim();
+      street = (p?.street || '').trim();
+    } else {
+      const mNameNum = String(p.name || '').trim().match(/(\d+)$/);
+      if (mNameNum && p?.street) {
+        number = mNameNum[1];
+        street = (p?.street || '').trim();
+      } else {
+        const mStreetNum = street.match(/^(.*?)[,\s]+(\d+)\s*$/);
+        if (mStreetNum) {
+          street = (mStreetNum[1] || '').trim();
+          number = mStreetNum[2] || '';
+        }
+      }
+    }
+    street = street
+      .replace(/^\s*(Av\.?|Av)\s+/i, 'Avenida ')
+      .replace(/^\s*(C\.?|Calle|C)\s+/i, 'Calle ')
+      .replace(/^\s*(Pje\.?|Pje)\s+/i, 'Pasaje ')
+      .replace(/^\s*(Gral\.?|Gral)\s+/i, 'General ')
+      .replace(/^\s*(Bv\.?|Bvar\.?|Bulevar|Bulev)\s+/i, 'Bulevar ');
+    const streetAndNumber = [street, number].filter(Boolean).join(' ').trim();
+    const comuna = p?.city || p?.town || p?.village || p?.municipality || p?.county || p?.district || 'Santiago';
+    return sanitizeShort([streetAndNumber, comuna].filter(Boolean).join(', ')) || 'Mi ubicación';
   }
 
   function applySynonyms(q: string): string[] {
     const base = q.trim();
     const out = new Set<string>([base]);
-
-    // Gran Avenida → Gran Avenida José Miguel Carrera
     if (/^\s*gran\s+avenida(\b|$)/i.test(base)) {
       out.add(base.replace(/^\s*gran\s+avenida/i, 'Gran Avenida José Miguel Carrera'));
     }
-
-    // Si parece “calle + número” sin tipo, probamos tipos comunes
     const m = base.match(/^(.+?)\s+(\d+)(?:\s*,\s*(.+))?$/i);
     if (m && !TYPE_REGEX.test(base)) {
       const name = m[1].trim();
@@ -125,7 +146,6 @@ export default function EditLocationScreen() {
         out.add(`${tipo} ${name} ${num}${tail ? `, ${tail}` : ''}`);
       });
     }
-
     return Array.from(out);
   }
 
@@ -153,61 +173,39 @@ export default function EditLocationScreen() {
   }
 
   // ===== Providers =====
-  const photonUrl = (q: string) => {
-    const base = 'https://photon.komoot.io/api';
-    const params: Record<string, string> = {
-      q,
-      lang: 'es',
-      limit: '12',
-      // Sesgo local: si tenemos centro, úsalo; si no, usar el centro de Santiago aprox
-      lat: String(center?.latitude ?? -33.45),
-      lon: String(center?.longitude ?? -70.6667),
-    };
-    const qs = Object.entries(params)
-      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-      .join('&');
-    return `${base}?${qs}`;
-  };
+  const GOOGLE_API_KEY =
+    (process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string) ||
+    (Constants.expoConfig?.extra?.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY as string);
 
-  async function fetchPhoton(q: string, signal?: AbortSignal): Promise<SuggestItem[]> {
-    const url = photonUrl(q);
-    const resp = await fetch(url, { signal } as any);
-    if (!resp.ok) return [];
-    const json = await resp.json();
-    const feats: any[] = json?.features || [];
-    const tokens = q.toLowerCase().split(/[\s,]+/).filter((t: string) => t.length > 1);
-    const out: SuggestItem[] = [];
-
-    for (const f of feats) {
-      const p = f.properties || {};
-      const lat = f.geometry?.coordinates?.[1];
-      const lon = f.geometry?.coordinates?.[0];
-
-      const road = p.street || p.name || p.road || '';
-      const number = p.housenumber || p.house_number || '';
-      // Comuna/ciudad
-      const comuna = p.city || p.town || p.village || p.district || p.county || p.municipality || 'Santiago';
-
-      if (!road && !p.name) continue;
-      const street = road ? `${road}${number ? ` ${number}` : ''}` : p.name;
-      if (!street) continue;
-
-      const label = ensureComuna(sanitizeShort([street, comuna].filter(Boolean).join(', ')), comuna);
-      const score = scoreByQuery(label, tokens, lat, lon);
-      out.push({ label, lat, lon, score, src: 'photon' });
+  const fetchGoogleAutocomplete = useCallback(async (input: string, signal?: AbortSignal): Promise<SuggestItem[]> => {
+    if (!input) return [];
+    try {
+      const q = encodeURIComponent(input);
+      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${q}&key=${GOOGLE_API_KEY}&components=country:cl&language=es&types=address`;
+      const resp = await fetch(url, { signal } as any);
+      if (!resp.ok) return [];
+      const js = await resp.json();
+      if (js.status !== 'OK' && js.status !== 'ZERO_RESULTS') return [];
+      return (js.predictions || []).slice(0, 12).map((p: any) => ({ label: p.description, placeId: p.place_id, src: 'google' }));
+    } catch {
+      return [];
     }
+  }, [GOOGLE_API_KEY]);
 
-    // Desduplicar por label
-    const seen = new Set<string>();
-    const unique = out.filter((i) => {
-      if (seen.has(i.label)) return false;
-      seen.add(i.label);
-      return true;
-    });
-
-    unique.sort((a, b) => b.score - a.score);
-    return unique;
-  }
+  const fetchPlaceDetails = useCallback(async (placeId: string, signal?: AbortSignal): Promise<{ lat: number; lon: number } | null> => {
+    try {
+      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${GOOGLE_API_KEY}&fields=geometry`;
+      const resp = await fetch(url, { signal } as any);
+      if (!resp.ok) return null;
+      const js = await resp.json();
+      if (js.status !== 'OK') return null;
+      const loc = js.result?.geometry?.location;
+      if (!loc) return null;
+      return { lat: Number(loc.lat), lon: Number(loc.lng) };
+    } catch {
+      return null;
+    }
+  }, [GOOGLE_API_KEY]);
 
   function nominatimSearchUrls(raw: string): string[] {
     const base = 'https://nominatim.openstreetmap.org/search';
@@ -217,8 +215,6 @@ export default function EditLocationScreen() {
       `${base}?${common}&q=${encodeURIComponent(raw)}&viewbox=${vb}&bounded=1`,
       `${base}?${common}&q=${encodeURIComponent(raw)}`,
     ];
-
-    // structured si parece calle + número (, comuna)
     const m = raw.match(/^(.+?)\s+(\d+)\s*(?:,\s*(.+))?$/i);
     if (m) {
       const street = `${m[1]} ${m[2]}`;
@@ -228,7 +224,7 @@ export default function EditLocationScreen() {
     return headers;
   }
 
-  async function fetchNominatim(raw: string, signal?: AbortSignal): Promise<SuggestItem[]> {
+  const fetchNominatim = useCallback(async (raw: string, signal?: AbortSignal): Promise<SuggestItem[]> => {
     const urls = nominatimSearchUrls(raw);
     const tokens = raw.toLowerCase().split(/[\s,]+/).filter((t) => t.length > 1);
     const results: SuggestItem[] = [];
@@ -237,58 +233,54 @@ export default function EditLocationScreen() {
       'User-Agent': 'SB-Aplicacion-movil/1.0 (contacto: tu-email@dominio.cl)',
       'Referer': 'https://tu-dominio.cl/app',
     };
-
     const push = (i: SuggestItem) => {
       if (!results.find((r) => r.label === i.label)) results.push(i);
     };
-
     for (const url of urls) {
-      const resp = await fetch(url, { headers, signal } as any);
-      if (!resp.ok) continue;
-      const js = (await resp.json()) as any[];
-      for (const s of js) {
-        const addr = s.address || {};
-        const displayParts = (s.display_name || '')
-          .split(',')
-          .map((p: string) => p.trim())
-          .filter((p: string) => {
-            if (!p) return false;
-            if (/^\d{3,}$/.test(p)) return false;
-            const lower = p.toLowerCase();
-            if (lower.includes('región') || lower.includes('region') || lower.includes('provincia') || lower.includes('metropolitana') || lower.includes('chile')) return false;
-            return true;
-          });
-
-        const first = displayParts[0] || '';
-        const road = addr.road || addr.residential || addr.pedestrian || addr.cycleway || addr.path || '';
-        const number = addr.house_number || addr.housenumber || '';
-        let comuna = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-        if (!comuna) comuna = displayParts[1] || 'Santiago';
-
-        const hasTypeInFirst = TYPE_REGEX.test(first);
-        const streetFromAddr = road ? `${road}${number ? ` ${number}` : ''}` : '';
-        const street = hasTypeInFirst ? first : streetFromAddr || first;
-        if (!street) continue;
-
-        const label = ensureComuna(sanitizeShort([street, comuna].filter(Boolean).join(', ')), comuna);
-        const lat = Number(s.lat);
-        const lon = Number(s.lon);
-        const score = scoreByQuery(label, tokens, lat, lon);
-        push({ label, lat, lon, score, src: 'nominatim' });
+      try {
+        const resp = await fetch(url, { headers, signal } as any);
+        if (!resp.ok) continue;
+        const js = (await resp.json()) as any[];
+        for (const s of js) {
+          const addr = s.address || {};
+          const displayParts = (s.display_name || '')
+            .split(',')
+            .map((p: string) => p.trim())
+            .filter((p: string) => {
+              if (!p) return false;
+              if (/^\d{3,}$/.test(p)) return false;
+              const lower = p.toLowerCase();
+              if (lower.includes('región') || lower.includes('region') || lower.includes('provincia') || lower.includes('metropolitana') || lower.includes('chile')) return false;
+              return true;
+            });
+          const first = displayParts[0] || '';
+          const road = addr.road || addr.residential || addr.pedestrian || addr.cycleway || addr.path || '';
+          const number = addr.house_number || addr.housenumber || '';
+          let comuna = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
+          if (!comuna) comuna = displayParts[1] || 'Santiago';
+          const hasTypeInFirst = TYPE_REGEX.test(first);
+          const streetFromAddr = road ? `${road}${number ? ` ${number}` : ''}` : '';
+          const street = hasTypeInFirst ? first : streetFromAddr || first;
+          if (!street) continue;
+          const label = ensureComuna(sanitizeShort([street, comuna].filter(Boolean).join(', ')), comuna);
+          const lat = Number(s.lat);
+          const lon = Number(s.lon);
+          const score = scoreByQuery(label, tokens, lat, lon);
+          push({ label, lat, lon, score, src: 'nominatim' });
+          if (results.length >= 12) break;
+        }
         if (results.length >= 12) break;
-      }
-      if (results.length >= 12) break;
+      } catch {}
     }
-
-    results.sort((a, b) => b.score - a.score);
+    results.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     return results;
-  }
+  }, []);
 
   // ===== Ubicación inicial =====
   useEffect(() => {
     (async () => {
       try {
-        if (center) return; // venía por params
+        if (center) return;
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           AppAlert.alert('Ubicación', 'Permiso denegado para acceder a la ubicación.');
@@ -297,16 +289,14 @@ export default function EditLocationScreen() {
         const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
         const { latitude, longitude } = pos.coords;
         setCenter({ latitude, longitude });
-
         try {
           const places = await Location.reverseGeocodeAsync({ latitude, longitude });
           const p = places?.[0] ?? null;
           if (p) setSearchText(formatReverseAddress(p));
         } catch {}
-
         if (mapReady && !didInitialCamera.current) {
           didInitialCamera.current = true;
-          await animateTo(latitude, longitude, 18, 0);
+          await animateTo(latitude, longitude, 19, 0);
         }
       } catch {
         AppAlert.alert('Ubicación', 'No se pudo obtener la ubicación.');
@@ -318,93 +308,83 @@ export default function EditLocationScreen() {
     if (qAddr) setSearchText(sanitizeShort(qAddr));
   }, [qAddr]);
 
-  // ====== AUTOCOMPLETADO (Photon rápido + Nominatim) ======
-  const runAutocomplete = async (text: string) => {
+  // ====== AUTOCOMPLETADO ======
+  const runAutocomplete = useCallback(async (text: string) => {
     const q = text.trim();
     if (!q) {
       setSuggestions([]);
       return;
     }
-
-    // Cache
-    const cacheKey = `${q}|${Math.round(center?.latitude ?? -33.45,)}|${Math.round(center?.longitude ?? -70.67)}`;
-    const cached = cacheRef.current.get(cacheKey);
-    if (cached) {
-      setSuggestions(cached);
-    }
-
-    // Cancela peticiones previas
-    try { abortPhoton.current?.abort(); } catch {}
-    try { abortNominatim.current?.abort(); } catch {}
-    abortPhoton.current = new AbortController();
-    abortNominatim.current = new AbortController();
-
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     setSuggestLoading(true);
-
-    // 1) Photon (rápido)
-    let photonItems: SuggestItem[] = [];
     try {
-      photonItems = await fetchPhoton(q, abortPhoton.current.signal);
-      if (photonItems.length > 0) setSuggestions(photonItems);
-    } catch {}
-
-    // 2) Nominatim (en paralelo, fusiona y mejora cobertura)
-    try {
-      const nominatimItems = await fetchNominatim(q, abortNominatim.current.signal);
-      const merged = mergeUnique(photonItems, nominatimItems).slice(0, 12);
-      setSuggestions(merged);
-      cacheRef.current.set(cacheKey, merged);
+      let googleItems: SuggestItem[] = [];
+      try {
+        googleItems = await fetchGoogleAutocomplete(q, controller.signal);
+      } catch {}
+      if (googleItems && googleItems.length > 0) {
+        setSuggestions(googleItems);
+        cacheRef.current.set(`${q}|g`, googleItems);
+      } else {
+        const nomi = await fetchNominatim(q, controller.signal);
+        setSuggestions(nomi);
+        cacheRef.current.set(`${q}|n`, nomi);
+      }
     } catch {
-      // si falla, nos quedamos con photon
-      if (photonItems.length === 0) setSuggestions([]);
+      setSuggestions([]);
     } finally {
       setSuggestLoading(false);
     }
-  };
-
-  const mergeUnique = (a: SuggestItem[], b: SuggestItem[]) => {
-    const out: SuggestItem[] = [];
-    const seen = new Set<string>();
-    [...a, ...b].forEach((i) => {
-      if (!seen.has(i.label)) {
-        seen.add(i.label);
-        out.push(i);
-      }
-    });
-    out.sort((x, y) => y.score - x.score);
-    return out;
-  };
+  }, [fetchGoogleAutocomplete, fetchNominatim]);
 
   useEffect(() => {
     if (!isTyping) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      runAutocomplete(searchText);
-    }, 280);
+      if (searchText !== lastQueryRef.current) {
+        lastQueryRef.current = searchText;
+        // No cerrar el teclado al mostrar el loading
+        runAutocomplete(searchText);
+      }
+    }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [searchText, isTyping]);
+  }, [searchText, isTyping, runAutocomplete]);
 
-  const onSelectSuggestion = async (item: SuggestItem) => {
+  const onSelectSuggestion = useCallback(async (item: SuggestItem) => {
     Keyboard.dismiss();
     setIsTyping(false);
     setSuggestions([]);
     setSearchText(item.label);
-    await animateTo(item.lat, item.lon, 18);
-  };
+    try {
+      if (item.lat != null && item.lon != null) {
+        await animateTo(item.lat, item.lon, 19);
+        return;
+      }
+      if (item.placeId) {
+        const coords = await fetchPlaceDetails(item.placeId);
+        if (coords) {
+          await animateTo(coords.lat, coords.lon, 19);
+        } else {
+          AppAlert.alert('Búsqueda', 'No se pudo obtener la ubicación exacta para esa sugerencia.');
+        }
+      }
+    } catch {}
+  }, [fetchPlaceDetails]);
 
   const runFreeSearch = async (text: string) => {
     const q = text.trim();
     if (!q) return;
     try {
       setSuggestLoading(true);
-      // Primero intenta combo
       await runAutocomplete(q);
-      const items = cacheRef.current.get(`${q}|${Math.round(center?.latitude ?? -33.45)}|${Math.round(center?.longitude ?? -70.67)}`) || suggestions;
+      const items = cacheRef.current.get(`${q}|g`) || suggestions;
       if (items && items[0]) {
         setSearchText(items[0].label);
-        await animateTo(items[0].lat, items[0].lon, 18);
+        await onSelectSuggestion(items[0]);
       } else {
         AppAlert.alert('Búsqueda', 'No se encontró esa dirección en Chile.');
       }
@@ -412,55 +392,41 @@ export default function EditLocationScreen() {
       AppAlert.alert('Búsqueda', 'Error al buscar la dirección.');
     } finally {
       setSuggestLoading(false);
-      setIsTyping(false);
+      // No cerrar el teclado ni cambiar isTyping aquí, solo limpiar sugerencias
       setSuggestions([]);
     }
   };
 
-  // ===== Sync barra al mover el mapa =====
-  const doReverseForRegion = async (region: Region) => {
-    setRevLoading(true);
-    try {
-      const places = await Location.reverseGeocodeAsync({
-        latitude: region.latitude,
-        longitude: region.longitude,
-      });
-      const p = places?.[0] ?? null;
-      if (p) setSearchText(formatReverseAddress(p));
-    } catch {
-      // ignore
-    } finally {
-      setRevLoading(false);
-    }
-  };
-
-  const onRegionChangeComplete = (region: Region) => {
-    setCenter({ latitude: region.latitude, longitude: region.longitude });
+  // ===== Precisión máxima del marcador =====
+  const onRegionChangeComplete = useCallback((region: Region) => {
+    // Actualiza el centro y la dirección con máxima precisión al mover el marcador
+    setCenter({ latitude: Number(region.latitude), longitude: Number(region.longitude) });
     if (isTyping) return;
     if (revTimerRef.current) clearTimeout(revTimerRef.current);
-    revTimerRef.current = setTimeout(() => doReverseForRegion(region), 200);
-  };
+    // Sin delay, siempre usa el centro exacto
+    doReverseForRegion(region);
+  }, [isTyping]);
 
-  async function animateTo(lat: number, lon: number, zoom = 18, duration = 300) {
+  async function animateTo(lat: number, lon: number, zoom = 19, duration = 250) {
     try {
       const anyMap: any = mapRef.current;
       if (!anyMap) return;
       if (anyMap.animateCamera) {
         await anyMap.animateCamera(
-          { center: { latitude: lat, longitude: lon }, zoom },
+          { center: { latitude: lat, longitude: lon }, zoom: zoom },
           { duration }
         );
       } else if (anyMap.animateToRegion) {
         anyMap.animateToRegion(
-          { latitude: lat, longitude: lon, latitudeDelta: 0.0015, longitudeDelta: 0.0015 },
+          { latitude: lat, longitude: lon, latitudeDelta: 0.0005, longitudeDelta: 0.0005 },
           duration
         );
       } else {
         anyMap.setRegion?.({
           latitude: lat,
           longitude: lon,
-          latitudeDelta: 0.0015,
-          longitudeDelta: 0.0015,
+          latitudeDelta: 0.0005,
+          longitudeDelta: 0.0005,
         });
       }
       setCenter({ latitude: lat, longitude: lon });
@@ -476,7 +442,7 @@ export default function EditLocationScreen() {
       }
       const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Highest });
       const { latitude, longitude } = pos.coords;
-      await animateTo(latitude, longitude, 18);
+      await animateTo(latitude, longitude, 19);
       try {
         const places = await Location.reverseGeocodeAsync({ latitude, longitude });
         const p = places?.[0] ?? null;
@@ -486,6 +452,24 @@ export default function EditLocationScreen() {
       AppAlert.alert('Ubicación', 'No se pudo centrar en tu ubicación.');
     }
   };
+
+  const doReverseForRegion = useCallback(async (region: Region) => {
+    setRevLoading(true);
+    try {
+      // Siempre usa el centro exacto del mapa
+      const places = await Location.reverseGeocodeAsync({
+        latitude: region.latitude,
+        longitude: region.longitude,
+      });
+      const p = places?.[0] ?? null;
+      // Solo actualiza el texto si no está cargando
+      if (p && !suggestLoading) setSearchText(formatReverseAddress(p));
+    } catch {
+      // ignore
+    } finally {
+      setRevLoading(false);
+    }
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -508,24 +492,30 @@ export default function EditLocationScreen() {
       </View>
 
       {/* Search bar */}
-  <View style={[styles.searchRow, { top: NAV_HEIGHT + 8, height: SEARCH_H }]}>
-  <View style={styles.searchLeft}><IconSymbol name="search" size={20} color="#999" /></View>
-        <TextInput
-          ref={searchRef}
-          value={searchText}
-          onFocus={() => setIsTyping(true)}
-          onBlur={() => setTimeout(() => setIsTyping(false), 150)}
-          onChangeText={(t) => { setSearchText(t); setIsTyping(true); }}
-          onSubmitEditing={(e) => runFreeSearch(e.nativeEvent.text)}
-          placeholder="Buscar dirección…"
-          placeholderTextColor="#999"
-          style={styles.searchInput}
-          returnKeyType="search"
-        />
+      <View style={[styles.searchRow, { top: NAV_HEIGHT + 8, height: SEARCH_H }]}>
+        <View style={styles.searchLeft}><IconSymbol name="search" size={20} color="#999" /></View>
+        {/* El loader se muestra, pero no se cierra el teclado */}
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <TextInput
+            ref={searchRef}
+            value={searchText}
+            onFocus={() => setIsTyping(true)}
+            onBlur={() => setTimeout(() => setIsTyping(false), 150)}
+            onChangeText={(t) => { setSearchText(t); setIsTyping(true); }}
+            onSubmitEditing={(e) => runFreeSearch(e.nativeEvent.text)}
+            placeholder="Buscar dirección…"
+            placeholderTextColor="#999"
+            style={styles.searchInput}
+            returnKeyType="search"
+          />
+          {(suggestLoading || revLoading) && (
+            <View pointerEvents="none" style={styles.searchLoaderOverlay}>
+              <ActivityIndicator size="small" color="#0A4A90" />
+            </View>
+          )}
+        </View>
         <View style={styles.searchRight}>
-          {suggestLoading || revLoading ? (
-            <ActivityIndicator color="#0A4A90" />
-          ) : searchText ? (
+          {searchText && !suggestLoading && !revLoading ? (
             <TouchableOpacity
               onPress={() => { setSearchText(''); setSuggestions([]); setIsTyping(true); searchRef.current?.focus(); }}
               style={styles.iconBtn}
@@ -535,6 +525,7 @@ export default function EditLocationScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
+        {/* El loading ya se muestra en el centro, no repetir aquí */}
       </View>
 
       {/* Suggestions */}
@@ -543,7 +534,7 @@ export default function EditLocationScreen() {
           <FlatList
             data={suggestions}
             keyboardShouldPersistTaps="handled"
-            keyExtractor={(i) => `${i.label}-${i.lat}-${i.lon}`}
+            keyExtractor={(i) => `${i.label}-${i.lat ?? '0'}-${i.lon ?? '0'}`}
             initialNumToRender={8}
             windowSize={5}
             removeClippedSubviews
@@ -552,6 +543,7 @@ export default function EditLocationScreen() {
                 <Text numberOfLines={2}>{item.label}</Text>
               </TouchableOpacity>
             )}
+            ListEmptyComponent={suggestLoading ? <ActivityIndicator size="small" color="#0A4A90" style={{ margin: 12 }} /> : null}
           />
         </View>
       )}
@@ -562,24 +554,23 @@ export default function EditLocationScreen() {
           <MapView
             ref={mapRef}
             style={styles.map}
-            initialRegion={{ latitude: center.latitude, longitude: center.longitude, latitudeDelta: 0.0015, longitudeDelta: 0.0015 }}
+            initialRegion={{ latitude: center.latitude, longitude: center.longitude, latitudeDelta: 0.0005, longitudeDelta: 0.0005 }}
             onMapReady={async () => {
               setMapReady(true);
               if (center && !didInitialCamera.current) {
                 didInitialCamera.current = true;
-                await animateTo(center.latitude, center.longitude, 18, 0);
+                await animateTo(center.latitude, center.longitude, 19, 0);
               }
             }}
             onRegionChange={() => {
-              if (isTyping) {
+              // Solo cerrar el teclado si el usuario está interactuando con el mapa Y no está escribiendo en la barra
+              if (isTyping && !suggestLoading && !revLoading) {
                 setIsTyping(false);
                 setSuggestions([]);
                 Keyboard.dismiss();
               }
             }}
             onRegionChangeComplete={onRegionChangeComplete}
-            // Importante: NO mostrar el dot azul
-            // showsUserLocation
             showsMyLocationButton={false}
           />
         ) : (
@@ -609,7 +600,6 @@ export default function EditLocationScreen() {
                 text: 'Guardar',
                 onPress: async () => {
                   try {
-                    // Try to enrich with postal code and region via reverse geocode
                     let full = basePayload.ubicacionTexto ?? '';
                     if (center) {
                       try {
@@ -648,11 +638,8 @@ export default function EditLocationScreen() {
                           const composed = [streetAndNumber, postalCity, region].filter(Boolean).join(', ').trim();
                           if (composed) full = composed;
                         }
-                      } catch (e) {
-                        // ignore reverse errors
-                      }
+                      } catch (e) {}
                     }
-
                     const payload = { ubicacionTexto: full, coords: basePayload.coords };
                     try { const prev = getReportFormSnapshot() || {}; setReportFormSnapshot({ ...prev, ...payload }); } catch {}
                     try { invokeLocationEdit(payload); } catch {}
@@ -699,4 +686,5 @@ const styles = StyleSheet.create({
   saveTxt: { color: '#fff', fontWeight: '700' },
 
   centerFab: { position: 'absolute', right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#0A4A90', alignItems: 'center', justifyContent: 'center', zIndex: 200, elevation: 8 },
+  searchLoaderOverlay: { position: 'absolute', left: 56, right: 56, top: 6, bottom: 6, alignItems: 'center', justifyContent: 'center', zIndex: 200, pointerEvents: 'none' as any },
 });

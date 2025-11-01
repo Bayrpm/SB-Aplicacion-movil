@@ -4,12 +4,17 @@
     "slug": "SB-Aplicacion-movil",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/img_logo.png",
     "scheme": "sbaplicacionmovil",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "La app necesita acceder a la cámara para tomar fotos y videos.",
+        "NSPhotoLibraryUsageDescription": "La app necesita acceder a la galería para seleccionar fotos y videos.",
+        "NSMicrophoneUsageDescription": "La app necesita acceder al micrófono para grabar audio en videos."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,15 +23,30 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO",
+        "POST_NOTIFICATIONS",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.wolfxthax.SBAplicacionmovil"
+      "package": "com.wolfxthax.sbaplicacionmovil"
+      // ...config eliminado, ahora se gestiona en app.config.js
     },
+    
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      ["expo-updates", { "checkAutomatically": "ON_LOAD", "autoUpdateTimeout": 0 }],
       "expo-router",
       [
         "expo-splash-screen",
@@ -39,6 +59,12 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permite a SanBernardo APP usar tu ubicación."
+        }
       ]
     ],
     "experiments": {
@@ -50,6 +76,12 @@
       "eas": {
         "projectId": "fc7331a3-dda8-4ded-b288-398c4e9f71e8"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fc7331a3-dda8-4ded-b288-398c4e9f71e8"
     }
   }
 }

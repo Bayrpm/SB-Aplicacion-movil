@@ -4,7 +4,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import * as Location from 'expo-location';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Dimensions, Easing, PixelRatio, Platform, StyleSheet, Text, View } from 'react-native';
-import MapView, { Region } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../../../../components/Button';
 import { IconSymbol } from '../../../../components/ui/icon-symbol';
@@ -299,47 +299,73 @@ export default function CurrentLocationMap() {
   // ======== Permisos + watchPosition (seguir físicamente cuando hay follow) ========
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') { setErrorMsg('Permiso de ubicación denegado'); setLoading(false); return; }
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        const status = perm?.status ?? (perm as any);
+        if (status !== 'granted') {
+          setErrorMsg('Permiso de ubicación denegado');
+          setLoading(false);
+          return;
+        }
 
-      // Intento rápido con last-known para dibujar algo ya
-      let lastLoc = await Location.getLastKnownPositionAsync();
-      if (lastLoc) {
-        const { latitude, longitude } = lastLoc.coords;
-        setLocation({ latitude, longitude });
-        setLoading(false);
-      } else {
+        // Intento rápido con last-known para dibujar algo ya
+        try {
+          const lastLoc = await Location.getLastKnownPositionAsync();
+          if (lastLoc && lastLoc.coords) {
+            const { latitude, longitude } = lastLoc.coords;
+            setLocation({ latitude, longitude });
+            setLoading(false);
+          } else {
+            setLoading(false);
+          }
+        } catch (err) {
+          console.warn('getLastKnownPositionAsync falló', err);
+          setLoading(false);
+        }
+
+        // Alta de watcher (seguir físico SOLO si isFollowing)
+        try {
+          locationSubRef.current = await Location.watchPositionAsync(
+            { accuracy: Location.Accuracy.Balanced, timeInterval: 1000, distanceInterval: 1 },
+            async (loc) => {
+              try {
+                const { latitude, longitude } = loc.coords;
+                setLocation({ latitude, longitude });
+                if (isFollowingRef.current && mapRef.current) {
+                  const anyMap: any = mapRef.current;
+                  // Mantener zoom/tilt/heading; sólo mover centro
+                  try {
+                    const cam = await anyMap.getCamera?.();
+                    if (cam?.zoom != null && anyMap.animateCamera) {
+                      await anyMap.animateCamera({ center: { latitude, longitude } }, { duration: 200 });
+                    } else if (anyMap.animateToRegion) {
+                      anyMap.animateToRegion({ latitude, longitude, latitudeDelta: TARGET_LAT_DELTA, longitudeDelta: TARGET_LON_DELTA });
+                    } else {
+                      anyMap.setRegion?.({ latitude, longitude, latitudeDelta: TARGET_LAT_DELTA, longitudeDelta: TARGET_LON_DELTA });
+                    }
+                    setIsCentered(true);
+                  } catch (innerErr) {
+                    console.warn('Error al actualizar cámara desde watcher', innerErr);
+                  }
+                }
+              } catch (cbErr) {
+                console.warn('Callback de watchPositionAsync falló', cbErr);
+              }
+            }
+          );
+        } catch (watchErr) {
+          console.warn('watchPositionAsync falló', watchErr);
+        }
+      } catch (err) {
+        console.error('Inicialización de ubicación falló', err);
+        setErrorMsg('No se pudo activar la ubicación');
         setLoading(false);
       }
-
-      // Alta de watcher (seguir físico SOLO si isFollowing)
-      try {
-        locationSubRef.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Balanced, timeInterval: 1000, distanceInterval: 1 },
-          async (loc) => {
-            const { latitude, longitude } = loc.coords;
-            setLocation({ latitude, longitude });
-            if (isFollowingRef.current && mapRef.current) {
-              const anyMap: any = mapRef.current;
-              // Mantener zoom/tilt/heading; sólo mover centro
-              try {
-                const cam = await anyMap.getCamera?.();
-                if (cam?.zoom != null && anyMap.animateCamera) {
-                  await anyMap.animateCamera({ center: { latitude, longitude } }, { duration: 200 });
-                } else if (anyMap.animateToRegion) {
-                  anyMap.animateToRegion({ latitude, longitude, latitudeDelta: TARGET_LAT_DELTA, longitudeDelta: TARGET_LON_DELTA });
-                } else {
-                  anyMap.setRegion?.({ latitude, longitude, latitudeDelta: TARGET_LAT_DELTA, longitudeDelta: TARGET_LON_DELTA });
-                }
-                setIsCentered(true);
-              } catch {}
-            }
-          }
-        );
-      } catch {}
     })();
 
-    return () => { try { locationSubRef.current?.remove(); } catch {} };
+    return () => {
+      try { locationSubRef.current?.remove(); } catch (e) { console.warn('Error al remover subscription', e); }
+    };
   }, []);
 
   // ======== Asegurar zoom/cámara inicial apenas mapa + ubicación listos ========
@@ -479,6 +505,7 @@ export default function CurrentLocationMap() {
       <MapView
         ref={mapRef}
         style={styles.map}
+        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         initialRegion={{
           // Fallback mínimo: si por alguna razón no entra ensureInitialCenter,
           // esto al menos no se ve “a lo lejos”.
