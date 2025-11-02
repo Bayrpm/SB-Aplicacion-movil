@@ -1,9 +1,10 @@
 import { useThemeColor } from '@/hooks/use-theme-color';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet } from 'react-native';
+import { Animated, Appearance, Easing, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, SplashScreen, useAuth } from '@/app/features/auth';
@@ -32,6 +33,27 @@ function RootLayoutNav() {
   const appOpacity = useRef(new Animated.Value(0)).current;
   const appTranslateY = useRef(new Animated.Value(8)).current; // leve desplazamiento hacia arriba
   const appScale = useRef(new Animated.Value(0.995)).current;
+
+  // Cargar y aplicar tema guardado al iniciar la app
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        const savedTheme = await AsyncStorage.getItem('@theme_mode');
+        if (savedTheme) {
+          if (savedTheme === 'light') {
+            Appearance.setColorScheme('light');
+          } else if (savedTheme === 'dark') {
+            Appearance.setColorScheme('dark');
+          } else {
+            Appearance.setColorScheme(null); // Usar tema del sistema
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando tema:', error);
+      }
+    };
+    loadTheme();
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setMinSplashElapsed(true), 5000);

@@ -94,7 +94,6 @@ const styles = StyleSheet.create({
 
 
 
-// Estilo de mapa oscuro que mantiene POI/íconos visibles
 const DARK_MAP_STYLE = [
   // Base + labels
   { elementType: 'geometry', stylers: [{ color: '#0b1627' }] },
@@ -141,12 +140,16 @@ const DARK_MAP_STYLE = [
   { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#3a7bd5' }] },
   { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#eaf2ff' }] },
   { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+
 ];
-
-
 export default function CurrentLocationMap() {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
+  
+  const mapStyle = React.useMemo(() => {
+    return scheme === 'dark' ? DARK_MAP_STYLE : undefined;
+  }, [scheme]);
+  
   const navBarHeightAndroid = Platform.OS === 'android'
     ? Math.max(0, Dimensions.get('screen').height - Dimensions.get('window').height)
     : 0;
@@ -505,14 +508,25 @@ export default function CurrentLocationMap() {
       <MapView
         ref={mapRef}
         style={styles.map}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+        // IMPORTANTE: customMapStyle solo funciona con PROVIDER_GOOGLE (no con Apple Maps)
+        provider={PROVIDER_GOOGLE}
         initialRegion={{
           // Fallback mínimo: si por alguna razón no entra ensureInitialCenter,
-          // esto al menos no se ve “a lo lejos”.
+          // esto al menos no se ve "a lo lejos".
           latitude: location.latitude,
           longitude: location.longitude,
           latitudeDelta: 0.002,
           longitudeDelta: 0.002,
+        }}
+        showsUserLocation
+        showsMyLocationButton={false}
+        loadingEnabled
+        showsCompass={false}
+        // CRITICO: Aplicar el estilo memoizado
+        customMapStyle={mapStyle}
+        onMapReady={() => {
+          mapReadyRef.current = true;
+          void ensureInitialCenter();
         }}
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
@@ -520,22 +534,11 @@ export default function CurrentLocationMap() {
           // Si ya tengo ubicación y el mapa acaba de layout, asegurar centrado
           void ensureInitialCenter();
         }}
-        onMapReady={() => {
-          mapReadyRef.current = true;
-          void ensureInitialCenter();
-        }}
-        showsUserLocation
-        showsMyLocationButton={false}
-        loadingEnabled
-  // Aplicar estilo similar a Google Maps en Android cuando el sistema está en dark
-  // En iOS dejamos el estilo por defecto (Apple Maps puede interpretarlo distinto)
-  customMapStyle={scheme === 'dark' && Platform.OS === 'android' ? DARK_MAP_STYLE : undefined}
         onRegionChange={onRegionChange}
         onRegionChangeComplete={onRegionChangeComplete}
         onPanDrag={onPanDrag}
-  onTouchStart={() => { startRaf(); userGestureRef.current = true; if (isFollowingRef.current) { isFollowingRef.current = false; setIsFollowing(false); } setIsCentered(false); }}
+        onTouchStart={() => { startRaf(); userGestureRef.current = true; if (isFollowingRef.current) { isFollowingRef.current = false; setIsFollowing(false); } setIsCentered(false); }}
         onTouchEnd={() => { setTimeout(() => stopRaf(), 80); }}
-        showsCompass={false}
       />
 
       {/* Overlay inferior para no tapar con la nav bar del sistema */}

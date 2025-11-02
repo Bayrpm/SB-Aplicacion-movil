@@ -1,6 +1,7 @@
 import { useAuth } from '@/app/features/auth';
 // ReportPickerModal se muestra desde la pantalla `citizenReport` via tabPress
 import { useReportModal } from '@/app/features/report/context';
+import { FontSizeProvider } from '@/app/features/settings/fontSizeContext';
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -139,6 +140,7 @@ export default function TabLayout() {
 
   return (
     <>
+      <FontSizeProvider>
   {/* Background panel under the tab bar to avoid seeing app content through it.
     Use full tabBarHeight and anchor to bottom:0 so it always covers the area
     regardless of extraBottom/platform differences. */}
@@ -288,6 +290,7 @@ export default function TabLayout() {
       />
   </TabsAny>
   {/* ReportPickerModal se muestra desde la pantalla `citizen/citizenReport` (escucha tabPress) */}
+      </FontSizeProvider>
     </>
   );
 }

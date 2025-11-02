@@ -1,22 +1,24 @@
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  Keyboard,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    Keyboard,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import MapView, { Region } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { invokeLocationEdit } from '../types/locationBridge';
 import { getReportFormSnapshot, setReportFormSnapshot } from '../types/reportFormBridge';
@@ -27,6 +29,12 @@ export default function EditLocationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams();
+  const scheme = useColorScheme();
+  const textColor = useThemeColor({}, 'text');
+  const iconColor = useThemeColor({}, 'icon');
+  const panelBg = useThemeColor({ light: '#FFFFFF', dark: '#0B1627' }, 'background');
+  const borderBase = useThemeColor({}, 'icon');
+  const borderColor = `${borderBase}26`;
 
   const qLat = Number(params.lat ?? '');
   const qLng = Number(params.lng ?? '');
@@ -44,6 +52,8 @@ export default function EditLocationScreen() {
   const NAV_CONTENT_H = 56;
   const NAV_HEIGHT = (insets.top || 0) + NAV_CONTENT_H;
   const SEARCH_H = 48;
+  // Ajuste: bajar 8% respecto al levantamiento previo (queda +2% neto)
+  const EXTRA_LIFT = Math.round(Dimensions.get('window').height * 0.02);
 
   // Bottom / tab safe area
   const navBarHeightAndroid =
@@ -75,6 +85,54 @@ export default function EditLocationScreen() {
   const revTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [footerHeight, setFooterHeight] = useState(0);
+
+  const DARK_MAP_STYLE = [
+    // Base + labels
+    { elementType: 'geometry', stylers: [{ color: '#0b1627' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#eaf2ff' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#0b1627' }] },
+
+    // Agua
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a2740' }] },
+    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#bfe1ff' }] },
+
+    // Límites administrativos
+    { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#23344a' }] },
+    { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d6e7ff' }] },
+    { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#c7dbff' }] },
+
+    // Paisaje/edificaciones + POI
+    { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#182e50ff' }] },
+    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#0f1d33' }] },
+    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#deebff' }] },
+    { featureType: 'poi', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#112b1e' }] },
+    { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#b8f8d0' }] },
+    { featureType: 'poi.business', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+
+    // Autopistas
+    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2e3f63' }] },
+    { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#5d718c' }] },
+    { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#e2eeff' }] },
+
+    // Arteriales
+    { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#22344a' }] },
+    { featureType: 'road.arterial', elementType: 'geometry.stroke', stylers: [{ color: '#3b557a' }] },
+    { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#d6e7ff' }] },
+
+    // Calles locales (más detalle)
+    { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#18263e' }] },
+    { featureType: 'road.local', elementType: 'geometry.stroke', stylers: [{ color: '#2b405f' }] },
+    { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#cfe2ff' }] },
+
+    // Íconos de vías visibles (coches, giros, etc.)
+    { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+
+    // Tránsito
+    { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#3a7bd5' }] },
+    { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#eaf2ff' }] },
+    { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+  ];
 
   // ===== Helpers =====
   const TYPE_REGEX = /(avenida|av\.?|calle|pasaje|camino|ruta|autopista|alameda|costanera|pje\.?)/i;
@@ -492,8 +550,8 @@ export default function EditLocationScreen() {
       </View>
 
       {/* Search bar */}
-      <View style={[styles.searchRow, { top: NAV_HEIGHT + 8, height: SEARCH_H }]}>
-        <View style={styles.searchLeft}><IconSymbol name="search" size={20} color="#999" /></View>
+      <View style={[styles.searchRow, { top: NAV_HEIGHT + 8, height: SEARCH_H, backgroundColor: panelBg }] }>
+        <View style={styles.searchLeft}><IconSymbol name="search" size={20} color={iconColor} /></View>
         {/* El loader se muestra, pero no se cierra el teclado */}
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <TextInput
@@ -504,8 +562,8 @@ export default function EditLocationScreen() {
             onChangeText={(t) => { setSearchText(t); setIsTyping(true); }}
             onSubmitEditing={(e) => runFreeSearch(e.nativeEvent.text)}
             placeholder="Buscar dirección…"
-            placeholderTextColor="#999"
-            style={styles.searchInput}
+            placeholderTextColor={iconColor}
+            style={[styles.searchInput, { color: textColor }]}
             returnKeyType="search"
           />
           {(suggestLoading || revLoading) && (
@@ -521,7 +579,7 @@ export default function EditLocationScreen() {
               style={styles.iconBtn}
               accessibilityLabel="Borrar búsqueda"
             >
-              <IconSymbol name="close" size={20} color="#666" />
+              <IconSymbol name="close" size={20} color={iconColor} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -530,7 +588,7 @@ export default function EditLocationScreen() {
 
       {/* Suggestions */}
       {isTyping && suggestions.length > 0 && (
-        <View style={[styles.suggestions, { top: NAV_HEIGHT + 8 + SEARCH_H + 6, zIndex: 9999 }]}>
+        <View style={[styles.suggestions, { top: NAV_HEIGHT + 8 + SEARCH_H + 6, zIndex: 9999, backgroundColor: panelBg }]}>
           <FlatList
             data={suggestions}
             keyboardShouldPersistTaps="handled"
@@ -539,8 +597,8 @@ export default function EditLocationScreen() {
             windowSize={5}
             removeClippedSubviews
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.suggestItem} onPress={() => onSelectSuggestion(item)}>
-                <Text numberOfLines={2}>{item.label}</Text>
+              <TouchableOpacity style={[styles.suggestItem, { borderBottomColor: borderColor, backgroundColor: panelBg }]} onPress={() => onSelectSuggestion(item)}>
+                <Text numberOfLines={2} style={{ color: textColor }}>{item.label}</Text>
               </TouchableOpacity>
             )}
             ListEmptyComponent={suggestLoading ? <ActivityIndicator size="small" color="#0A4A90" style={{ margin: 12 }} /> : null}
@@ -554,6 +612,7 @@ export default function EditLocationScreen() {
           <MapView
             ref={mapRef}
             style={styles.map}
+            provider={PROVIDER_GOOGLE}
             initialRegion={{ latitude: center.latitude, longitude: center.longitude, latitudeDelta: 0.0005, longitudeDelta: 0.0005 }}
             onMapReady={async () => {
               setMapReady(true);
@@ -572,6 +631,7 @@ export default function EditLocationScreen() {
             }}
             onRegionChangeComplete={onRegionChangeComplete}
             showsMyLocationButton={false}
+            customMapStyle={scheme === 'dark' ? DARK_MAP_STYLE : undefined}
           />
         ) : (
           <View style={styles.mapPlaceholder}><ActivityIndicator size="large" color="#0A4A90" /></View>
@@ -583,13 +643,13 @@ export default function EditLocationScreen() {
         </View>
 
         {/* FAB centrar en mi ubicación */}
-        <TouchableOpacity style={[styles.centerFab, { bottom: tabBarHeightLocal + footerHeight + 12 }]} onPress={centerToMyLocation} accessibilityLabel="Centrar ubicación">
+        <TouchableOpacity style={[styles.centerFab, { bottom: tabBarHeightLocal + footerHeight + 12 + EXTRA_LIFT }]} onPress={centerToMyLocation} accessibilityLabel="Centrar ubicación">
           <IconSymbol name="my-location" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
       {/* Footer */}
-      <View onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)} style={[styles.footer, { bottom: tabBarHeightLocal + 8 }]}>
+      <View onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)} style={[styles.footer, { bottom: tabBarHeightLocal + 8 + EXTRA_LIFT }]}>
         <TouchableOpacity
           style={styles.saveBtn}
           onPress={() => {
