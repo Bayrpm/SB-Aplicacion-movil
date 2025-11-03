@@ -19,9 +19,10 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { createReport } from '../api/report.api';
+import { checkRecentReportByCategory, createReport } from '../api/report.api';
 import { useReportModal } from '../context';
 import { useReportCategories } from '../hooks/useReportCategories';
+import { geocodeAddress } from '../lib/googleGeocoding';
 import type { ReportCategory } from '../types';
 import { setLocationEditCallback } from '../types/locationBridge';
 import { setReportFormSnapshot } from '../types/reportFormBridge';
@@ -96,14 +97,18 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
   useEffect(() => { setReportFormOpen(true); return () => setReportFormOpen(false); }, [setReportFormOpen]);
 
   // ===== Coords aprox
+  // Solo establecer coordenadas aproximadas si NO vienen desde edición ni ya existen
   useEffect(() => {
     (async () => {
       try {
+        const hasInitial = Boolean(initialData && (initialData.ubicacionTexto || (initialData.coords && (initialData.coords.x || initialData.coords.y))));
+        const hasCoords = Boolean(coords.x && coords.y);
+        if (hasInitial || hasCoords) return;
         const loc = await (await import('expo-location')).getCurrentPositionAsync({});
         setCoords({ x: Number(loc.coords.latitude.toFixed(4)), y: Number(loc.coords.longitude.toFixed(4)) });
       } catch {}
     })();
-  }, []);
+  }, [initialData, coords.x, coords.y]);
 
   const handleSubmit = async () => {
     if (!user?.id) { RNAlert.alert('Debes iniciar sesión', 'Inicia sesión para enviar una denuncia.'); return; }
@@ -111,31 +116,59 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
 
     setSubmitting(true);
     try {
-      if (ubicacionTexto.trim() && (!coords.x || !coords.y)) {
+      // Calcular coordenadas a usar en variables locales para evitar race con setState
+      let useX: number | undefined = coords.x;
+      let useY: number | undefined = coords.y;
+
+      if (ubicacionTexto.trim() && (!useX || !useY)) {
         try {
-          const { geocodeAsync } = await import('expo-location');
-          const results = await geocodeAsync(ubicacionTexto.trim());
-          if (results?.[0]?.latitude != null && results?.[0]?.longitude != null) {
-            setCoords({ x: Number(results[0].latitude.toFixed(4)), y: Number(results[0].longitude.toFixed(4)) });
+          const g = await geocodeAddress(ubicacionTexto.trim());
+          if (g && g.lat != null && g.lon != null) {
+            useX = Number(g.lat.toFixed(4));
+            useY = Number(g.lon.toFixed(4));
           }
         } catch {}
       }
-      if (!coords.x || !coords.y) {
+      if (!useX || !useY) {
         try {
           const loc = await (await import('expo-location')).getCurrentPositionAsync({});
           if (loc?.coords?.latitude != null && loc?.coords?.longitude != null) {
-            setCoords({ x: Number(loc.coords.latitude.toFixed(4)), y: Number(loc.coords.longitude.toFixed(4)) });
+            useX = Number(loc.coords.latitude.toFixed(4));
+            useY = Number(loc.coords.longitude.toFixed(4));
           }
         } catch {}
       }
+
+      // Validar que no haya denuncia reciente de la misma categoría EN LA MISMA UBICACIÓN (últimas 24h, radio 30m)
+      // IMPORTANTE: Validar DESPUÉS de calcular las coordenadas finales
+      if (categoryId && useX && useY) {
+        try {
+          const hasRecent = await checkRecentReportByCategory(user.id, categoryId, useX, useY);
+          if (hasRecent) {
+            AppAlert.alert(
+              'Denuncia duplicada',
+              'Ya has realizado una denuncia de esta categoría en esta ubicación recientemente, debes esperar 24 horas desde la creación de la anterior reporte para volver a reportar.',
+              [{ text: 'Entendido', style: 'default' }]
+            );
+            setSubmitting(false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Error al verificar denuncias recientes:', err);
+          // En caso de error en la verificación, permitir continuar para no bloquear al usuario
+        }
+      }
+
+      // Sincronizar estado (no bloquea el envío)
+      setCoords({ x: useX, y: useY });
       const res = await createReport({
         ciudadano_id: user.id,
         titulo: titulo.trim(),
         descripcion: descripcion.trim(),
         anonimo,
         ubicacion_texto: ubicacionTexto.trim() || null,
-        coords_x: coords.x ?? null,
-        coords_y: coords.y ?? null,
+  coords_x: useX ?? null,
+  coords_y: useY ?? null,
         categoria_publica_id: categoryId ?? null,
       });
   if (res.error) { RNAlert.alert('Error', 'No se pudo enviar la denuncia. Intenta de nuevo.'); }

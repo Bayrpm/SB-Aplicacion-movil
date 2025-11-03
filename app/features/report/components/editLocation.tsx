@@ -7,19 +7,21 @@ import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    FlatList,
-    Keyboard,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Keyboard,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { reverseGeocode } from '../lib/googleGeocoding';
+import { getMapStyle } from '../lib/mapStyles';
 import { invokeLocationEdit } from '../types/locationBridge';
 import { getReportFormSnapshot, setReportFormSnapshot } from '../types/reportFormBridge';
 
@@ -86,53 +88,7 @@ export default function EditLocationScreen() {
 
   const [footerHeight, setFooterHeight] = useState(0);
 
-  const DARK_MAP_STYLE = [
-    // Base + labels
-    { elementType: 'geometry', stylers: [{ color: '#0b1627' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#eaf2ff' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#0b1627' }] },
-
-    // Agua
-    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a2740' }] },
-    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#bfe1ff' }] },
-
-    // Límites administrativos
-    { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#23344a' }] },
-    { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d6e7ff' }] },
-    { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#c7dbff' }] },
-
-    // Paisaje/edificaciones + POI
-    { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#182e50ff' }] },
-    { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#0f1d33' }] },
-    { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#deebff' }] },
-    { featureType: 'poi', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
-    { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#112b1e' }] },
-    { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#b8f8d0' }] },
-    { featureType: 'poi.business', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
-
-    // Autopistas
-    { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2e3f63' }] },
-    { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#5d718c' }] },
-    { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#e2eeff' }] },
-
-    // Arteriales
-    { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#22344a' }] },
-    { featureType: 'road.arterial', elementType: 'geometry.stroke', stylers: [{ color: '#3b557a' }] },
-    { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#d6e7ff' }] },
-
-    // Calles locales (más detalle)
-    { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#18263e' }] },
-    { featureType: 'road.local', elementType: 'geometry.stroke', stylers: [{ color: '#2b405f' }] },
-    { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#cfe2ff' }] },
-
-    // Íconos de vías visibles (coches, giros, etc.)
-    { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
-
-    // Tránsito
-    { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#3a7bd5' }] },
-    { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#eaf2ff' }] },
-    { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
-  ];
+  const mapStyle = React.useMemo(() => getMapStyle(scheme), [scheme]);
 
   // ===== Helpers =====
   const TYPE_REGEX = /(avenida|av\.?|calle|pasaje|camino|ruta|autopista|alameda|costanera|pje\.?)/i;
@@ -348,9 +304,8 @@ export default function EditLocationScreen() {
         const { latitude, longitude } = pos.coords;
         setCenter({ latitude, longitude });
         try {
-          const places = await Location.reverseGeocodeAsync({ latitude, longitude });
-          const p = places?.[0] ?? null;
-          if (p) setSearchText(formatReverseAddress(p));
+          const g = await reverseGeocode(latitude, longitude);
+          if (g?.formatted) setSearchText(sanitizeShort(g.formatted));
         } catch {}
         if (mapReady && !didInitialCamera.current) {
           didInitialCamera.current = true;
@@ -502,9 +457,8 @@ export default function EditLocationScreen() {
       const { latitude, longitude } = pos.coords;
       await animateTo(latitude, longitude, 19);
       try {
-        const places = await Location.reverseGeocodeAsync({ latitude, longitude });
-        const p = places?.[0] ?? null;
-        if (p) setSearchText(formatReverseAddress(p));
+        const g = await reverseGeocode(latitude, longitude);
+        if (g?.formatted) setSearchText(sanitizeShort(g.formatted));
       } catch {}
     } catch {
       AppAlert.alert('Ubicación', 'No se pudo centrar en tu ubicación.');
@@ -515,13 +469,9 @@ export default function EditLocationScreen() {
     setRevLoading(true);
     try {
       // Siempre usa el centro exacto del mapa
-      const places = await Location.reverseGeocodeAsync({
-        latitude: region.latitude,
-        longitude: region.longitude,
-      });
-      const p = places?.[0] ?? null;
+      const g = await reverseGeocode(Number(region.latitude), Number(region.longitude));
       // Solo actualiza el texto si no está cargando
-      if (p && !suggestLoading) setSearchText(formatReverseAddress(p));
+      if (g?.formatted && !suggestLoading) setSearchText(sanitizeShort(g.formatted));
     } catch {
       // ignore
     } finally {
@@ -631,7 +581,7 @@ export default function EditLocationScreen() {
             }}
             onRegionChangeComplete={onRegionChangeComplete}
             showsMyLocationButton={false}
-            customMapStyle={scheme === 'dark' ? DARK_MAP_STYLE : undefined}
+            customMapStyle={mapStyle}
           />
         ) : (
           <View style={styles.mapPlaceholder}><ActivityIndicator size="large" color="#0A4A90" /></View>
@@ -663,40 +613,9 @@ export default function EditLocationScreen() {
                     let full = basePayload.ubicacionTexto ?? '';
                     if (center) {
                       try {
-                        const places = await Location.reverseGeocodeAsync({ latitude: center.latitude, longitude: center.longitude });
-                        const p = places?.[0] ?? null;
-                        if (p) {
-                          const pp: any = p as any;
-                          let streetRaw = (pp.street || pp.name || '').trim();
-                          let number = '';
-                          if (pp.name && /^\d+$/.test(String(pp.name).trim())) {
-                            number = String(pp.name).trim();
-                            streetRaw = (pp.street || '').trim();
-                          } else {
-                            const mNameNum = String(pp.name || '').trim().match(/(\d+)$/);
-                            if (mNameNum && pp.street) {
-                              number = mNameNum[1];
-                              streetRaw = (pp.street || '').trim();
-                            } else {
-                              const mStreetNum = streetRaw.match(/^(.*?)[,\s]+(\d+)\s*$/);
-                              if (mStreetNum) {
-                                streetRaw = (mStreetNum[1] || '').trim();
-                                number = mStreetNum[2] || '';
-                              }
-                            }
-                          }
-                          streetRaw = streetRaw
-                            .replace(/^\s*(Av\.?|Av)\s+/i, 'Avenida ')
-                            .replace(/^\s*(C\.?|Calle|C)\s+/i, 'Calle ')
-                            .replace(/^\s*(Pje\.?|Pje)\s+/i, 'Pasaje ')
-                            .replace(/^\s*(Gral\.?|Gral)\s+/i, 'General ')
-                            .replace(/^\s*(Bv\.?|Bvar\.?|Bulevar|Bulev)\s+/i, 'Bulevar ');
-
-                          const streetAndNumber = [streetRaw, number].filter(Boolean).join(' ').trim();
-                          const postalCity = [pp.postalCode, pp.city || pp.town || pp.village || pp.county || pp.municipality].filter(Boolean).join(' ').trim();
-                          const region = pp.region || '';
-                          const composed = [streetAndNumber, postalCity, region].filter(Boolean).join(', ').trim();
-                          if (composed) full = composed;
+                        const g = await reverseGeocode(center.latitude, center.longitude);
+                        if (g?.formatted) {
+                          full = sanitizeShort(g.formatted);
                         }
                       } catch (e) {}
                     }

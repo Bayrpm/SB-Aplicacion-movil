@@ -4,17 +4,16 @@ import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { ThemeMode, useAppColorScheme } from '@/hooks/useAppColorScheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
 import {
-  Appearance,
   Linking,
   Modal,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  useColorScheme,
   View
 } from 'react-native';
 
@@ -23,10 +22,9 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
-type ThemeMode = 'light' | 'dark' | 'system';
 
 export default function SettingsModal({ visible, onClose }: SettingsModalProps) {
-  const colorScheme = useColorScheme();
+  const [, setAppThemeMode] = useAppColorScheme();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background');
   const textColor = useThemeColor({}, 'text');
   const mutedColor = useThemeColor({ light: '#6B7280', dark: '#9CA3AF' }, 'icon');
@@ -72,17 +70,9 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   const handleThemeSelect = async (mode: ThemeMode) => {
     try {
       setThemeMode(mode);
-      await AsyncStorage.setItem('@theme_mode', mode);
+      // Persistencia y notificación global a toda la app (incluye mapas)
+      await setAppThemeMode(mode);
       setShowThemeSelector(false);
-      
-      // Aplicar el tema inmediatamente
-      if (mode === 'light') {
-        Appearance.setColorScheme('light');
-      } else if (mode === 'dark') {
-        Appearance.setColorScheme('dark');
-      } else {
-        Appearance.setColorScheme(null); // Usar tema del sistema
-      }
       
       AppAlert.alert('Tema actualizado', 'El tema se ha aplicado correctamente');
     } catch (error) {

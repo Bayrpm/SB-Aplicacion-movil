@@ -74,6 +74,195 @@ export default function _ReportApiRoute(): null {
 }
 
 /**
+ * Obtiene las denuncias públicas (consentir_publicacion = true) con coordenadas válidas.
+ * - Solo devuelve denuncias que tienen coords_x y coords_y (no null).
+ * - Filtra por consentir_publicacion = true.
+ * - Excluye denuncias en estado "Cerrada".
+ * - Solo denuncias creadas en las últimas 24 horas (desde su fecha_creacion según hora del servidor).
+ * - Ordena por fecha_creacion desc (más recientes primero).
+ * 
+ * IMPORTANTE: Requiere la función RPC 'get_denuncias_publicas_recientes' en Supabase.
+ * Ver documentación al final del archivo para crear la función.
+ */
+export async function fetchPublicReports(): Promise<Array<{
+  id: string;
+  titulo: string;
+  descripcion: string;
+  coords_x: number;
+  coords_y: number;
+  categoria_publica_id: number | null;
+  fecha_creacion: string;
+  ubicacion_texto: string | null;
+}>> {
+  try {
+    // Usar función RPC que filtra por hora del servidor (24 horas desde fecha_creacion)
+    const { data, error } = await supabase.rpc('get_denuncias_publicas_recientes');
+
+    if (error) {
+      console.warn('fetchPublicReports supabase error', error);
+      return [];
+    }
+
+    if (!Array.isArray(data)) return [];
+
+    return data.map((row: any) => ({
+      id: String(row.id),
+      titulo: String(row.titulo ?? ''),
+      descripcion: String(row.descripcion ?? ''),
+      coords_x: Number(row.coords_x),
+      coords_y: Number(row.coords_y),
+      categoria_publica_id: row.categoria_publica_id ? Number(row.categoria_publica_id) : null,
+      fecha_creacion: String(row.fecha_creacion ?? ''),
+      ubicacion_texto: row.ubicacion_texto ? String(row.ubicacion_texto) : null,
+    }));
+  } catch (e) {
+    console.warn('fetchPublicReports exception', e);
+    return [];
+  }
+}
+
+/**
+ * Calcula la distancia en metros entre dos coordenadas GPS usando la fórmula de Haversine
+ */
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371000; // Radio de la Tierra en metros
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c; // Distancia en metros
+
+  return distance;
+}
+
+/**
+ * Verifica si el ciudadano ya tiene una denuncia reciente de la misma categoría
+ * EN LA MISMA UBICACIÓN (radio de 30 metros) en las últimas 24 horas.
+ * 
+ * La validación de proximidad se hace en la app (más eficiente).
+ * Solo usa el servidor para filtrar por tiempo (24h) y evitar manipulación del reloj.
+ * 
+ * IMPORTANTE: Requiere la función RPC 'get_recent_reports_by_category' en Supabase.
+ */
+export async function checkRecentReportByCategory(
+  ciudadano_id: string,
+  categoria_publica_id: number,
+  coords_x: number,
+  coords_y: number,
+  radio_metros: number = 30
+): Promise<boolean> {
+  try {
+    // Obtener denuncias recientes del mismo ciudadano y categoría (últimas 24h desde servidor)
+    const { data, error } = await supabase.rpc('get_recent_reports_by_category', {
+      p_ciudadano_id: ciudadano_id,
+      p_categoria_publica_id: categoria_publica_id,
+    });
+
+    if (error) {
+      console.warn('checkRecentReportByCategory error', error);
+      return false; // en caso de error, permitir la denuncia (evitar bloqueo falso)
+    }
+
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return false;
+    }
+
+    // Verificar si alguna denuncia está dentro del radio de proximidad
+    for (const denuncia of data) {
+      if (denuncia.coords_x && denuncia.coords_y) {
+        const distancia = calculateDistance(
+          coords_x,
+          coords_y,
+          denuncia.coords_x,
+          denuncia.coords_y
+        );
+
+        if (distancia <= radio_metros) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch (e) {
+    console.warn('checkRecentReportByCategory exception', e);
+    return false;
+  }
+}
+
+/**
+ * Obtiene el detalle de una denuncia pública por id (consentir_publicacion = true)
+ */
+export async function fetchPublicReportDetail(id: string): Promise<{
+  id: string;
+  folio: string | null;
+  titulo: string;
+  descripcion: string;
+  coords_x: number;
+  coords_y: number;
+  categoria_publica_id: number | null;
+  fecha_creacion: string;
+  ubicacion_texto: string | null;
+  anonimo: boolean;
+  ciudadano?: {
+    nombre?: string;
+    apellido?: string;
+  };
+}> {
+  try {
+    // Usar perfiles_ciudadanos según el hint de Supabase
+    const { data, error } = await supabase
+      .from('denuncias')
+      .select('id, folio, titulo, descripcion, coords_x, coords_y, categoria_publica_id, fecha_creacion, ubicacion_texto, anonimo, consentir_publicacion, perfiles_ciudadanos(nombre, apellido)')
+      .eq('id', id)
+      .eq('consentir_publicacion', true)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('fetchPublicReportDetail supabase error', error);
+      throw error;
+    }
+    if (!data) {
+      throw new Error('No se encontró la denuncia o no es pública');
+    }
+
+    // Extraer datos del perfil ciudadano
+    const ciudadanoData = (data as any).perfiles_ciudadanos;
+
+    return {
+      id: String(data.id),
+      folio: data.folio ? String(data.folio) : null,
+      titulo: String(data.titulo ?? ''),
+      descripcion: String(data.descripcion ?? ''),
+      coords_x: Number(data.coords_x),
+      coords_y: Number(data.coords_y),
+      categoria_publica_id: data.categoria_publica_id ? Number(data.categoria_publica_id) : null,
+      fecha_creacion: String(data.fecha_creacion ?? ''),
+      ubicacion_texto: data.ubicacion_texto ? String(data.ubicacion_texto) : null,
+      anonimo: Boolean(data.anonimo),
+      ciudadano: ciudadanoData ? {
+        nombre: String(ciudadanoData.nombre ?? ''),
+        apellido: String(ciudadanoData.apellido ?? ''),
+      } : undefined,
+    };
+  } catch (e) {
+    throw e;
+  }
+}
+
+/**
  * Crea una nueva denuncia en la tabla `denuncias`.
  * Se intenta insertar únicamente los campos que la app móvil provee.
  * La función devuelve `{ data, error }` tal como devuelve supabase.

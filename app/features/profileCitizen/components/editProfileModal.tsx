@@ -4,9 +4,10 @@ import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -46,13 +47,58 @@ export default function EditProfileModal({
   const [telefono, setTelefono] = useState('');
   const [email, setEmail] = useState('');
   const [saving, setSaving] = useState(false);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const fieldYRef = useRef<Record<string, number>>({});
+  const activeFieldKeyRef = useRef<string | null>(null);
+
+  const rememberFieldY = (key: string) => (e: any) => {
+    try { fieldYRef.current[key] = e?.nativeEvent?.layout?.y ?? 0; } catch {}
+  };
+
+  const scrollToField = (key: string) => {
+    const y = fieldYRef.current[key] ?? 0;
+    const targetY = Math.max(0, y - 100);
+    // Primer intento inmediato
+    requestAnimationFrame(() => {
+      try { scrollRef.current?.scrollTo({ y: targetY, animated: true }); } catch {}
+    });
+    // Segundo intento tras mostrar el teclado/animaciones
+    setTimeout(() => {
+      try { scrollRef.current?.scrollTo({ y: targetY, animated: true }); } catch {}
+    }, 160);
+  };
+
+  useEffect(() => {
+    const onDidShow = (e: any) => {
+      try { setKeyboardHeight(e?.endCoordinates?.height ?? 0); } catch { setKeyboardHeight(300); }
+      const k = activeFieldKeyRef.current;
+      if (k) scrollToField(k);
+    };
+    const onWillShow = (e: any) => {
+      if (Platform.OS === 'ios') {
+        const k = activeFieldKeyRef.current;
+        if (k) setTimeout(() => scrollToField(k), 60);
+      }
+    };
+    const onHide = () => setKeyboardHeight(0);
+
+    const sub1 = Keyboard.addListener('keyboardDidShow', onDidShow);
+    const sub2 = Keyboard.addListener('keyboardDidHide', onHide);
+    const sub3 = Platform.OS === 'ios' ? Keyboard.addListener('keyboardWillShow', onWillShow) : { remove: () => {} } as any;
+    return () => {
+      try { sub1.remove(); } catch {}
+      try { sub2.remove(); } catch {}
+      try { sub3.remove(); } catch {}
+    };
+  }, []);
 
   // Actualizar los estados cuando cambie el perfil o cuando el modal se hace visible
   React.useEffect(() => {
     if (visible && profile) {
       setNombre(profile.nombre || '');
       setApellido(profile.apellido || '');
-      setTelefono(profile.telefono || '');
+  setTelefono(profile.telefono || '');
       setEmail(profile.email || '');
     }
   }, [profile, visible]);
@@ -69,32 +115,30 @@ export default function EditProfileModal({
       return;
     }
 
-    if (!email.trim()) {
-      AppAlert.alert('Error', 'El correo es requerido');
-      return;
-    }
+    // Correo no editable desde aquí, no validar formato ni requerirlo (se asume proviene del perfil)
 
-    // Validar formato de email
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailPattern.test(email.trim())) {
-      AppAlert.alert('Error', 'El correo electrónico no es válido');
-      return;
-    }
-
-    // Validar formato chileno: +56 9 XXXX XXXX o solo 9 XXXXXXXX (9 dígitos)
-    const phonePattern = /^(\+?56)?9\d{8}$/;
-    if (telefono.trim() && !phonePattern.test(telefono.trim().replace(/\s/g, ''))) {
-      AppAlert.alert('Error', 'El teléfono debe ser un número válido (Ej: +56912345678 o 912345678)');
+    // Validar formato chileno si hay números ingresados (se normaliza eliminando espacios)
+    const digitsOnly = telefono.replace(/\D/g, '');
+    const phonePattern = /^(?:56)?9\d{8}$/; // acepta 569XXXXXXXX o 9XXXXXXXX
+    if (digitsOnly && !phonePattern.test(digitsOnly)) {
+      AppAlert.alert('Error', 'El teléfono debe ser un número válido (+56 9 y 8 dígitos)');
       return;
     }
 
     setSaving(true);
     try {
+      // Normalizar teléfono a formato +569XXXXXXXX para guardar si existe
+      const normalizedPhone = (() => {
+        const d = telefono.replace(/\D/g, '');
+        const m = d.match(/(?:56)?9(\d{8})$/);
+        return m ? `+569${m[1]}` : null;
+      })();
+
       const updates = {
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         email: email.trim(),
-        ...(telefono.trim() && { telefono: telefono.trim() }),
+        ...(normalizedPhone && { telefono: normalizedPhone }),
       };
 
       const { data, error } = await updateCitizenProfile(updates);
@@ -136,12 +180,10 @@ export default function EditProfileModal({
       visible={visible}
       animationType="slide"
       transparent
+      statusBarTranslucent={Platform.OS === 'android'}
       onRequestClose={handleCancel}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.overlay}
-      >
+      <View style={styles.overlay}>
         <View style={[styles.container, { backgroundColor: bgColor }]}>
           {/* Header */}
           <View style={styles.header}>
@@ -150,128 +192,164 @@ export default function EditProfileModal({
               <IconSymbol name="close" size={24} color={mutedColor} />
             </TouchableOpacity>
           </View>
-
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-            {/* Email (ahora editable) */}
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}> 
-                Correo Electrónico <Text style={{ color: '#EF4444' }}>*</Text>
-              </Text>
-              <View style={[styles.inputContainer, { backgroundColor: inputBg, borderColor }]}>
-                <IconSymbol name="email" size={20} color={accentColor} />
-                <TextInput
-                  style={[styles.input, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="correo@ejemplo.com"
-                  placeholderTextColor={mutedColor}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  editable={!saving}
-                />
-              </View>
-              <Text style={[styles.helpText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}> 
-                Se enviará un correo de confirmación si lo cambias
-              </Text>
-            </View>
-
-            {/* Nombre */}
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}> 
-                Nombre <Text style={{ color: '#EF4444' }}>*</Text>
-              </Text>
-              <View style={[styles.inputContainer, { backgroundColor: inputBg, borderColor }]}>
-                <IconSymbol name="account" size={20} color={accentColor} />
-                <TextInput
-                  style={[styles.input, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}
-                  value={nombre}
-                  onChangeText={setNombre}
-                  placeholder="Ingresa tu nombre"
-                  placeholderTextColor={mutedColor}
-                  editable={!saving}
-                  autoCapitalize="words"
-                />
-              </View>
-            </View>
-
-            {/* Apellido */}
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}> 
-                Apellido <Text style={{ color: '#EF4444' }}>*</Text>
-              </Text>
-              <View style={[styles.inputContainer, { backgroundColor: inputBg, borderColor }]}>
-                <IconSymbol name="account" size={20} color={accentColor} />
-                <TextInput
-                  style={[styles.input, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}
-                  value={apellido}
-                  onChangeText={setApellido}
-                  placeholder="Ingresa tu apellido"
-                  placeholderTextColor={mutedColor}
-                  editable={!saving}
-                  autoCapitalize="words"
-                />
-              </View>
-            </View>
-
-            {/* Teléfono */}
-            <View style={styles.fieldContainer}>
-              <Text style={[styles.label, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Teléfono</Text>
-              <View style={[styles.inputContainer, { backgroundColor: inputBg, borderColor }]}>
-                <IconSymbol name="phone" size={20} color={accentColor} />
-                <TextInput
-                  style={[styles.input, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}
-                  value={telefono}
-                  onChangeText={setTelefono}
-                  placeholder="+56912345678"
-                  placeholderTextColor={mutedColor}
-                  keyboardType="phone-pad"
-                  editable={!saving}
-                />
-              </View>
-              <Text style={[styles.helpText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}> 
-                Formato: +56912345678 o 912345678
-              </Text>
-            </View>
-          </ScrollView>
-
-          {/* Botones de acción */}
-          <View style={styles.footer}>
-            <TouchableOpacity
-              style={[
-                styles.button, 
-                styles.cancelButton, 
-                { 
-                  borderColor: accentColor,
-                  backgroundColor: 'transparent'
-                }
-              ]}
-              onPress={handleCancel}
-              disabled={saving}
+          <KeyboardAvoidingView
+            behavior={Platform.select({ ios: 'padding', android: 'height' })}
+            keyboardVerticalOffset={Platform.select({ ios: 0, android: 0 })}
+            style={{ flex: 1 }}
+          >
+            <ScrollView
+              style={styles.content}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+              contentInsetAdjustmentBehavior="always"
+              ref={scrollRef}
+              contentContainerStyle={{ paddingBottom: 24 + Math.max(0, keyboardHeight - 12) }}
+              onContentSizeChange={() => {
+                const k = activeFieldKeyRef.current; if (k) setTimeout(() => scrollToField(k), 60);
+              }}
             >
-              <Text style={[styles.cancelButtonText, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}> 
-                Cancelar
-              </Text>
-            </TouchableOpacity>
+              {/* Email (solo lectura) */}
+              <View style={styles.fieldContainer} onLayout={rememberFieldY('email')}>
+                <Text style={[styles.label, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}> 
+                  Correo Electrónico <Text style={{ color: '#EF4444' }}>*</Text>
+                </Text>
+                <View pointerEvents="none" style={[styles.inputContainer, { backgroundColor: inputBg, borderColor, opacity: 0.6 }]} accessibilityRole="text" accessibilityState={{ disabled: true }}>
+                  <IconSymbol name="email" size={20} color={mutedColor} style={{ opacity: 0.65 }} />
+                  <Text
+                    style={[styles.input, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 16), opacity: 0.75 }]}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {email || 'correo@ejemplo.com'}
+                  </Text>
+                </View>
+                <Text style={[styles.helpText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}> 
+                  Tu correo no se puede cambiar desde aquí
+                </Text>
+              </View>
 
-            <TouchableOpacity
-              style={[
-                styles.button,
-                styles.saveButton,
-                { backgroundColor: saveButtonBg },
-                saving && styles.disabledButton,
-              ]}
-              onPress={handleSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color={saveButtonText} />
-              ) : (
-                <Text style={[styles.saveButtonText, { color: saveButtonText, fontSize: getFontSizeValue(fontSize, 16) }]}>Guardar</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              {/* Nombre */}
+              <View style={styles.fieldContainer} onLayout={rememberFieldY('nombre')}>
+                <Text style={[styles.label, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}> 
+                  Nombre <Text style={{ color: '#EF4444' }}>*</Text>
+                </Text>
+                <View style={[styles.inputContainer, { backgroundColor: inputBg, borderColor }]}>
+                  <IconSymbol name="account" size={20} color={accentColor} />
+                  <TextInput
+                    style={[styles.input, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}
+                    value={nombre}
+                    onChangeText={setNombre}
+                    placeholder="Ingresa tu nombre"
+                    placeholderTextColor={mutedColor}
+                    editable={!saving}
+                    autoCapitalize="words"
+                    onFocus={() => { activeFieldKeyRef.current = 'nombre'; scrollToField('nombre'); }}
+                    onSelectionChange={() => { activeFieldKeyRef.current = 'nombre'; setTimeout(() => scrollToField('nombre'), 40); }}
+                  />
+                </View>
+              </View>
+
+              {/* Apellido */}
+              <View style={styles.fieldContainer} onLayout={rememberFieldY('apellido')}>
+                <Text style={[styles.label, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}> 
+                  Apellido <Text style={{ color: '#EF4444' }}>*</Text>
+                </Text>
+                <View style={[styles.inputContainer, { backgroundColor: inputBg, borderColor }]}>
+                  <IconSymbol name="account" size={20} color={accentColor} />
+                  <TextInput
+                    style={[styles.input, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}
+                    value={apellido}
+                    onChangeText={setApellido}
+                    placeholder="Ingresa tu apellido"
+                    placeholderTextColor={mutedColor}
+                    editable={!saving}
+                    autoCapitalize="words"
+                    onFocus={() => { activeFieldKeyRef.current = 'apellido'; scrollToField('apellido'); }}
+                    onSelectionChange={() => { activeFieldKeyRef.current = 'apellido'; setTimeout(() => scrollToField('apellido'), 40); }}
+                  />
+                </View>
+              </View>
+
+              {/* Teléfono (forzando prefijo +56 9) */}
+              <View style={styles.fieldContainer} onLayout={rememberFieldY('telefono')}>
+                <Text style={[styles.label, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Teléfono</Text>
+                <View style={[styles.inputContainer, { backgroundColor: inputBg, borderColor }]}>
+                  <IconSymbol name="phone" size={20} color={accentColor} />
+                  <TextInput
+                    style={[styles.input, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}
+                    value={telefono}
+                    onChangeText={(t) => {
+                      // Si borra todo, permite vacío
+                      const rawDigits = (t || '').replace(/\D/g, '');
+                      if (!rawDigits) { setTelefono(''); return; }
+                      // Mantener siempre prefijo +56 9 y hasta 8 dígitos
+                      const tail = rawDigits.replace(/^(?:56)?9?/, '').slice(0, 8);
+                      setTelefono(`+56 9 ${tail}`);
+                    }}
+                    onFocus={() => {
+                      activeFieldKeyRef.current = 'telefono';
+                      scrollToField('telefono');
+                      // Si está vacío al comenzar a escribir, inyectar prefijo
+                      if (!telefono) setTelefono('+56 9 ');
+                    }}
+                    onBlur={() => {
+                      // Si quedó solo el prefijo sin dígitos, limpiar a vacío
+                      const digits = telefono.replace(/\D/g, '');
+                      if (!digits || /^(?:56)?9?$/.test(digits)) setTelefono('');
+                    }}
+                    placeholder="+56 9 12345678"
+                    placeholderTextColor={mutedColor}
+                    keyboardType="phone-pad"
+                    editable={!saving}
+                    onSelectionChange={() => { activeFieldKeyRef.current = 'telefono'; setTimeout(() => scrollToField('telefono'), 40); }}
+                  />
+                </View>
+                <Text style={[styles.helpText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}> 
+                  Siempre comienza con +56 9 y escribe 8 dígitos
+                </Text>
+              </View>
+            </ScrollView>
+
+            {/* Botones de acción */}
+            <View style={styles.footer}>
+              <TouchableOpacity
+                style={[
+                  styles.button, 
+                  styles.cancelButton, 
+                  { 
+                    borderColor: accentColor,
+                    backgroundColor: 'transparent'
+                  }
+                ]}
+                onPress={handleCancel}
+                disabled={saving}
+              >
+                <Text style={[styles.cancelButtonText, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}> 
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  styles.saveButton,
+                  { backgroundColor: saveButtonBg },
+                  saving && styles.disabledButton,
+                ]}
+                onPress={handleSave}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator color={saveButtonText} />
+                ) : (
+                  <Text style={[styles.saveButtonText, { color: saveButtonText, fontSize: getFontSizeValue(fontSize, 16) }]}>Guardar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }

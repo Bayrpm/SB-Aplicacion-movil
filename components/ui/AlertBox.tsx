@@ -1,5 +1,6 @@
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import React from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type AlertButton = {
   text: string;

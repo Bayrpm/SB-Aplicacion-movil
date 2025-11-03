@@ -32,6 +32,7 @@ export default function HomeScreen() {
     { light: 'rgba(255, 80, 80, 0.3)', dark: 'rgba(255, 80, 80, 0.5)' }, 
     'background'
   );
+  const actionButtonBg = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background');
   const logoutIconColor = '#FF5050'; // Rojo siempre
   
   const settingsButtonBg = useThemeColor(
@@ -169,15 +170,15 @@ export default function HomeScreen() {
             style={[
               styles.signOutButton, 
               { 
-                backgroundColor: logoutButtonBg,
-                top: insets.top + 12,
+                backgroundColor: actionButtonBg,
+                top: insets.top + 14,
                 left: Math.max(16, insets.left + 8),
               }
             ]}
             onPress={handleSignOut}
             activeOpacity={0.7}
           >
-            <IconSymbol name="exit-to-app" size={26} color={logoutIconColor} />
+            <IconSymbol name="exit-to-app" size={28} color={logoutIconColor} />
           </TouchableOpacity>
 
           {/* Botón de configuración en la esquina superior derecha */}
@@ -185,15 +186,15 @@ export default function HomeScreen() {
             style={[
               styles.settingsButton, 
               { 
-                backgroundColor: settingsButtonBg,
-                top: insets.top + 12,
+                  backgroundColor: actionButtonBg,
+                  top: insets.top + 14,
                 right: Math.max(16, insets.right + 8),
               }
             ]}
             onPress={handleSettings}
             activeOpacity={0.7}
           >
-            <IconSymbol name="settings" size={26} color={settingsIconColor} />
+            <IconSymbol name="settings" size={28} color={settingsIconColor} />
           </TouchableOpacity>
         </View>
         
@@ -229,11 +230,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 16, // Será sobreescrito dinámicamente con área segura
     zIndex: 10,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -244,11 +246,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16, // Será sobreescrito dinámicamente con área segura
     zIndex: 10,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,

@@ -1,14 +1,20 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { getMapStyle } from '../lib/mapStyles';
 // usamos IconSymbol centralizado en lugar de importar familias directamente
 import * as Location from 'expo-location';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Dimensions, Easing, PixelRatio, Platform, StyleSheet, Text, View } from 'react-native';
-import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import MapView, { Circle, Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+// view-shot para capturar la vista del CategoryPin como imagen nativa
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { captureRef } from 'react-native-view-shot';
 import { Button } from '../../../../components/Button';
 import { IconSymbol } from '../../../../components/ui/icon-symbol';
-
+import { fetchPublicReports } from '../api/report.api';
+import { useReportModal } from '../context';
+import CategoryPin from './CategoryPin';
+import ReportDetailModal from './reportDetailModal';
 // ======== UI scale ========
 const DPR = PixelRatio.get();
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -23,17 +29,30 @@ const NS_ARROW_SIZE = Math.max(12, Math.round(COMPASS_SIZE * 0.22));
 const EO_ARROW_SIZE = NS_ARROW_SIZE;
 const DIAG_HEIGHT = Math.max(4, Math.round(COMPASS_SIZE * 0.09));
 const DIAG_OFFSET = Math.max(4, Math.round(COMPASS_SIZE * 0.125));
+// Dimensiones del pin y su wrapper para evitar recortes
+const PIN_SIZE = 56;        // diámetro del círculo
+const PIN_TIP_H = 12;       // altura de la punta
+const MARKER_WRAPPER_W = 112; // wrapper amplio para que no recorte
+const MARKER_WRAPPER_H = 140;
+// Separador seguro para componer claves de snapshot (iconName y count)
+const SNAP_KEY_SEP = '__COUNT__';
 
 // ======== Map behavior tunables (clave) ========
-// Umbral de píxeles para considerar “centrado” (Google es MUY sensible).
-// Lo hacemos en puntos independientes de densidad (dp).
-const CENTER_PX_THRESHOLD = Math.max(3, Math.round(4 * SCALE)); // 3–6 dp es razonable
-// Umbral de rotación para considerar descentrado si giras el mapa
+// Umbral de píxeles para considerar "centrado"
+const CENTER_PX_THRESHOLD = Math.max(3, Math.round(4 * SCALE));
 const ROT_EPS_DEG = 0.5;
-// Zoom alvo cuando centramos (fallback con lat/lon deltas)
-const TARGET_ZOOM = 18; // ~calle
+const TARGET_ZOOM = 16;
 const TARGET_LAT_DELTA = 0.0015;
 const TARGET_LON_DELTA = 0.0015;
+// Zoom a partir del cual cambiamos de agrupado -> individual
+const ZOOM_CLUSTER_BREAK = 17.5;
+
+// ⬇️ ÚNICO cambio funcional relevante: offset del icono de categoría
+const CATEGORY_ICON_OFFSET = Platform.select({
+  ios:      { x: 0, y: -32 }, // iOS centrado en la cabeza del pin
+  android:  { x: 0, y: -28 }, // Android centrado en la cabeza del pin
+  default:  { x: 0, y: -30 },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, borderRadius: 16, overflow: 'hidden' },
@@ -46,6 +65,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0A4A90', alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5, overflow: 'visible',
   },
+  fab: { width: FAB_SIZE, height: FAB_SIZE, borderRadius: Math.round(FAB_SIZE / 2), backgroundColor: '#0A4A90', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 4 },
   compassContent: { alignItems: 'center', justifyContent: 'center', width: COMPASS_SIZE, height: COMPASS_SIZE, overflow: 'visible' },
   compassLabels: { position: 'absolute', left: 0, top: 0, width: COMPASS_SIZE, height: COMPASS_SIZE, alignItems: 'center', justifyContent: 'center', zIndex: 80 },
   labelWrapper: { position: 'absolute', width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
@@ -85,70 +105,46 @@ const styles = StyleSheet.create({
   arrowEO: { position: 'absolute', zIndex: 121, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.4, shadowRadius: 1 },
   arrowEastEO: { right: EO_OFFSET, transform: [{ rotate: '90deg' }] },
   arrowWestEO: { left: EO_OFFSET, transform: [{ rotate: '-90deg' }] },
-  fab: {
-    width: FAB_SIZE, height: FAB_SIZE, borderRadius: Math.round(FAB_SIZE / 2),
-    backgroundColor: '#0A4A90', alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5,
+  markerWrapper: {
+    height: MARKER_WRAPPER_H,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    overflow: 'visible',
+  },
+  pinContainer: {
+    width: PIN_SIZE,
+  },
+  pinHead: {
+    width: PIN_SIZE,
+    height: PIN_SIZE,
+    borderRadius: PIN_SIZE / 2,
+    backgroundColor: '#FF3B30',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinTip: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: Math.max(8, Math.round(PIN_SIZE * 0.18)),
+    borderRightWidth: Math.max(8, Math.round(PIN_SIZE * 0.18)),
+    borderTopWidth: PIN_TIP_H,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#FF3B30',
+    marginTop: -2,
   },
 });
 
 
 
-const DARK_MAP_STYLE = [
-  // Base + labels
-  { elementType: 'geometry', stylers: [{ color: '#0b1627' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#eaf2ff' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0b1627' }] },
-
-  // Agua
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a2740' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#bfe1ff' }] },
-
-  // Límites administrativos
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#23344a' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d6e7ff' }] },
-  { featureType: 'administrative.neighborhood', elementType: 'labels.text.fill', stylers: [{ color: '#c7dbff' }] },
-
-  // Paisaje/edificaciones + POI
-  { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#182e50ff' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#0f1d33' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#deebff' }] },
-  { featureType: 'poi', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#112b1e' }] },
-  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#b8f8d0' }] },
-  { featureType: 'poi.business', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
-
-  // Autopistas
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#2e3f63' }] },
-  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#5d718c' }] },
-  { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#e2eeff' }] },
-
-  // Arteriales
-  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#22344a' }] },
-  { featureType: 'road.arterial', elementType: 'geometry.stroke', stylers: [{ color: '#3b557a' }] },
-  { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#d6e7ff' }] },
-
-  // Calles locales (más detalle)
-  { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#18263e' }] },
-  { featureType: 'road.local', elementType: 'geometry.stroke', stylers: [{ color: '#2b405f' }] },
-  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#cfe2ff' }] },
-
-  // Íconos de vías visibles (coches, giros, etc.)
-  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
-
-  // Tránsito
-  { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#3a7bd5' }] },
-  { featureType: 'transit.station', elementType: 'labels.text.fill', stylers: [{ color: '#eaf2ff' }] },
-  { featureType: 'transit', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
-
-];
 export default function CurrentLocationMap() {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
+  const { reportDetailId, setReportDetailId } = useReportModal();
   
-  const mapStyle = React.useMemo(() => {
-    return scheme === 'dark' ? DARK_MAP_STYLE : undefined;
-  }, [scheme]);
+  const mapStyle = React.useMemo(() => getMapStyle(scheme), [scheme]);
   
   const navBarHeightAndroid = Platform.OS === 'android'
     ? Math.max(0, Dimensions.get('screen').height - Dimensions.get('window').height)
@@ -156,6 +152,24 @@ export default function CurrentLocationMap() {
   const bottomOverlayHeight = Math.max(insets.bottom || 0, navBarHeightAndroid || 0);
   const TAB_BAR_BASE = 72;
   const tabBarHeightLocal = TAB_BAR_BASE + bottomOverlayHeight;
+
+  // ======== Estado de denuncias públicas ========
+    const [publicReports, setPublicReports] = useState<Array<{
+      id: string;
+      titulo: string;
+      descripcion: string;
+      coords_x: number;
+      coords_y: number;
+      categoria_publica_id: number | null;
+      fecha_creacion: string;
+      ubicacion_texto: string | null;
+    }>>([]);
+  const [freezeMarkers, setFreezeMarkers] = useState(false);
+  const markersLoadedRef = useRef(false);
+  
+  // ======== Modal de detalle de denuncia ========
+  const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   // ======== Estado brújula/rotación (tu lógica original) ========
   const [mapRotation, setMapRotation] = useState(0);
@@ -169,8 +183,8 @@ export default function CurrentLocationMap() {
   const isPanningRef = useRef(false);
 
   // ======== Seguimiento y centrado ========
-  const [isCentered, setIsCentered] = useState(true);     // Estado visual del botón
-  const [isFollowing, setIsFollowing] = useState(true);    // “Follow mode” real
+  const [isCentered, setIsCentered] = useState(true);
+  const [isFollowing, setIsFollowing] = useState(true);
   const isFollowingRef = useRef(true);
 
   const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -179,16 +193,28 @@ export default function CurrentLocationMap() {
   const mapRef = useRef<MapView | null>(null);
   const mapReadyRef = useRef(false);
   const mapLayoutRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+  const [mapZoom, setMapZoom] = useState<number | null>(null);
 
   const initialCenteredRef = useRef(false);
   const isCenteringRef = useRef(false);
   const LAST_CENTERED_AT = useRef<number | null>(null);
 
-  const userGestureRef = useRef(false); // true si el último cambio vino del usuario (pan/rotate)
+  const userGestureRef = useRef(false);
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
 
   const fabBottomOffset = 24 + Math.max(0, insets.bottom);
   const fabBottomAboveTab = tabBarHeightLocal + 16;
+
+  // ======== Manejo de deep links para abrir modal de detalle ========
+  useEffect(() => {
+    if (reportDetailId) {
+      // Abrir el modal con el reporte específico
+      setSelectedReportIds([reportDetailId]);
+      setShowDetailModal(true);
+      // Limpiar el ID del contexto después de usarlo
+      setReportDetailId(null);
+    }
+  }, [reportDetailId, setReportDetailId]);
 
   // ======== Utilidades ========
   const computeCardinal = (heading: number) => {
@@ -204,8 +230,7 @@ export default function CurrentLocationMap() {
         const heading = cam?.heading ?? 0;
         const prev = angleRef.current || 0;
         const targetN = ((heading % 360) + 360) % 360;
-        const prevMod = ((prev % 360) + 360) % 360;
-        let delta = targetN - prevMod;
+        let delta = targetN - (((prev % 360) + 360) % 360);
         if (delta > 180) delta -= 360;
         if (delta < -180) delta += 360;
         const next = prev + delta * 0.28;
@@ -258,12 +283,10 @@ export default function CurrentLocationMap() {
     try {
       if (!mapRef.current || !location) return;
       const anyMap: any = mapRef.current;
-      // Centro del viewport en puntos
       const cx = mapLayoutRef.current.width / 2;
       const cy = mapLayoutRef.current.height / 2;
       if (cx <= 0 || cy <= 0) return;
 
-      // Proyectar la ubicación del usuario al plano de pantalla
       const pt = await anyMap.pointForCoordinate({ latitude: location.latitude, longitude: location.longitude });
       const dx = (pt?.x ?? 0) - cx;
       const dy = (pt?.y ?? 0) - cy;
@@ -272,19 +295,16 @@ export default function CurrentLocationMap() {
       const centered = dist <= CENTER_PX_THRESHOLD;
       setIsCentered(centered);
 
-      // Si esto viene de gesto del usuario y está fuera del umbral, apaga seguimiento
       if (userGestureRef.current && !centered) {
         isFollowingRef.current = false;
         setIsFollowing(false);
       }
     } catch {
-      // Si falla la proyección, no rompemos UX
     } finally {
-      userGestureRef.current = false; // consumido
+      userGestureRef.current = false;
     }
   };
 
-  // También marcar descentrado si rotaste el mapa nada (epsilon)
   const updateCenteredByRotation = async () => {
     try {
       if (!mapRef.current || !userGestureRef.current) return;
@@ -299,7 +319,7 @@ export default function CurrentLocationMap() {
     } catch {}
   };
 
-  // ======== Permisos + watchPosition (seguir físicamente cuando hay follow) ========
+  // ======== Permisos + watchPosition ========
   useEffect(() => {
     (async () => {
       try {
@@ -311,7 +331,6 @@ export default function CurrentLocationMap() {
           return;
         }
 
-        // Intento rápido con last-known para dibujar algo ya
         try {
           const lastLoc = await Location.getLastKnownPositionAsync();
           if (lastLoc && lastLoc.coords) {
@@ -322,11 +341,9 @@ export default function CurrentLocationMap() {
             setLoading(false);
           }
         } catch (err) {
-          console.warn('getLastKnownPositionAsync falló', err);
           setLoading(false);
         }
 
-        // Alta de watcher (seguir físico SOLO si isFollowing)
         try {
           locationSubRef.current = await Location.watchPositionAsync(
             { accuracy: Location.Accuracy.Balanced, timeInterval: 1000, distanceInterval: 1 },
@@ -335,8 +352,8 @@ export default function CurrentLocationMap() {
                 const { latitude, longitude } = loc.coords;
                 setLocation({ latitude, longitude });
                 if (isFollowingRef.current && mapRef.current) {
+                  if (!mapReadyRef.current) return;
                   const anyMap: any = mapRef.current;
-                  // Mantener zoom/tilt/heading; sólo mover centro
                   try {
                     const cam = await anyMap.getCamera?.();
                     if (cam?.zoom != null && anyMap.animateCamera) {
@@ -348,30 +365,48 @@ export default function CurrentLocationMap() {
                     }
                     setIsCentered(true);
                   } catch (innerErr) {
-                    console.warn('Error al actualizar cámara desde watcher', innerErr);
                   }
                 }
               } catch (cbErr) {
-                console.warn('Callback de watchPositionAsync falló', cbErr);
               }
             }
           );
         } catch (watchErr) {
-          console.warn('watchPositionAsync falló', watchErr);
         }
       } catch (err) {
-        console.error('Inicialización de ubicación falló', err);
         setErrorMsg('No se pudo activar la ubicación');
         setLoading(false);
       }
     })();
 
     return () => {
-      try { locationSubRef.current?.remove(); } catch (e) { console.warn('Error al remover subscription', e); }
+      try { locationSubRef.current?.remove(); } catch (e) { }
     };
   }, []);
 
-  // ======== Asegurar zoom/cámara inicial apenas mapa + ubicación listos ========
+  // ======== Cargar denuncias públicas ========
+  const loadPublicReports = async () => {
+    try {
+      const reports = await fetchPublicReports();
+      setPublicReports(reports);
+      markersLoadedRef.current = true;
+  // Permitir que los markers rendericen sus vistas y luego congelar
+  setFreezeMarkers(false);
+  // ampliar ventana para evitar rasterización parcial (Android)
+  setTimeout(() => setFreezeMarkers(true), 2200);
+    } catch (err) {
+      
+    }
+  };
+
+  // Cargar denuncias solo una vez al montar
+  useEffect(() => {
+    if (!markersLoadedRef.current) {
+      loadPublicReports();
+    }
+  }, []);
+
+  // ======== Asegurar zoom/cámara inicial ========
   const ensureInitialCenter = async () => {
     if (!mapRef.current || !location || initialCenteredRef.current === true || !mapReadyRef.current) return;
     const { latitude, longitude } = location;
@@ -393,7 +428,6 @@ export default function CurrentLocationMap() {
 
   useEffect(() => { void ensureInitialCenter(); }, [location]);
 
-  // ======== Botón brújula ========
   const handleCompassPress = (skipAnimateCameraHeading: boolean = false) => {
     if (!skipAnimateCameraHeading && mapRef.current) {
       try { (mapRef.current as any).animateCamera?.({ heading: 0 }); } catch {}
@@ -401,7 +435,6 @@ export default function CurrentLocationMap() {
     resetCompass();
   };
 
-  // ======== Botón centrar ========
   const centerMap = async () => {
     if (!mapRef.current) return;
     const anyMap: any = mapRef.current;
@@ -425,7 +458,6 @@ export default function CurrentLocationMap() {
         }
       } catch {}
 
-      // Activa follow al tocar el botón, como Google
       isFollowingRef.current = true;
       setIsFollowing(true);
       setIsCentered(true);
@@ -435,10 +467,8 @@ export default function CurrentLocationMap() {
     }
   };
 
-  // ======== Handlers de gestos/región ========
   const onPanDrag = () => {
-    userGestureRef.current = true; // viene de usuario
-    // Si el usuario inicia un pan, desactivar inmediatamente el modo "follow"
+    userGestureRef.current = true;
     if (isFollowingRef.current) {
       isFollowingRef.current = false;
       setIsFollowing(false);
@@ -473,9 +503,179 @@ export default function CurrentLocationMap() {
     if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     await readCameraHeading();
     onRegionChange(region);
+    // guardar region actual para cálculos de offset en píxeles -> coordenadas
+    try { setMapRegion(region); } catch {}
+    // actualizar zoom actual
+    try {
+      const anyMap: any = mapRef.current;
+      const cam = await anyMap?.getCamera?.();
+      if (cam?.zoom != null) setMapZoom(cam.zoom as number);
+    } catch {}
     await updateCenteredByRotation();
     await updateCenteredByPixels();
   };
+
+  // estado local para la region actual (necesario para convertir offsets px -> grados)
+  const [mapRegion, setMapRegion] = useState<Region | null>(null);
+
+  // cache de imágenes generadas para cada iconName (data-uri)
+  const [iconUris, setIconUris] = useState<Record<string, string>>({});
+  const hiddenRefs = useRef<Record<string, any>>({});
+
+  // uniqueIconKeys y captura se declaran después de groupedItems
+
+  // ======== Agrupación por categoría y distancia (metros) ========
+  const GROUP_RADIUS_M = 50; // 50m para agrupar cercanos
+  const TIME_WINDOW_MS = 24 * 60 * 60 * 1000; // últimas 24 horas
+
+  type Report = typeof publicReports[number];
+  
+  // Filtrar reportes a solo los de las últimas 24h
+  const recentReports: Report[] = React.useMemo(() => {
+    const now = Date.now();
+    return publicReports.filter((r) => {
+      const t = new Date(r.fecha_creacion).getTime();
+      return Number.isFinite(t) && (now - t) <= TIME_WINDOW_MS;
+    });
+  }, [publicReports]);
+  const distanceMeters = (a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) => {
+    const R = 6371000; // radio tierra (m)
+    const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+    const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
+    const lat1 = (a.latitude * Math.PI) / 180;
+    const lat2 = (b.latitude * Math.PI) / 180;
+    const sinDLat = Math.sin(dLat / 2);
+    const sinDLon = Math.sin(dLon / 2);
+    const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+    const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    return R * c;
+  };
+
+  const ICON_MAP: Record<number, string> = {
+    1: 'ambulance',
+    2: 'alert-circle-outline',
+    3: 'shield-alert',
+    4: 'pill',
+    5: 'pistol',
+    6: 'bell-ring-outline',
+    7: 'police-badge',
+    8: 'dots-horizontal',
+  };
+
+  type GroupedItem = {
+    id: string;
+    latitude: number;
+    longitude: number;
+    categoryId: number | null;
+    iconName: string;
+    reports: Report[];
+  };
+
+  const groupedItems: GroupedItem[] = React.useMemo(() => {
+    const result: GroupedItem[] = [];
+    const assigned = new Set<string>();
+    const nowMs = Date.now();
+    for (const r of recentReports) {
+      if (assigned.has(r.id)) continue;
+      const anchor = r;
+      const groupReports: Report[] = [anchor];
+      assigned.add(anchor.id);
+      for (const other of recentReports) {
+        if (assigned.has(other.id)) continue;
+        if (other.categoria_publica_id !== anchor.categoria_publica_id) continue;
+        // Solo considerar reportes dentro de la ventana de 24h
+        const tOther = new Date(other.fecha_creacion).getTime();
+        if (!Number.isFinite(tOther) || (nowMs - tOther) > TIME_WINDOW_MS) continue;
+        const tAnchor = new Date(anchor.fecha_creacion).getTime();
+        // Si el ancla está fuera de 24h, no se agrupa (queda solo)
+        if (!Number.isFinite(tAnchor) || (nowMs - tAnchor) > TIME_WINDOW_MS) continue;
+        const d = distanceMeters(
+          { latitude: anchor.coords_x, longitude: anchor.coords_y },
+          { latitude: other.coords_x, longitude: other.coords_y }
+        );
+        if (d <= GROUP_RADIUS_M) {
+          groupReports.push(other);
+          assigned.add(other.id);
+        }
+      }
+      const iconName = anchor.categoria_publica_id ? (ICON_MAP[anchor.categoria_publica_id] ?? 'map-marker') : 'map-marker';
+      result.push({
+        id: `grp-${anchor.categoria_publica_id ?? 'x'}-${anchor.id}`,
+        latitude: anchor.coords_x,
+        longitude: anchor.coords_y,
+        categoryId: anchor.categoria_publica_id,
+        iconName,
+        reports: groupReports,
+      });
+      if (groupReports.length > 1) {
+      }
+    }
+    return result;
+  }, [recentReports]);
+
+  // Generar claves únicas por iconName y count real (para agrupados)
+  const uniqueIconKeys = React.useMemo(() => {
+    const set = new Set<string>();
+    for (const r of recentReports) {
+      const icon = r.categoria_publica_id ? (ICON_MAP[r.categoria_publica_id] ?? 'map-marker') : 'map-marker';
+      set.add(`${icon}${SNAP_KEY_SEP}1`); // individual
+    }
+    for (const item of groupedItems) {
+      if (item.reports.length > 1) {
+        set.add(`${item.iconName}${SNAP_KEY_SEP}${item.reports.length}`);
+      }
+    }
+    return Array.from(set);
+  }, [recentReports, groupedItems]);
+
+  useEffect(() => {
+    // capturar cada CategoryPin (individual y agrupado) offscreen y guardar data-uri en cache
+    (async () => {
+      try {
+        for (const key of uniqueIconKeys) {
+          if (iconUris[key]) continue;
+          const ref = hiddenRefs.current[key];
+          if (!ref) continue;
+          try {
+            const uri = await captureRef(ref, { format: 'png', quality: 1, result: 'data-uri' });
+            setIconUris((s) => ({ ...s, [key]: uri }));
+          } catch (err) {
+            // ignore capture errors and leave fallback
+          }
+        }
+      } catch {}
+    })();
+  }, [uniqueIconKeys]);
+
+  // (Obsoleto) offsetCoordinate: dejamos de usar offset en píxeles para evitar drift según zoom
+
+  // Offset estable por metros (no depende del zoom)
+  const offsetByMeters = (lat: number, lon: number, radiusMeters: number, angleRad: number) => {
+    const metersPerDegLat = 111320; // aproximación
+    const metersPerDegLon = 111320 * Math.cos((lat * Math.PI) / 180);
+    const dLat = (radiusMeters * Math.sin(angleRad)) / metersPerDegLat;
+    const dLon = (radiusMeters * Math.cos(angleRad)) / metersPerDegLon;
+    return { latitude: lat + dLat, longitude: lon + dLon };
+  };
+
+  // Detectar pines superpuestos (misma ubicación exacta) para los items ya AGRUPADOS
+  const overlapGroups = React.useMemo(() => {
+    const positionMap = new Map<string, string[]>();
+    for (const item of groupedItems) {
+      const key = `${item.latitude.toFixed(6)}|${item.longitude.toFixed(6)}`;
+      const list = positionMap.get(key) ?? [];
+      list.push(item.id);
+      positionMap.set(key, list);
+    }
+    const result = new Map<string, { size: number; index: number }>();
+    for (const [key, ids] of positionMap) {
+      const size = ids.length;
+      if (size > 1) {
+      }
+      ids.forEach((id, i) => result.set(id, { size, index: i }));
+    }
+    return result;
+  }, [groupedItems]);
 
   useEffect(() => {
     return () => {
@@ -505,14 +705,30 @@ export default function CurrentLocationMap() {
 
   return (
     <View style={[styles.container, { paddingBottom: tabBarHeightLocal }]}>
+      {/* Hidden offscreen render for CategoryPin snapshots (individual y agrupado con count real) */}
+      <View style={{ position: 'absolute', left: -2000, top: -2000, opacity: 0 }} pointerEvents="none">
+        {uniqueIconKeys.map((key) => {
+          // key: iconName__COUNT__count (SNAP_KEY_SEP)
+          const [iconName, countStr] = key.split(SNAP_KEY_SEP);
+          const count = Number.parseInt(countStr ?? '1', 10) || 1;
+          return (
+            <View
+              key={`hidden-${key}`}
+              ref={(r) => { hiddenRefs.current[key] = r; }}
+              collapsable={false}
+            >
+              <CategoryPin iconName={iconName} size={PIN_SIZE} count={count > 1 ? count : undefined} />
+            </View>
+          );
+        })}
+      </View>
       <MapView
         ref={mapRef}
         style={styles.map}
-        // IMPORTANTE: customMapStyle solo funciona con PROVIDER_GOOGLE (no con Apple Maps)
         provider={PROVIDER_GOOGLE}
+        // disable Android map toolbar (open in Google Maps / directions) which shows extra icons
+        toolbarEnabled={false}
         initialRegion={{
-          // Fallback mínimo: si por alguna razón no entra ensureInitialCenter,
-          // esto al menos no se ve "a lo lejos".
           latitude: location.latitude,
           longitude: location.longitude,
           latitudeDelta: 0.002,
@@ -522,16 +738,19 @@ export default function CurrentLocationMap() {
         showsMyLocationButton={false}
         loadingEnabled
         showsCompass={false}
-        // CRITICO: Aplicar el estilo memoizado
         customMapStyle={mapStyle}
         onMapReady={() => {
           mapReadyRef.current = true;
           void ensureInitialCenter();
+          // Leer zoom inicial
+          try {
+            const anyMap: any = mapRef.current;
+            anyMap?.getCamera?.().then((cam: any) => { if (cam?.zoom != null) setMapZoom(cam.zoom as number); }).catch(() => {});
+          } catch {}
         }}
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
           mapLayoutRef.current = { width, height };
-          // Si ya tengo ubicación y el mapa acaba de layout, asegurar centrado
           void ensureInitialCenter();
         }}
         onRegionChange={onRegionChange}
@@ -539,9 +758,155 @@ export default function CurrentLocationMap() {
         onPanDrag={onPanDrag}
         onTouchStart={() => { startRaf(); userGestureRef.current = true; if (isFollowingRef.current) { isFollowingRef.current = false; setIsFollowing(false); } setIsCentered(false); }}
         onTouchEnd={() => { setTimeout(() => stopRaf(), 80); }}
-      />
+      >
+        {/* Cambiar entre vista agrupada e individual según zoom, manteniendo radios */}
+        {(() => {
+          const showGrouped = (mapZoom ?? 0) < ZOOM_CLUSTER_BREAK;
+          if (showGrouped) {
+            // Vista AGRUPADA
+            return groupedItems.map((item) => {
+              const coord = { latitude: item.latitude, longitude: item.longitude };
+              const ov = overlapGroups.get(item.id);
+              const coordDisplay = (() => {
+                if (ov && ov.size > 1) {
+                  const angle = (2 * Math.PI * ov.index) / ov.size;
+                  return offsetByMeters(coord.latitude, coord.longitude, 2.5 /* m */, angle);
+                }
+                return coord;
+              })();
 
-      {/* Overlay inferior para no tapar con la nav bar del sistema */}
+              const count = item.reports.length;
+              const reportIds = item.reports.map(r => r.id);
+              const iconKey = `${item.iconName}${SNAP_KEY_SEP}${count}`;
+              const useNativeIcon = Platform.OS === 'android' && iconUris[iconKey];
+
+              return (
+                <React.Fragment key={`group-${item.id}`}>
+                  {count > 1 && (
+                    <Circle
+                      key={`circle-${item.id}`}
+                      center={coordDisplay}
+                      radius={GROUP_RADIUS_M}
+                      fillColor="rgba(0,172,255,0.15)"
+                      strokeColor="#00ACFF"
+                      strokeWidth={2}
+                      zIndex={1}
+                    />
+                  )}
+                  <Marker
+                    key={`marker-${item.id}`}
+                    coordinate={coordDisplay}
+                    anchor={{ x: 0.5, y: 1 }}
+                    zIndex={2}
+                    tracksViewChanges={!freezeMarkers}
+                    onPress={() => {
+                      if (reportIds.length > 0) {
+                        setSelectedReportIds(reportIds);
+                        setShowDetailModal(true);
+                      }
+                    }}
+                    {...(useNativeIcon ? { icon: { uri: iconUris[iconKey] } as any } : {})}
+                  >
+                    {useNativeIcon ? null : (
+                      <CategoryPin 
+                        iconName={item.iconName} 
+                        pinColor="#FF3B30" 
+                        size={PIN_SIZE}
+                        count={count}
+                      />
+                    )}
+                  </Marker>
+                </React.Fragment>
+              );
+            });
+          }
+
+          // Vista INDIVIDUAL (zoom alto)
+          type Individual = { id: string; reportId: string; latitude: number; longitude: number; iconName: string; groupSize: number };
+          const individuals: Individual[] = [];
+          for (const g of groupedItems) {
+            for (const r of g.reports) {
+              const iconName = r.categoria_publica_id ? (ICON_MAP[r.categoria_publica_id] ?? 'map-marker') : 'map-marker';
+              individuals.push({
+                id: `ind-${r.id}`,
+                reportId: r.id,
+                latitude: r.coords_x,
+                longitude: r.coords_y,
+                iconName,
+                groupSize: g.reports.length,
+              });
+            }
+          }
+
+          // Evitar superposición exacta entre individuales
+          const posMap = new Map<string, string[]>();
+          individuals.forEach((it) => {
+            const key = `${it.latitude.toFixed(6)}|${it.longitude.toFixed(6)}`;
+            const list = posMap.get(key) ?? [];
+            list.push(it.id);
+            posMap.set(key, list);
+          });
+          const overlapInd = new Map<string, { size: number; index: number }>();
+          for (const [key, ids] of posMap) {
+            const size = ids.length;
+            ids.forEach((id, i) => overlapInd.set(id, { size, index: i }));
+          }
+
+          return individuals.map((it) => {
+            const coord = { latitude: it.latitude, longitude: it.longitude };
+            const ov = overlapInd.get(it.id);
+            const coordDisplay = (() => {
+              if (ov && ov.size > 1) {
+                const angle = (2 * Math.PI * ov.index) / ov.size;
+                return offsetByMeters(coord.latitude, coord.longitude, 2.5 /* m */, angle);
+              }
+              return coord;
+            })();
+
+            const iconKey = `${it.iconName}${SNAP_KEY_SEP}1`;
+            const useNativeIcon = Platform.OS === 'android' && iconUris[iconKey];
+
+            return (
+              <React.Fragment key={`ind-frag-${it.id}`}>
+                {it.groupSize > 1 && (
+                  <Circle
+                    key={`ind-circle-${it.id}`}
+                    center={coordDisplay}
+                    radius={GROUP_RADIUS_M}
+                    fillColor="rgba(0,172,255,0.15)"
+                    strokeColor="#00ACFF"
+                    strokeWidth={2}
+                    zIndex={1}
+                  />
+                )}
+                <Marker
+                  key={`marker-${it.id}`}
+                  coordinate={coordDisplay}
+                  anchor={{ x: 0.5, y: 1 }}
+                  zIndex={2}
+                  tracksViewChanges={!freezeMarkers}
+                  onPress={() => {
+                    setSelectedReportIds([it.reportId]);
+                    setShowDetailModal(true);
+                  }}
+                  {...(useNativeIcon ? { icon: { uri: iconUris[iconKey] } as any } : {})}
+                >
+                  {useNativeIcon ? null : (
+                    <CategoryPin 
+                      iconName={it.iconName} 
+                      pinColor="#FF3B30" 
+                      size={PIN_SIZE}
+                    />
+                  )}
+                </Marker>
+              </React.Fragment>
+            );
+          });
+        })()}
+      </MapView>
+
+      {/* Debug overlay 'Denuncias' removed per UX request */}
+
       {bottomOverlayHeight > 0 && (
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: bottomOverlayHeight, backgroundColor: Colors[scheme ?? 'light'].background }} />
       )}
@@ -600,6 +965,17 @@ export default function CurrentLocationMap() {
       <IconSymbol name="arrow-drop-up" size={EO_ARROW_SIZE} color={cardinal === 'O' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowEO, styles.arrowWestEO, { opacity: cardinal === 'O' ? 1 : 0.9 }]} />
         </View>
       </View>
+
+      {/* Modal de detalle de denuncia */}
+      <ReportDetailModal
+        visible={showDetailModal}
+        reportId={null}
+        reportIds={selectedReportIds}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedReportIds([]);
+        }}
+      />
     </View>
   );
 }

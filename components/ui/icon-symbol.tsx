@@ -56,7 +56,15 @@ const MC_MAPPING: Record<string, string> = {
   // estados y selección
   'heart': 'heart',
   'heart-outline': 'heart-outline',
+  'heart.fill': 'heart',
   'circle-outline': 'circle-outline',
+  // Interacciones estilo Instagram
+  'hand.thumbsdown': 'thumb-down-outline',
+  'hand.thumbsdown.fill': 'thumb-down',
+  'bubble.left': 'comment-outline',
+  'message': 'comment-outline',
+  'paperplane': 'send',
+  'xmark.circle.fill': 'close-circle',
   // report category icons (MaterialCommunityIcons)
   'ambulance': 'ambulance',
   'alert-circle-outline': 'alert-circle-outline',
@@ -66,6 +74,9 @@ const MC_MAPPING: Record<string, string> = {
   'bell-ring-outline': 'bell-ring-outline',
   'police-badge': 'police-badge',
   'dots-horizontal': 'dots-horizontal',
+  // alias de compatibilidad (evitar warnings en nombres cortos)
+  'police': 'police-badge',
+  'dots': 'dots-horizontal',
 };
 
 // Mapeo a Ionicons

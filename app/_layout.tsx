@@ -4,17 +4,66 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Appearance, Easing, StyleSheet } from 'react-native';
+import { Animated, Appearance, Easing, Linking, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, SplashScreen, useAuth } from '@/app/features/auth';
-import { ReportModalProvider } from '@/app/features/report/context';
+import { ReportModalProvider, useReportModal } from '@/app/features/report/context';
 import AlertBox from '@/components/ui/AlertBox';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
+
+// Componente para manejar deep links con acceso al contexto
+function DeepLinkHandler() {
+  const router = useRouter();
+  const { openReportDetail } = useReportModal();
+  const { session } = useAuth();
+
+  useEffect(() => {
+    // Solo manejar deep links si hay sesión activa
+    if (!session) return;
+
+    // Manejar el link inicial si la app se abre desde un deep link
+    const handleInitialURL = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        handleDeepLink(initialUrl);
+      }
+    };
+
+    // Manejar deep links cuando la app ya está abierta
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+
+    handleInitialURL();
+
+    return () => {
+      subscription.remove();
+    };
+  }, [session]);
+
+  const handleDeepLink = (url: string) => {
+    // Formato esperado: sbaplicacionmovil://report/{reportId}
+    const match = url.match(/sbaplicacionmovil:\/\/report\/(.+)/);
+    if (match && match[1]) {
+      const reportId = match[1];
+      
+      // Navegar al home del ciudadano
+      router.push('/(tabs)/citizen/citizenHome' as any);
+      
+      // Esperar un momento para que la navegación se complete y luego abrir el modal
+      setTimeout(() => {
+        openReportDetail(reportId);
+      }, 500);
+    }
+  };
+
+  return null; // Este componente no renderiza nada
+}
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
@@ -165,6 +214,7 @@ function RootLayoutNav() {
             }}
           >
             <ReportModalProvider>
+              <DeepLinkHandler />
               <Slot />
             </ReportModalProvider>
           </Animated.View>
