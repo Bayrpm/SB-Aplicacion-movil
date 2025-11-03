@@ -45,7 +45,7 @@ const TARGET_ZOOM = 16;
 const TARGET_LAT_DELTA = 0.0015;
 const TARGET_LON_DELTA = 0.0015;
 // Zoom a partir del cual cambiamos de agrupado -> individual
-const ZOOM_CLUSTER_BREAK = 17.5;
+const ZOOM_CLUSTER_BREAK = 15.5;
 
 // ⬇️ ÚNICO cambio funcional relevante: offset del icono de categoría
 const CATEGORY_ICON_OFFSET = Platform.select({

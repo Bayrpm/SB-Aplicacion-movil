@@ -33,11 +33,11 @@ export default function CategoryPin({ iconName, pinColor = '#FF3B30', size, coun
         width: CONTAINER_W,
         height: CONTAINER_H,
         alignItems: 'center',
-        justifyContent: 'center',
+        // Importante: mantener la punta exactamente en el borde inferior
+        // para que anchor { x: 0.5, y: 1 } del Marker coincida con la coordenada.
+        justifyContent: 'flex-end',
         overflow: 'visible',
         pointerEvents: 'none',
-        paddingTop: showBadge ? BADGE_SIZE / 2 : 5, // espacio arriba para el badge
-        paddingBottom: 5, // espacio abajo para la punta
       }}
     >
       <View
