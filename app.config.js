@@ -21,17 +21,7 @@ export default ({ config }) => {
     config.android = { ...(config.android ?? {}), googleServicesFile: './google-services.json' };
   }
 
-  // Opción B: secret en EAS (recomendado si tu repo es público)
-  // Crea el secret: `eas secret:create --name GOOGLE_SERVICES_JSON --scope project --type string --value "$(cat google-services.json)"`
-  if (process.env.GOOGLE_SERVICES_JSON || process.env.GOOGLE_SERVICES_JSON_BASE64) {
-    const raw =
-      process.env.GOOGLE_SERVICES_JSON_BASE64
-        ? Buffer.from(process.env.GOOGLE_SERVICES_JSON_BASE64, 'base64').toString('utf8')
-        : process.env.GOOGLE_SERVICES_JSON;
 
-    fs.writeFileSync('./google-services.json', raw);
-    config.android = { ...(config.android ?? {}), googleServicesFile: './google-services.json' };
-  }
 
   return {
     ...config,
