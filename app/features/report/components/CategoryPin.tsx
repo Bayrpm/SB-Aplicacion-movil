@@ -22,10 +22,10 @@ export default function CategoryPin({ iconName, pinColor = '#FF3B30', size, coun
   const showBadge = count && count > 1;
   const BADGE_SIZE = 30;
 
-  // Tamaño del contenedor: reservar espacio extra para mostrar el badge medio afuera
-  // - Añadimos BADGE_SIZE a lo ancho (simétrico) y BADGE_SIZE/2 hacia arriba
-  const CONTAINER_W = HEAD + (showBadge ? BADGE_SIZE : 0);
-  const CONTAINER_H = HEAD + TIP_H + (showBadge ? Math.round(BADGE_SIZE / 2) : 0);
+  // Tamaño del contenedor: reservar espacio extra suficiente para el badge y las sombras
+  // - Añadimos más espacio para asegurar que todo se capture en el snapshot
+  const CONTAINER_W = HEAD + (showBadge ? BADGE_SIZE + 10 : 10); // +10 para padding y sombras
+  const CONTAINER_H = HEAD + TIP_H + (showBadge ? BADGE_SIZE : 10); // +10 para padding y sombras
 
   return (
     <View
@@ -33,9 +33,11 @@ export default function CategoryPin({ iconName, pinColor = '#FF3B30', size, coun
         width: CONTAINER_W,
         height: CONTAINER_H,
         alignItems: 'center',
-        justifyContent: 'flex-end',
+        justifyContent: 'center',
         overflow: 'visible',
         pointerEvents: 'none',
+        paddingTop: showBadge ? BADGE_SIZE / 2 : 5, // espacio arriba para el badge
+        paddingBottom: 5, // espacio abajo para la punta
       }}
     >
       <View
