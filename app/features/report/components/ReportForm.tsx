@@ -1,6 +1,7 @@
 import { useAuth } from '@/app/features/auth/context';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import * as Network from 'expo-network';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -113,6 +114,30 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
   const handleSubmit = async () => {
     if (!user?.id) { RNAlert.alert('Debes iniciar sesión', 'Inicia sesión para enviar una denuncia.'); return; }
     if (!titulo.trim() || !descripcion.trim()) { RNAlert.alert('Campos incompletos', 'Por favor ingresa título y descripción.'); return; }
+    // Verificar conexión antes de intentar enviar
+    try {
+      const st = await Network.getNetworkStateAsync();
+      const connected = !!st.isConnected && st.isInternetReachable !== false;
+      if (!connected) {
+        AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+          { text: 'Reintentar', onPress: () => handleSubmit() },
+          { text: 'Cancelar', style: 'cancel' },
+        ]);
+        return;
+      }
+    } catch {
+      AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+        { text: 'Reintentar', onPress: () => handleSubmit() },
+        { text: 'Cancelar', style: 'cancel' },
+      ]);
+      return;
+    }
+    
+    // Validar mínimo 30 caracteres en descripción
+    if (descripcion.trim().length < 30) {
+      AppAlert.alert('Descripción muy corta', 'La descripción debe tener al menos 30 caracteres');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -303,6 +328,24 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
   // ===== Obtener y mostrar dirección actual
   const handleUseCurrentLocation = async () => {
     try {
+      // Verificar conexión (para geocodificación inversa y servicios de red)
+      try {
+        const st = await Network.getNetworkStateAsync();
+        const connected = !!st.isConnected && st.isInternetReachable !== false;
+        if (!connected) {
+          AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+            { text: 'Reintentar', onPress: () => handleUseCurrentLocation() },
+            { text: 'Cancelar', style: 'cancel' },
+          ]);
+          return;
+        }
+      } catch {
+        AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+          { text: 'Reintentar', onPress: () => handleUseCurrentLocation() },
+          { text: 'Cancelar', style: 'cancel' },
+        ]);
+        return;
+      }
       const { requestForegroundPermissionsAsync, getCurrentPositionAsync, reverseGeocodeAsync } = await import('expo-location');
       const perm = await requestForegroundPermissionsAsync();
       if (perm.status !== 'granted') {
@@ -372,9 +415,9 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
         <View style={styles.overlayFull} />
 
         {/* Panel superior */}
-        <View style={{ position: 'absolute', left: '4%', right: '4%', top: 0, maxHeight: maxPanelHeight, paddingTop: SAFE_TOP, alignItems: 'center', justifyContent: 'flex-start', borderRadius: 12, overflow: 'hidden' }}>
+  <View style={{ position: 'absolute', left: 0, right: 0, top: 0, maxHeight: maxPanelHeight, paddingTop: SAFE_TOP, alignItems: 'center', justifyContent: 'flex-start', borderRadius: 0, overflow: 'hidden', width: '100%' }}>
           {/* Navbar */}
-          <View style={[styles.navbar, { paddingVertical: ms(8), paddingHorizontal: 6, marginTop: ms(12) }]}>
+          <View style={[styles.navbar, { paddingVertical: ms(8), paddingHorizontal: 6, marginTop: ms(12), width: '100%', borderRadius: 0 }]}> 
             <View style={{ width: '100%', flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ width: ms(120), flexDirection: 'row', alignItems: 'center' }}>
                 <TouchableOpacity onPress={() => { if (typeof onBack === 'function') onBack(); else onClose?.(); }} style={{ padding: ms(10) }} accessibilityRole="button">
@@ -418,6 +461,9 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
             <View style={{ height: TOP_OFFSET }} />
 
             <View style={{ marginBottom: ms(8), padding: 8, backgroundColor: 'transparent' }}>
+              <Text style={{ color: '#ffffff', fontSize: ms(23), fontWeight: '600', marginBottom: ms(6), letterSpacing: 0.3 }}>
+                Solo el hecho principal
+              </Text>
               <TextInput
                 ref={titleRef}
                 placeholder="Título (breve)"
@@ -448,9 +494,16 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
                   value={descripcion}
                   onFocus={() => { focusedRef.current = 'desc'; requestAnimationFrame(() => autoEnsureCurrent()); }}
                   onBlur={() => { if (focusedRef.current === 'desc') focusedRef.current = null; }}
-                  onChangeText={(t) => { setDescripcion(t); autoEnsureCurrent(); }}
+                  onChangeText={(t) => { 
+                    // Limitar a 1000 caracteres
+                    if (t.length <= 1000) {
+                      setDescripcion(t); 
+                      autoEnsureCurrent(); 
+                    }
+                  }}
                   onSelectionChange={(e) => { setDescSel(e.nativeEvent.selection); autoEnsureCurrent(); }}
                   onContentSizeChange={() => { autoEnsureCurrent(); }}
+                  maxLength={1000}
                   style={{
                     color: '#fff',
                     backgroundColor: 'transparent',
@@ -460,12 +513,32 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
                     padding: DESC_PAD,
                     minHeight: Math.max(160, ms(180)),
                     textAlignVertical: 'top',
-                    marginBottom: ms(12),
+                    marginBottom: ms(6),
                     fontSize: ms(18),
                     lineHeight: Math.round(ms(24)),
                   }}
                   multiline
                 />
+
+                {/* Contador de caracteres */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: ms(12) }}>
+                  <Text style={{ 
+                    color: descripcion.length >= 1000 ? '#EF4444' : 'rgba(255,255,255,0.6)', 
+                    fontSize: ms(12), 
+                    fontWeight: '600' 
+                  }}>
+                    {descripcion.length >= 1000 ? 'Límite alcanzado' : `${descripcion.length}/1000 caracteres`}
+                  </Text>
+                  {descripcion.length > 0 && descripcion.length < 30 && (
+                    <Text style={{ 
+                      color: '#FCD34D', 
+                      fontSize: ms(12), 
+                      fontWeight: '600' 
+                    }}>
+                      Mínimo 30 caracteres
+                    </Text>
+                  )}
+                </View>
 
                 {/* --- Medidor oculto para calcular altura hasta el cursor --- */}
                 <View style={{ position: 'absolute', left: -9999, top: -9999, width: Math.max(0, descInputW - DESC_PAD * 2) }}>

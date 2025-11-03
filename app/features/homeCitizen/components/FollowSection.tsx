@@ -1,4 +1,4 @@
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
+import { Alert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import React from 'react';
@@ -8,7 +8,7 @@ import HomeCard from './homeCard';
 export default function FollowSection() {
   const scheme = useColorScheme() ?? 'light';
 
-  const onPress = (which: string) => {
+  const onPress = async (which: string) => {
     // abrir url correspondiente
     try {
       let url = '';
@@ -17,7 +17,7 @@ export default function FollowSection() {
           url = 'https://www.instagram.com/sanbernardocl/';
           break;
         case 'facebook':
-          url = 'https://www.facebook.com/sanbernardocl/?_rdc=1&_rdr#';
+          url = 'https://www.facebook.com/sanbernardocl/?locale=es_LA';
           break;
         case 'youtube':
           url = 'https://www.youtube.com/@sanbernardo.onlinetv';
@@ -29,12 +29,15 @@ export default function FollowSection() {
           url = '';
       }
       if (url) {
-        Linking.openURL(url).catch(() => {
-          AppAlert.alert('Error', 'No se pudo abrir el enlace');
-        });
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+        } else {
+          Alert.alert('Error', 'No se puede abrir este enlace en tu dispositivo');
+        }
       }
     } catch (e) {
-      console.warn('follow error', e);
+  Alert.alert('Error', 'No se pudo abrir el enlace. Por favor intenta nuevamente.');
     }
   };
 

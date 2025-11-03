@@ -16,7 +16,9 @@
         "NSPhotoLibraryUsageDescription": "La app necesita acceder a la galería para seleccionar fotos y videos.",
         "NSMicrophoneUsageDescription": "La app necesita acceder al micrófono para grabar audio en videos."
       },
-      "associatedDomains": ["applinks:sbaplicacionmovil"]
+      "associatedDomains": [
+        "applinks:sbaplicacionmovil"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -35,7 +37,9 @@
         "READ_MEDIA_VIDEO",
         "POST_NOTIFICATIONS",
         "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "VIBRATE",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -50,18 +54,26 @@
               "host": "*"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
-      ]
-      // ...config eliminado, ahora se gestiona en app.config.js
+  ],
+   "googleServicesFile": "./google-services.json"
     },
-    
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      ["expo-updates", { "checkAutomatically": "ON_LOAD", "autoUpdateTimeout": 0 }],
+      [
+        "expo-updates",
+        {
+          "checkAutomatically": "ON_LOAD",
+          "autoUpdateTimeout": 0
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",
@@ -79,6 +91,15 @@
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Permite a SanBernardo APP usar tu ubicación."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#0A4A90",
+          "sounds": [],
+          "mode": "production"
         }
       ]
     ],

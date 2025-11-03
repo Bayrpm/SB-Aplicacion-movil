@@ -1,6 +1,9 @@
 // app/features/profileCitizen/components/settingsModal.tsx
 import CameraRequestModal from '@/app/features/profileCitizen/components/cameraRequestModal';
 import { useFontSize } from '@/app/features/settings/fontSizeContext';
+import { registerForPushNotifications, unregisterPushNotifications } from '@/app/services/notificationService';
+import PrivacyModal from '@/components/privacyModal';
+import TermsModal from '@/components/termsModal';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -8,7 +11,6 @@ import { ThemeMode, useAppColorScheme } from '@/hooks/useAppColorScheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
 import {
-  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -39,6 +41,8 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   const [showThemeSelector, setShowThemeSelector] = React.useState(false);
   const [showFontSizeSelector, setShowFontSizeSelector] = React.useState(false);
   const [showCameraRequestModal, setShowCameraRequestModal] = React.useState(false);
+  const [showTermsModal, setShowTermsModal] = React.useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = React.useState(false);
 
   // Cargar preferencias guardadas
   React.useEffect(() => {
@@ -83,18 +87,41 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
 
   const handleNotificationsPress = async () => {
     const newValue = !notificationsEnabled;
-    setNotificationsEnabled(newValue);
-    await AsyncStorage.setItem('@notifications_enabled', String(newValue));
     
-    if (newValue) {
+    try {
+      if (newValue) {
+        // Activar notificaciones: registrar el token
+        const token = await registerForPushNotifications();
+        
+        if (token) {
+          setNotificationsEnabled(true);
+          await AsyncStorage.setItem('@notifications_enabled', 'true');
+          AppAlert.alert(
+            'Notificaciones activadas',
+            'Recibirás alertas sobre el estado de tus denuncias'
+          );
+        } else {
+          // Si no se pudo obtener el token, mostrar error
+          AppAlert.alert(
+            'Error',
+            'No se pudieron activar las notificaciones. Verifica los permisos de la aplicación.'
+          );
+        }
+      } else {
+        // Desactivar notificaciones: eliminar el token
+        await unregisterPushNotifications();
+        setNotificationsEnabled(false);
+        await AsyncStorage.setItem('@notifications_enabled', 'false');
+        AppAlert.alert(
+          'Notificaciones desactivadas',
+          'No recibirás alertas sobre tus denuncias'
+        );
+      }
+    } catch (error) {
+      console.error('Error al cambiar estado de notificaciones:', error);
       AppAlert.alert(
-        'Notificaciones activadas',
-        'Recibirás alertas sobre el estado de tus denuncias'
-      );
-    } else {
-      AppAlert.alert(
-        'Notificaciones desactivadas',
-        'No recibirás alertas sobre tus denuncias'
+        'Error',
+        'Hubo un problema al cambiar el estado de las notificaciones'
       );
     }
   };
@@ -145,15 +172,11 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
   };
 
   const handleTermsPress = () => {
-    // TODO: Abrir términos y condiciones
-    const url = 'https://tuapp.cl/terminos-y-condiciones';
-    Linking.openURL(url).catch((err) => console.error('Error abriendo URL:', err));
+    setShowTermsModal(true);
   };
 
   const handlePrivacyPress = () => {
-    // TODO: Abrir políticas de privacidad
-    const url = 'https://tuapp.cl/politicas-de-privacidad';
-    Linking.openURL(url).catch((err) => console.error('Error abriendo URL:', err));
+    setShowPrivacyModal(true);
   };
 
   return (
@@ -241,7 +264,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                       Solicitar cámaras
                     </Text>
                     <Text style={[styles.settingDescription, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>
-                      Enviar solicitud al centro de control
+                      Enviar solicitud a central cámaras
                     </Text>
                   </View>
                 </View>
@@ -556,6 +579,18 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
       <CameraRequestModal
         visible={showCameraRequestModal}
         onClose={() => setShowCameraRequestModal(false)}
+      />
+
+      {/* Modal de Términos y Condiciones */}
+      <TermsModal 
+        visible={showTermsModal} 
+        onClose={() => setShowTermsModal(false)} 
+      />
+
+      {/* Modal de Políticas de Privacidad */}
+      <PrivacyModal 
+        visible={showPrivacyModal} 
+        onClose={() => setShowPrivacyModal(false)} 
       />
     </Modal>
     );

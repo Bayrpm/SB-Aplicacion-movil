@@ -60,15 +60,19 @@ export function RegistrationStep2({ onNext, onSkip, onBack, initialData }: Regis
   React.useEffect(() => {
     (global as any).validateStep2 = (omitir = false) => {
       const trimmedPhone = telefono.trim();
-      if (!trimmedPhone && !omitir) {
-        // Si no hay teléfono y no se confirmó omitir, no continuar
+      
+      // El teléfono ahora es obligatorio
+      if (!trimmedPhone) {
+        setErrors({ telefono: 'El teléfono es requerido' });
         return false;
       }
-      // Validar formato chileno si no está vacío
-      if (trimmedPhone && !trimmedPhone.match(/^\+56 [0-9] \d{4} \d{4}$/)) {
+      
+      // Validar formato chileno
+      if (!trimmedPhone.match(/^\+56 [0-9] \d{4} \d{4}$/)) {
         setErrors({ telefono: 'Formato inválido. Debe ser: +56 9 1234 5678' });
         return false;
       }
+      
       onNext({ telefono: trimmedPhone });
       return true;
     };
@@ -82,7 +86,9 @@ export function RegistrationStep2({ onNext, onSkip, onBack, initialData }: Regis
   return (
     <View style={styles.container}>
       <View style={styles.inputSection}>
-        <Text style={[styles.label, { color: labelColor }]}>Teléfono (Opcional)</Text>
+        <Text style={[styles.label, { color: labelColor }]}>
+          Teléfono <Text style={{ color: '#EF4444' }}>*</Text>
+        </Text>
         <TextInput
           style={[
             styles.input,

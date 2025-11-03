@@ -1,4 +1,3 @@
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
@@ -580,20 +579,9 @@ export default function SignUpScreen() {
                   (global as any).validateStep1();
                 }
               } else if (currentStep === 2) {
-                const currentPhone = (global as any).getCurrentPhone ? (global as any).getCurrentPhone() : '';
-                if (!currentPhone) {
-                  AppAlert.alert(
-                    '¿Seguro que quieres omitir tu teléfono?',
-                    'Podrás agregarlo más tarde en tu perfil.',
-                    [
-                      { text: 'Cancelar', style: 'cancel' },
-                      { text: 'Omitir', style: 'destructive', onPress: () => { if ((global as any).validateStep2) { (global as any).validateStep2(true); } } },
-                    ]
-                  );
-                } else {
-                  if ((global as any).validateStep2) {
-                    (global as any).validateStep2();
-                  }
+                // El teléfono ahora es obligatorio, no hay opción de omitir
+                if ((global as any).validateStep2) {
+                  (global as any).validateStep2();
                 }
               } else if (currentStep === 3) {
                 if ((global as any).validateStep3) {

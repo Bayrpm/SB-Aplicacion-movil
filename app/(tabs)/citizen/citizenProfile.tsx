@@ -1,16 +1,18 @@
 import { useAuth } from '@/app/features/auth';
 import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
-import { getCitizenProfile, type CitizenProfile } from '@/app/features/profileCitizen/api/profile.api';
+import { getCitizenProfile, type CitizenProfile, type CitizenReport } from '@/app/features/profileCitizen/api/profile.api';
+import { supabase } from '@/app/shared/lib/supabase';
 
 import EditProfileModal from '@/app/features/profileCitizen/components/editProfileModal';
 import ProfileHeader from '@/app/features/profileCitizen/components/profileHeader';
+import ReportDetailModal from '@/app/features/profileCitizen/components/reportDetailModal';
 import ReportsList from '@/app/features/profileCitizen/components/reportsList';
 import SettingsModal from '@/app/features/profileCitizen/components/settingsModal';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,6 +22,7 @@ const { width, height } = Dimensions.get('window');
 export default function HomeScreen() {
   const { user, isInspector, inspectorLoading, signOut } = useAuth();
   const router = useRouter();
+  const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const iconColor = useThemeColor({ light: '#0A4A90', dark: '#FFFFFF' }, 'tint');
@@ -46,6 +49,40 @@ export default function HomeScreen() {
   const [loading, setLoading] = React.useState(true);
   const [editModalVisible, setEditModalVisible] = React.useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = React.useState(false);
+  
+  // Estados para manejar el modal de detalle desde notificaciones
+  const [selectedReport, setSelectedReport] = React.useState<CitizenReport | null>(null);
+  const [showDetailModal, setShowDetailModal] = React.useState(false);
+
+  // Detectar si viene desde una notificación y cargar el reporte
+  React.useEffect(() => {
+    if (params.openReportId) {
+      console.log('🔔 Abriendo reporte desde notificación:', params.openReportId);
+      loadReportFromNotification(params.openReportId as string);
+    }
+  }, [params.openReportId]);
+
+  // Función para cargar un reporte específico desde su ID
+  const loadReportFromNotification = async (reportId: string) => {
+    try {
+      const { data: reportData, error } = await supabase
+        .from('denuncias')
+        .select('*')
+        .eq('id', reportId)
+        .single();
+
+      if (error) {
+        console.error('Error cargando reporte:', error);
+        AppAlert.alert('Error', 'No se pudo cargar el detalle del reporte');
+        return;
+      }
+
+      setSelectedReport(reportData as CitizenReport);
+      setShowDetailModal(true);
+    } catch (error) {
+      console.error('Error inesperado cargando reporte:', error);
+    }
+  };
 
   // Cargar el perfil del ciudadano
   const loadProfile = async () => {
@@ -217,6 +254,16 @@ export default function HomeScreen() {
       <SettingsModal
         visible={settingsModalVisible}
         onClose={() => setSettingsModalVisible(false)}
+      />
+
+      {/* Modal de detalle de reporte (desde notificaciones) */}
+      <ReportDetailModal
+        visible={showDetailModal}
+        onClose={() => {
+          setShowDetailModal(false);
+          setSelectedReport(null);
+        }}
+        report={selectedReport}
       />
     </View>
   );

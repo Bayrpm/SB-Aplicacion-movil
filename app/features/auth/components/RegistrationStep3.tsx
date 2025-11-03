@@ -1,3 +1,5 @@
+import PrivacyModal from '@/components/privacyModal';
+import TermsModal from '@/components/termsModal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useRef, useState } from 'react';
@@ -22,6 +24,9 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
   const inputTextColor = useThemeColor({}, 'text');
   const [email, setEmail] = useState(initialData?.email || '');
   const [password, setPassword] = useState(initialData?.password || '');
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const passwordRef = useRef<TextInput | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -32,6 +37,13 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
           email: email.trim(),
           password,
         };
+      
+      // Validar aceptación de términos
+      if (!aceptaTerminos) {
+        setErrors({ terminos: 'Debe aceptar los términos y condiciones' });
+        return false;
+      }
+      
       const validation = registrationStep3Schema.safeParse(data);
       if (!validation.success) {
         const fieldErrors: Record<string, string> = {};
@@ -59,7 +71,7 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
       onNext({ email: data.email, password: data.password });
       return true;
     };
-  }, [email, password, onNext]);
+  }, [email, password, aceptaTerminos, onNext]);
 
   React.useEffect(() => {
     if ((global as any).setStep3Errors) {
@@ -169,8 +181,72 @@ export function RegistrationStep3({ onNext, onBack, initialData, onInputFocus }:
             </View>
           ))}
         </View>
+
+        {/* Checkbox de términos y condiciones */}
+        <View style={styles.checkboxWrapper}>
+          <TouchableOpacity 
+            style={styles.checkboxContainer}
+            onPress={() => {
+              setAceptaTerminos(!aceptaTerminos);
+              if (errors.terminos) {
+                setErrors({ ...errors, terminos: '' });
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[
+              styles.checkbox, 
+              { borderColor: errors.terminos ? '#EF4444' : inputBorder },
+              aceptaTerminos && { backgroundColor: '#0A4A90', borderColor: '#0A4A90' }
+            ]}>
+              {aceptaTerminos && (
+                <IconSymbol name="check" size={14} color="#FFFFFF" />
+              )}
+            </View>
+            <Text style={[styles.checkboxLabel, { color: errors.terminos ? '#EF4444' : labelColor }]}>
+              Acepto los{' '}
+              <Text
+                style={styles.linkText}
+                onPress={(e) => {
+                  // Evita que el toque cambie el estado del checkbox
+                  // y abre el modal de Términos
+                  // @ts-ignore
+                  e?.stopPropagation?.();
+                  setShowTermsModal(true);
+                }}
+              >
+                Términos y Condiciones
+              </Text>
+              {' '}y la{' '}
+              <Text
+                style={styles.linkText}
+                onPress={(e) => {
+                  // @ts-ignore
+                  e?.stopPropagation?.();
+                  setShowPrivacyModal(true);
+                }}
+              >
+                Política de Privacidad
+              </Text>
+              {' '}<Text style={{ color: '#EF4444' }}>*</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+        {errors.terminos && (
+          <Text style={[styles.errorText, { marginTop: 4, marginBottom: 8 }]}>{errors.terminos}</Text>
+        )}
         {/* confirmPassword removed by request; only email + password remain */}
       </View>
+
+      {/* Modal de Términos y Condiciones */}
+      <TermsModal
+        visible={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+      />
+      <PrivacyModal
+        visible={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+      />
     </View>
   );
 }
@@ -186,13 +262,15 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     justifyContent: 'flex-start',
-    alignItems: 'stretch'
+    alignItems: 'stretch',
+    overflow: 'hidden',
   },
   inputSection: {
     width: '100%',
     justifyContent: 'center',
     alignItems: 'stretch',
-    marginBottom: 20
+    marginBottom: 16,
+    overflow: 'hidden',
   },
   label: {
     fontSize: 16,
@@ -246,9 +324,8 @@ const styles = StyleSheet.create({
     minHeight: 50
   },
   passwordRulesContainer: {
-    marginTop: 10,
-    marginBottom: 16,
-    paddingBottom: 16,
+    marginTop: 4,
+    marginBottom: 4,
     paddingTop: 6,
     paddingHorizontal: 8,
     backgroundColor: 'transparent',
@@ -264,7 +341,46 @@ const styles = StyleSheet.create({
   marginBottom: 2,
   flexWrap: 'wrap',
   flexShrink: 1
-  }
+  },
+  checkboxWrapper: {
+    width: '100%',
+    overflow: 'hidden',
+    paddingHorizontal: 0,
+    alignSelf: 'stretch',
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 0,
+    marginBottom: 0,
+    paddingLeft: 0,
+    paddingRight: 0,
+    width: '100%',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 17,
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    paddingRight: 0,
+  },
+  linkText: {
+    color: '#0A4A90',
+    textDecorationLine: 'underline',
+    fontWeight: '600',
+  },
 });
 
 // Default export for expo-router route detection

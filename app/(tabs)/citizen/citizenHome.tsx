@@ -1,10 +1,12 @@
 import { Image } from 'expo-image';
+import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import EmergencyCarousel from '@/app/features/homeCitizen/components/emergencyCarousel';
 import FollowSection from '@/app/features/homeCitizen/components/followSection';
 import HomeCard from '@/app/features/homeCitizen/components/homeCard';
+import MoreInfo from '@/app/features/homeCitizen/components/moreInfo';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -15,6 +17,8 @@ export default function CitizenHome() {
   const logoSource = scheme === 'dark'
     ? require('@/assets/images/img_logo_blanco.png')
     : require('@/assets/images/img_logo.png');
+
+  const [showMoreInfo, setShowMoreInfo] = useState(false);
 
   // Texto para la card. Separado en título y descripción para destacar el principal.
   const cardTitle = 'Tú voz importa, denuncia y apoya a tu comunidad.';
@@ -38,7 +42,7 @@ export default function CitizenHome() {
         {/* Logo + HomeCard ahora forman parte del scroll (arriba) */}
         <View style={{ alignItems: 'center', width: '100%' }}>
           <View style={{ width: '100%', marginTop: 20 }}>
-            <HomeCard title={cardTitle} description={cardDescription} buttonText="Conoce más" onPress={() => { /* abrir info */ }} />
+            <HomeCard title={cardTitle} description={cardDescription} buttonText="Conoce más" onPress={() => setShowMoreInfo(true)} />
           </View>
         </View>
 
@@ -57,6 +61,9 @@ export default function CitizenHome() {
         {/* Sección: Síguenos */}
         <FollowSection />
       </View>
+
+      {/* Modal de información */}
+      <MoreInfo visible={showMoreInfo} onClose={() => setShowMoreInfo(false)} />
     </ParallaxScrollView>
   );
 }

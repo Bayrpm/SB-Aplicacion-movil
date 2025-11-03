@@ -2,9 +2,11 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getMapStyle } from '../lib/mapStyles';
 // usamos IconSymbol centralizado en lugar de importar familias directamente
+import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Dimensions, Easing, PixelRatio, Platform, StyleSheet, Text, View } from 'react-native';
+import * as Network from 'expo-network';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Dimensions, Easing, PixelRatio, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Circle, Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
 // view-shot para capturar la vista del CategoryPin como imagen nativa
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,20 +47,64 @@ const TARGET_ZOOM = 16;
 const TARGET_LAT_DELTA = 0.0015;
 const TARGET_LON_DELTA = 0.0015;
 // Zoom a partir del cual cambiamos de agrupado -> individual
-const ZOOM_CLUSTER_BREAK = 15.5;
+const ZOOM_CLUSTER_BREAK = 18.5;
 
-// ⬇️ ÚNICO cambio funcional relevante: offset del icono de categoría
-const CATEGORY_ICON_OFFSET = Platform.select({
-  ios:      { x: 0, y: -32 }, // iOS centrado en la cabeza del pin
-  android:  { x: 0, y: -28 }, // Android centrado en la cabeza del pin
-  default:  { x: 0, y: -30 },
-});
 
 const styles = StyleSheet.create({
   container: { flex: 1, borderRadius: 16, overflow: 'hidden' },
   map: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   fabContainer: { position: 'absolute', right: 24, bottom: 32, alignItems: 'center', zIndex: 10 },
+  networkErrorContainer: {
+    position: 'absolute',
+    top: '35%',
+    left: 20,
+    right: 20,
+    padding: 24,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  networkErrorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  networkErrorText: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryButton: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0A4A90',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    minWidth: 140,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
   compassFab: {
     marginBottom: Math.round(12 * SCALE),
     width: COMPASS_SIZE, height: COMPASS_SIZE, borderRadius: Math.round(COMPASS_SIZE / 2),
@@ -166,6 +212,8 @@ export default function CurrentLocationMap() {
     }>>([]);
   const [freezeMarkers, setFreezeMarkers] = useState(false);
   const markersLoadedRef = useRef(false);
+  const [networkError, setNetworkError] = useState(false);
+  const [loadingReports, setLoadingReports] = useState(false);
   
   // ======== Modal de detalle de denuncia ========
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
@@ -386,25 +434,43 @@ export default function CurrentLocationMap() {
 
   // ======== Cargar denuncias públicas ========
   const loadPublicReports = async () => {
+    setLoadingReports(true);
+    setNetworkError(false);
     try {
+      // Verificar conectividad antes de llamar a la API
+      try {
+        const st = await Network.getNetworkStateAsync();
+        const connected = !!st.isConnected && st.isInternetReachable !== false;
+        if (!connected) {
+          setNetworkError(true);
+          return;
+        }
+      } catch {
+        // Si falla la verificación, asumimos posible falta de red
+        setNetworkError(true);
+        return;
+      }
       const reports = await fetchPublicReports();
       setPublicReports(reports);
       markersLoadedRef.current = true;
-  // Permitir que los markers rendericen sus vistas y luego congelar
-  setFreezeMarkers(false);
-  // ampliar ventana para evitar rasterización parcial (Android)
-  setTimeout(() => setFreezeMarkers(true), 2200);
+      setNetworkError(false);
+      // Permitir que los markers rendericen sus vistas y luego congelar
+      setFreezeMarkers(false);
+      // ampliar ventana para evitar rasterización parcial (Android)
+      setTimeout(() => setFreezeMarkers(true), 2200);
     } catch (err) {
-      
+      setNetworkError(true);
+    } finally {
+      setLoadingReports(false);
     }
   };
 
-  // Cargar denuncias solo una vez al montar
-  useEffect(() => {
-    if (!markersLoadedRef.current) {
+  // Cargar denuncias al montar y cuando se vuelve a la pantalla
+  useFocusEffect(
+    useCallback(() => {
       loadPublicReports();
-    }
-  }, []);
+    }, [])
+  );
 
   // ======== Asegurar zoom/cámara inicial ========
   const ensureInitialCenter = async () => {
@@ -965,6 +1031,32 @@ export default function CurrentLocationMap() {
       <IconSymbol name="arrow-drop-up" size={EO_ARROW_SIZE} color={cardinal === 'O' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowEO, styles.arrowWestEO, { opacity: cardinal === 'O' ? 1 : 0.9 }]} />
         </View>
       </View>
+
+      {/* Mensaje de error de conexión */}
+      {networkError && (
+        <View style={[styles.networkErrorContainer, { backgroundColor: scheme === 'dark' ? 'rgba(7, 18, 41, 0.95)' : 'rgba(255, 255, 255, 0.95)' }]}>
+          <IconSymbol name="wifi-off" size={48} color="#EF4444" />
+          <Text style={[styles.networkErrorTitle, { color: scheme === 'dark' ? '#E6EEF8' : '#0F1724' }]}>Sin conexión a la red</Text>
+          <Text style={[styles.networkErrorText, { color: scheme === 'dark' ? '#9CA3AF' : '#6B7280' }]}>
+            No se pudieron cargar las denuncias. Verifica tu conexión.
+          </Text>
+          <TouchableOpacity
+            onPress={loadPublicReports}
+            disabled={loadingReports}
+            style={[styles.retryButton, { opacity: loadingReports ? 0.6 : 1 }]}
+            activeOpacity={0.8}
+          >
+            {loadingReports ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <IconSymbol name="refresh" size={20} color="#FFFFFF" />
+                <Text style={styles.retryButtonText}>Reintentar</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Modal de detalle de denuncia */}
       <ReportDetailModal

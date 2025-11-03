@@ -2,6 +2,7 @@
 import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import * as Network from 'expo-network';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,6 +23,7 @@ export default function ReportsList() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [networkError, setNetworkError] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({
     orderBy: 'fecha_desc',
     categoryId: null,
@@ -63,6 +65,21 @@ export default function ReportsList() {
 
   const loadInitialReports = useCallback(async () => {
     setLoading(true);
+    setNetworkError(false);
+    // Verificar conectividad antes de llamar a la API
+    try {
+      const st = await Network.getNetworkStateAsync();
+      const connected = !!st.isConnected && st.isInternetReachable !== false;
+      if (!connected) {
+        setNetworkError(true);
+        setLoading(false);
+        return;
+      }
+    } catch {
+      setNetworkError(true);
+      setLoading(false);
+      return;
+    }
     const { data, error, hasMore: more } = await getCitizenReports(
       LIMIT,
       0,
@@ -71,19 +88,34 @@ export default function ReportsList() {
       filters.estadoId
     );
     if (error) {
-      console.error('Error cargando denuncias:', error);
+      setNetworkError(true);
       setLoading(false);
       return;
     }
     setReports(data || []);
     setHasMore(!!more);
     setOffset(LIMIT);
+    setNetworkError(false);
     setLoading(false);
   }, [filters]);
 
   const loadMoreReports = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
+    // Verificar conectividad antes de paginar
+    try {
+      const st = await Network.getNetworkStateAsync();
+      const connected = !!st.isConnected && st.isInternetReachable !== false;
+      if (!connected) {
+        setNetworkError(true);
+        setLoadingMore(false);
+        return;
+      }
+    } catch {
+      setNetworkError(true);
+      setLoadingMore(false);
+      return;
+    }
     const { data, error, hasMore: more } = await getCitizenReports(
       LIMIT,
       offset,
@@ -92,7 +124,6 @@ export default function ReportsList() {
       filters.estadoId
     );
     if (error) {
-      console.error('Error cargando más denuncias:', error);
       setLoadingMore(false);
       return;
     }
@@ -149,6 +180,34 @@ export default function ReportsList() {
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={accentColor} />
   <Text style={[styles.loadingText, { color: iconColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Cargando denuncias...</Text>
+      </View>
+    );
+  }
+
+  // Mostrar error de red
+  if (networkError && reports.length === 0) {
+    return (
+      <View style={styles.centerContainer}>
+        <IconSymbol name="wifi-off" size={48} color="#EF4444" />
+        <Text style={[styles.errorTitle, { color: textColor, fontSize: getFontSizeValue(fontSize, 18) }]}>
+          Sin conexión a la red
+        </Text>
+        <Text style={[styles.errorSubtitle, { color: iconColor, fontSize: getFontSizeValue(fontSize, 14) }]}>
+          No se pudieron cargar tus denuncias
+        </Text>
+        <TouchableOpacity
+          style={[
+            styles.retryButton,
+            { backgroundColor: accentColor }
+          ]}
+          onPress={loadInitialReports}
+          activeOpacity={0.7}
+        >
+          <IconSymbol name="refresh" size={20} color="#FFFFFF" />
+          <Text style={[styles.retryButtonText, { fontSize: getFontSizeValue(fontSize, 15) }]}>
+            Reintentar
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -297,6 +356,37 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     marginTop: 8,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  errorSubtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
   emptyContainer: {
     paddingVertical: 60,

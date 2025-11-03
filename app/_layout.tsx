@@ -9,8 +9,10 @@ import 'react-native-reanimated';
 
 import { AuthProvider, SplashScreen, useAuth } from '@/app/features/auth';
 import { ReportModalProvider, useReportModal } from '@/app/features/report/context';
+import { unregisterPushNotifications } from '@/app/services/notificationService';
 import AlertBox from '@/components/ui/AlertBox';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useNotifications } from '@/hooks/useNotifications';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -70,6 +72,10 @@ function RootLayoutNav() {
   const { session, loading, isInspector, inspectorLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  
+  // Inicializar notificaciones push
+  const { notificationToken } = useNotifications();
+  
   // Mantener la Splash visible hasta que la navegación esté alineada con el estado de auth
   const [navReady, setNavReady] = useState(false);
   // Asegurar un mínimo de 5s de Splash visible
@@ -82,6 +88,13 @@ function RootLayoutNav() {
   const appOpacity = useRef(new Animated.Value(0)).current;
   const appTranslateY = useRef(new Animated.Value(8)).current; // leve desplazamiento hacia arriba
   const appScale = useRef(new Animated.Value(0.995)).current;
+
+  // Limpiar token de notificación al cerrar sesión
+  useEffect(() => {
+    if (!session) {
+      unregisterPushNotifications();
+    }
+  }, [session]);
 
   // Cargar y aplicar tema guardado al iniciar la app
   useEffect(() => {

@@ -4,19 +4,20 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
+import * as Network from 'expo-network';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  Keyboard,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    Keyboard,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -328,6 +329,24 @@ export default function EditLocationScreen() {
       setSuggestions([]);
       return;
     }
+    // Verificar conexión antes de buscar sugerencias
+    try {
+      const st = await Network.getNetworkStateAsync();
+      const connected = !!st.isConnected && st.isInternetReachable !== false;
+      if (!connected) {
+        AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+          { text: 'Reintentar', onPress: () => runAutocomplete(text) },
+          { text: 'Cancelar', style: 'cancel' },
+        ]);
+        return;
+      }
+    } catch {
+      AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+        { text: 'Reintentar', onPress: () => runAutocomplete(text) },
+        { text: 'Cancelar', style: 'cancel' },
+      ]);
+      return;
+    }
     if (abortControllerRef.current) abortControllerRef.current.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -378,6 +397,24 @@ export default function EditLocationScreen() {
         return;
       }
       if (item.placeId) {
+        // Verificar conexión antes de obtener detalles del lugar
+        try {
+          const st = await Network.getNetworkStateAsync();
+          const connected = !!st.isConnected && st.isInternetReachable !== false;
+          if (!connected) {
+            AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+              { text: 'Reintentar', onPress: () => onSelectSuggestion(item) },
+              { text: 'Cancelar', style: 'cancel' },
+            ]);
+            return;
+          }
+        } catch {
+          AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+            { text: 'Reintentar', onPress: () => onSelectSuggestion(item) },
+            { text: 'Cancelar', style: 'cancel' },
+          ]);
+          return;
+        }
         const coords = await fetchPlaceDetails(item.placeId);
         if (coords) {
           await animateTo(coords.lat, coords.lon, 19);
@@ -392,6 +429,24 @@ export default function EditLocationScreen() {
     const q = text.trim();
     if (!q) return;
     try {
+      // Verificar conexión antes de buscar
+      try {
+        const st = await Network.getNetworkStateAsync();
+        const connected = !!st.isConnected && st.isInternetReachable !== false;
+        if (!connected) {
+          AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+            { text: 'Reintentar', onPress: () => runFreeSearch(text) },
+            { text: 'Cancelar', style: 'cancel' },
+          ]);
+          return;
+        }
+      } catch {
+        AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+          { text: 'Reintentar', onPress: () => runFreeSearch(text) },
+          { text: 'Cancelar', style: 'cancel' },
+        ]);
+        return;
+      }
       setSuggestLoading(true);
       await runAutocomplete(q);
       const items = cacheRef.current.get(`${q}|g`) || suggestions;
@@ -448,6 +503,24 @@ export default function EditLocationScreen() {
 
   const centerToMyLocation = async () => {
     try {
+      // Verificar conexión para geocodificación de dirección (la ubicación GPS puede funcionar offline)
+      try {
+        const st = await Network.getNetworkStateAsync();
+        const connected = !!st.isConnected && st.isInternetReachable !== false;
+        if (!connected) {
+          AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+            { text: 'Reintentar', onPress: () => centerToMyLocation() },
+            { text: 'Cancelar', style: 'cancel' },
+          ]);
+          return;
+        }
+      } catch {
+        AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+          { text: 'Reintentar', onPress: () => centerToMyLocation() },
+          { text: 'Cancelar', style: 'cancel' },
+        ]);
+        return;
+      }
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         AppAlert.alert('Ubicación', 'Permiso denegado para acceder a la ubicación.');
