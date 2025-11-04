@@ -59,8 +59,7 @@
             "DEFAULT"
           ]
         }
-  ],
-   "googleServicesFile": "./google-services.json"
+  ]
     },
     "web": {
       "output": "static",
