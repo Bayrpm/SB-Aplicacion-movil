@@ -1,5 +1,4 @@
 // app.config.js
-import fs from 'fs';
 
 export default ({ config }) => {
   // --- TU CONFIG EXISTENTE (Google Maps) ---
@@ -14,12 +13,6 @@ export default ({ config }) => {
     ...(config.ios?.config ?? {}),
     googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
   };
-
-  // --- FCM: google-services.json ---
-  // Opción A: archivo commiteado en la raíz del proyecto
-  if (fs.existsSync('./google-services.json')) {
-    config.android = { ...(config.android ?? {}), googleServicesFile: './google-services.json' };
-  }
 
 
 
