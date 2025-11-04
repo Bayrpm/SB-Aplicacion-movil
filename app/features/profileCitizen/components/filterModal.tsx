@@ -4,14 +4,15 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useState } from 'react';
 import {
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type FilterOrderBy = 'fecha_desc' | 'fecha_asc';
 
@@ -54,6 +55,7 @@ export default function FilterModal({
   categories,
   estados,
 }: FilterModalProps) {
+  const insets = useSafeAreaInsets();
   const { fontSize } = useFontSize();
   const [orderBy, setOrderBy] = useState<FilterOrderBy>(currentFilters.orderBy);
   const [categoryId, setCategoryId] = useState<number | null>(
@@ -285,7 +287,12 @@ export default function FilterModal({
           </ScrollView>
 
           {/* Footer con botones */}
-          <View style={[styles.footer, { borderTopColor: borderColor }]}>
+          <View
+            style={[
+              styles.footer,
+              { borderTopColor: borderColor, paddingBottom: 16 + insets.bottom, paddingTop: 16 },
+            ]}
+          >
             <TouchableOpacity
               style={[styles.resetButton, { borderColor: mutedColor }]}
               onPress={handleReset}
@@ -392,7 +399,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 0,
     borderTopWidth: 1,
   },
   resetButton: {

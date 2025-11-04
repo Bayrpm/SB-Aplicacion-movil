@@ -72,12 +72,23 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
   // ===== Teclado
   const [kbH, setKbH] = useState(0);
   const [kbShown, setKbShown] = useState(false);
+  // Detectar si en Android la ventana se "reduce" (adjustResize) o se "desplaza" (adjustPan) midiendo el alto real del contenedor
+  const [rootH, setRootH] = useState<number>(Dimensions.get('window').height);
+  const baseRootHRef = useRef<number>(Dimensions.get('window').height);
+  const [androidKbMode, setAndroidKbMode] = useState<'resize' | 'pan'>('resize');
   useEffect(() => {
     const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const s1 = Keyboard.addListener(showEvt as any, (e: any) => {
       setKbShown(true);
       setKbH(e?.endCoordinates?.height ?? 0);
+      // Evaluar si el alto del contenedor se redujo (Android adjustResize) o no (adjustPan)
+      if (Platform.OS === 'android') {
+        try {
+          const delta = Math.max(0, (baseRootHRef.current || 0) - (rootH || 0));
+          setAndroidKbMode(delta > 40 ? 'resize' : 'pan');
+        } catch {}
+      }
       setTimeout(() => autoEnsureCurrent(), 0);
       setTimeout(() => autoEnsureCurrent(), 80);
     });
@@ -241,11 +252,16 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
 
   // ===== Footer (altura real) y paddings
   const [footerH, setFooterH] = useState(0);
-  const bottomPadWhenKB = 6;
-  const bottomPadNoKB = 6; // fixed small padding inside footer; footerBottomOffset keeps it above system nav
-  const contentBottom = (kbH > 0 ? kbH : bottomPadNoKB) + footerH + ms(28);
-  // footer offset from bottom: siempre encima de la barra del sistema
-  const footerBottomOffset = (kbH > 0 ? kbH : 0) + (insets.bottom || 12);
+  // Sin espacio extra cuando el teclado está visible: el footer debe tocar el borde del teclado
+  const bottomPadWhenKB = 0;
+  const bottomPadNoKB = 6; // padding interno mínimo cuando no hay teclado
+  // En iOS, usar kbH real. En Android, si el modo es 'pan' (la ventana no se reduce), usar kbH; si es 'resize', usar 0.
+  const effKbInset = kbShown
+    ? (Platform.OS === 'ios' ? kbH : (androidKbMode === 'pan' ? kbH : 0))
+    : 0;
+  const contentBottom = effKbInset + (kbShown ? bottomPadWhenKB : bottomPadNoKB) + footerH + ms(28);
+  // Offset inferior del footer: cuando hay teclado, usar effKbInset; si no, usar insets.bottom
+  const footerBottomOffset = kbShown ? effKbInset : (insets.bottom || 0);
 
   // ===== Cursor tracking para DESCRIPCIÓN =====
   // padding/border del TextInput (mantener sincronizado con estilos)
@@ -410,7 +426,11 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
   // ===== Render
   return (
     <Modal visible transparent animationType="fade" hardwareAccelerated={Platform.OS === 'android'} statusBarTranslucent onRequestClose={onClose}>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1 }} onLayout={(e) => {
+        const h = Math.round(e.nativeEvent.layout.height);
+        setRootH(h);
+        if (!kbShown) baseRootHRef.current = h;
+      }}>
         {/* overlay */}
         <View style={styles.overlayFull} />
 
@@ -559,7 +579,7 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
         {/* Footer (medimos alto real) */}
         <View
           onLayout={(e) => setFooterH(Math.max(0, Math.round(e.nativeEvent.layout.height)))}
-          style={[styles.footerAbsolute, { bottom: footerBottomOffset, paddingBottom: kbH > 0 ? bottomPadWhenKB : bottomPadNoKB }]}
+          style={[styles.footerAbsolute, { bottom: footerBottomOffset, paddingBottom: kbShown ? bottomPadWhenKB : bottomPadNoKB }]}
         >
           <View style={styles.footerTopRowInner}>
             <TouchableOpacity style={styles.footerCircleBtn} onPress={() => AppAlert.alert('Próximamente', 'Función de cámara disponible próximamente')}>

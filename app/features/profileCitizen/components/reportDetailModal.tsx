@@ -3,16 +3,17 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useState } from 'react';
 import {
-  Dimensions,
-  Image,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    Image,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CitizenReport, getCategoryById, getCitizenProfile, getEstadoById } from '../api/profile.api';
 
 interface ReportDetailModalProps {
@@ -75,6 +76,7 @@ export default function ReportDetailModal({
   onToggleLike,
   isLiked = false,
 }: ReportDetailModalProps) {
+  const insets = useSafeAreaInsets();
   const { fontSize } = useFontSize();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background'); // Color específico para cards
   const textColor = useThemeColor({}, 'text');
@@ -293,7 +295,12 @@ export default function ReportDetailModal({
             </ScrollView>
 
             {/* Footer con botones */}
-            <View style={[styles.footer, { borderTopColor: borderColor }]}>
+            <View
+              style={[
+                styles.footer,
+                { borderTopColor: borderColor, paddingBottom: 16 + insets.bottom, paddingTop: 16 },
+              ]}
+            >
               <TouchableOpacity
                 style={[
                   styles.likeButton, 
@@ -576,7 +583,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 0,
     borderTopWidth: 1,
   },
   likeButton: {

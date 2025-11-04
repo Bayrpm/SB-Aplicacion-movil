@@ -8,7 +8,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Tabs, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Dimensions, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Some navigator props (sceneContainerStyle) aren't exposed via the typed Tabs from expo-router.
@@ -66,11 +66,9 @@ export default function TabLayout() {
   const { isReportFormOpen } = useReportModal();
   const segments = useSegments();
 
-  // En Android la diferencia entre screen y window suele reflejar la navigation bar (soft keys)
-  const navBarHeightAndroid = Platform.OS === 'android' ? Math.max(0, Dimensions.get('screen').height - Dimensions.get('window').height) : 0;
-  const extraBottom = Math.max(insets.bottom || 0, navBarHeightAndroid || 0);
-  const TAB_BAR_BASE = 72; // altura base usada antes
-  const tabBarHeight = TAB_BAR_BASE + extraBottom;
+  // Usar solo el safe area bottom; evita offsets extra en modo "ocultar notch" o distintos navegadores del sistema
+  const TAB_BAR_BASE = 72; // altura base del contenido visible de la tab bar
+  const tabBarHeight = TAB_BAR_BASE + (insets.bottom || 0);
 
   useEffect(() => {
     let mounted = true;
@@ -152,7 +150,9 @@ export default function TabLayout() {
       screenOptions={{
         // Forzar que el contenido de cada pantalla reserve espacio inferior igual a tabBarHeight
         // note: contentStyle on bottom tabs isn't always typed; we still keep tabBar absolute anchoring
-  tabBarActiveTintColor: '#FFFFFF',
+        tabBarActiveTintColor: '#FFFFFF',
+        tabBarHideOnKeyboard: true,
+        safeAreaInsets: { bottom: 0, top: 0 },
         headerShown: false,
         tabBarShowLabel: false,
         tabBarButton: HapticTab,
@@ -160,9 +160,9 @@ export default function TabLayout() {
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: extraBottom, // ancla la tab bar justo encima de la barra de navegación del sistema
-          height: TAB_BAR_BASE,
-          paddingBottom: 12,
+          bottom: 0, // anclada al borde; altura incluye insets.bottom
+          height: tabBarHeight,
+          paddingBottom: insets.bottom || 0,
           paddingTop: 8,
           overflow: 'visible',
           backgroundColor: '#0A4A90',

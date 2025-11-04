@@ -6,18 +6,19 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Keyboard,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface EditProfileModalProps {
   visible: boolean;
@@ -32,6 +33,7 @@ export default function EditProfileModal({
   profile,
   onProfileUpdated,
 }: EditProfileModalProps) {
+  const insets = useSafeAreaInsets();
   const { fontSize } = useFontSize();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background'); // Color específico para modo oscuro
   const textColor = useThemeColor({}, 'text');
@@ -312,7 +314,12 @@ export default function EditProfileModal({
             </ScrollView>
 
             {/* Botones de acción */}
-            <View style={styles.footer}>
+            <View
+              style={[
+                styles.footer,
+                { paddingBottom: 16 + (keyboardHeight > 0 ? 0 : insets.bottom), paddingTop: 16 },
+              ]}
+            >
               <TouchableOpacity
                 style={[
                   styles.button, 
@@ -431,7 +438,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 0,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },

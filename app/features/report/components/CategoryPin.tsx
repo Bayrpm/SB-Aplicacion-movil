@@ -32,6 +32,8 @@ export default function CategoryPin({ iconName, pinColor = '#FF3B30', size, coun
 
   return (
     <View
+      collapsable={false}
+      renderToHardwareTextureAndroid
       style={{
         width: CONTAINER_W,
         height: CONTAINER_H,

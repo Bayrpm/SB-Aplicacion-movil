@@ -1,4 +1,3 @@
-import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getMapStyle } from '../lib/mapStyles';
 // usamos IconSymbol centralizado en lugar de importar familias directamente
@@ -192,12 +191,8 @@ export default function CurrentLocationMap() {
   
   const mapStyle = React.useMemo(() => getMapStyle(scheme), [scheme]);
   
-  const navBarHeightAndroid = Platform.OS === 'android'
-    ? Math.max(0, Dimensions.get('screen').height - Dimensions.get('window').height)
-    : 0;
-  const bottomOverlayHeight = Math.max(insets.bottom || 0, navBarHeightAndroid || 0);
   const TAB_BAR_BASE = 72;
-  const tabBarHeightLocal = TAB_BAR_BASE + bottomOverlayHeight;
+  const tabBarHeightLocal = TAB_BAR_BASE + (insets.bottom || 0);
 
   // ======== Estado de denuncias públicas ========
     const [publicReports, setPublicReports] = useState<Array<{
@@ -703,6 +698,9 @@ export default function CurrentLocationMap() {
           const ref = hiddenRefs.current[key];
           if (!ref) continue;
           try {
+            // Esperar un frame para asegurar layout medido, evitando capturas parciales/cortadas
+            await new Promise((r) => requestAnimationFrame(() => r(null)));
+            await new Promise((r) => setTimeout(r, 16));
             const uri = await captureRef(ref, { format: 'png', quality: 1, result: 'data-uri' });
             setIconUris((s) => ({ ...s, [key]: uri }));
           } catch (err) {
@@ -973,9 +971,7 @@ export default function CurrentLocationMap() {
 
       {/* Debug overlay 'Denuncias' removed per UX request */}
 
-      {bottomOverlayHeight > 0 && (
-        <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: bottomOverlayHeight, backgroundColor: Colors[scheme ?? 'light'].background }} />
-      )}
+      {/* Ya no renderizamos relleno inferior adicional; la tab bar maneja el inset */}
 
       <View style={[styles.fabContainer, { bottom: Math.max(fabBottomAboveTab, fabBottomOffset) }]}>
         <Button

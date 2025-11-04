@@ -3,19 +3,21 @@ import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Keyboard,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface CameraRequestModalProps {
   visible: boolean;
@@ -26,6 +28,7 @@ export default function CameraRequestModal({
   visible,
   onClose,
 }: CameraRequestModalProps) {
+  const insets = useSafeAreaInsets();
   const { fontSize } = useFontSize();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background');
   const textColor = useThemeColor({}, 'text');
@@ -51,6 +54,16 @@ export default function CameraRequestModal({
   
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [sending, setSending] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => {
+      try { show.remove(); } catch {}
+      try { hide.remove(); } catch {}
+    };
+  }, []);
 
   const handleCancel = () => {
     // Limpiar todos los campos
@@ -451,7 +464,15 @@ export default function CameraRequestModal({
           </ScrollView>
 
           {/* Botones de acción */}
-          <View style={styles.footer}>
+          <View
+            style={[
+              styles.footer,
+              {
+                paddingBottom: 16 + (keyboardVisible ? 0 : insets.bottom),
+                paddingTop: 16,
+              },
+            ]}
+          >
             <TouchableOpacity
               style={[
                 styles.button,
@@ -611,7 +632,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 0,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },

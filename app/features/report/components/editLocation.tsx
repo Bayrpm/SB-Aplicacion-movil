@@ -12,12 +12,11 @@ import {
     Dimensions,
     FlatList,
     Keyboard,
-    Platform,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -58,13 +57,8 @@ export default function EditLocationScreen() {
   // Ajuste: bajar 8% respecto al levantamiento previo (queda +2% neto)
   const EXTRA_LIFT = Math.round(Dimensions.get('window').height * 0.02);
 
-  // Bottom / tab safe area
-  const navBarHeightAndroid =
-    Platform.OS === 'android'
-      ? Math.max(0, Dimensions.get('screen').height - Dimensions.get('window').height)
-      : 0;
-  const bottomOverlayHeight = Math.max(insets.bottom || 0, Math.min(navBarHeightAndroid || 0, 48));
-  const tabBarHeightLocal = bottomOverlayHeight || 0;
+  // Bottom / tab safe area: confiar en insets.bottom (evita huecos en modo "ocultar cámara")
+  const tabBarHeightLocal = insets.bottom || 0;
 
   // BBOX Región Metropolitana (aprox — minlon,minlat,maxlon,maxlat)
   const STGO_BBOX = { minlon: -71.30, minlat: -33.95, maxlon: -69.90, maxlat: -32.70 };
@@ -630,7 +624,7 @@ export default function EditLocationScreen() {
       )}
 
       {/* Map */}
-      <View style={[styles.mapWrap, { marginTop: NAV_HEIGHT, marginBottom: tabBarHeightLocal + 4 }]} pointerEvents="box-none">
+  <View style={[styles.mapWrap, { marginTop: NAV_HEIGHT, marginBottom: tabBarHeightLocal + 4 }]} pointerEvents="box-none">
         {center ? (
           <MapView
             ref={mapRef}
@@ -666,13 +660,13 @@ export default function EditLocationScreen() {
         </View>
 
         {/* FAB centrar en mi ubicación */}
-        <TouchableOpacity style={[styles.centerFab, { bottom: tabBarHeightLocal + footerHeight + 12 + EXTRA_LIFT }]} onPress={centerToMyLocation} accessibilityLabel="Centrar ubicación">
+  <TouchableOpacity style={[styles.centerFab, { bottom: tabBarHeightLocal + footerHeight + 12 + EXTRA_LIFT }]} onPress={centerToMyLocation} accessibilityLabel="Centrar ubicación">
           <IconSymbol name="my-location" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
       {/* Footer */}
-      <View onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)} style={[styles.footer, { bottom: tabBarHeightLocal + 8 + EXTRA_LIFT }]}>
+  <View onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)} style={[styles.footer, { bottom: tabBarHeightLocal + 8 + EXTRA_LIFT }]}>
         <TouchableOpacity
           style={styles.saveBtn}
           onPress={() => {

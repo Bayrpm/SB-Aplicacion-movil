@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "SB-Aplicacion-movil",
+    "name": "SanBernardo APP",
     "slug": "SB-Aplicacion-movil",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/img_logo.png",
+  "icon": "./assets/images/logotipo_vertical.png",
     "scheme": "sbaplicacionmovil",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -22,10 +22,10 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/logotipo_vertical.png",
+        "backgroundImage": "./assets/images/logotipo_vertical.png",
+        "monochromeImage": "./assets/images/logotipo_vertical.png"
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -78,7 +78,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/logotipo_vertical.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -115,6 +115,11 @@
     },
     "runtimeVersion": {
       "policy": "appVersion"
+    },
+    "splash": {
+      "image": "./assets/images/logotipo_vertical.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
     },
     "updates": {
       "url": "https://u.expo.dev/fc7331a3-dda8-4ded-b288-398c4e9f71e8"
