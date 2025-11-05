@@ -497,3 +497,203 @@ export async function uploadCitizenAvatar(fileUri: string): Promise<{
     return { data: null, error: e?.message || 'Error inesperado' };
   }
 }
+
+// --- Comentarios y reacciones (utils para profileCitizen) ---
+/** Obtiene estadísticas y reacción del usuario para una denuncia (reutilizable en profileCitizen) */
+export async function fetchReportStats(reportId: string): Promise<{
+  likes: number;
+  dislikes: number;
+  userReaction: 'LIKE'|'DISLIKE'|null;
+  commentsCount: number;
+}> {
+  try {
+    const { data: statsData } = await supabase.from('v_denuncia_reacciones_stats').select('*').eq('denuncia_id', reportId).maybeSingle();
+    const { data: comments } = await supabase.from('v_denuncia_comentarios_publicos').select('id', { count: 'estimated' }).eq('denuncia_id', reportId);
+    const { data: userData } = await supabase.auth.getUser();
+    let userReaction: 'LIKE'|'DISLIKE'|null = null;
+    if (userData?.user) {
+      const { data: r } = await supabase.from('denuncia_reacciones').select('tipo').eq('denuncia_id', reportId).eq('usuario_id', userData.user.id).maybeSingle();
+      if (r && r.tipo) userReaction = String(r.tipo).toUpperCase() === 'LIKE' ? 'LIKE' : 'DISLIKE';
+    }
+    const likes = statsData?.likes ?? 0;
+    const dislikes = statsData?.dislikes ?? 0;
+    const commentsCount = Array.isArray(comments) ? comments.length : 0;
+    return { likes, dislikes, userReaction, commentsCount };
+  } catch (e: any) {
+    console.error('fetchReportStats profile.api exception', e);
+    return { likes: 0, dislikes: 0, userReaction: null, commentsCount: 0 };
+  }
+}
+
+/** Llama la RPC fn_denuncia_reaccionar para crear/actualizar la reacción del usuario */
+export async function reactToReport(reportId: string, tipo: 'LIKE'|'DISLIKE') {
+  try {
+    const { data, error } = await supabase.rpc('fn_denuncia_reaccionar', { p_denuncia_id: reportId, p_tipo: tipo });
+    if (error) return { data: null, error };
+    return { data, error: null };
+  } catch (e: any) {
+    console.error('reactToReport profile.api exception', e);
+    return { data: null, error: e };
+  }
+}
+
+/** Obtiene comentarios (vista pública) para una denuncia */
+export async function fetchReportComments(reportId: string) {
+  try {
+    // Intentar primero solicitando parent_id (si la vista lo expone)
+    try {
+      const { data, error } = await supabase
+        .from('v_denuncia_comentarios_publicos')
+        .select('id, denuncia_id, usuario_id, autor, anonimo, autor_visible, contenido, created_at, parent_id')
+        .eq('denuncia_id', reportId)
+        .order('created_at', { ascending: false });
+
+      // Si la vista no tiene parent_id, Postgres/Supabase regresará error con code 42703
+      if (error) {
+        if ((error as any)?.code === '42703') {
+          // Reintentar sin parent_id
+          const { data: data2, error: error2 } = await supabase
+            .from('v_denuncia_comentarios_publicos')
+            .select('id, denuncia_id, usuario_id, autor, anonimo, autor_visible, contenido, created_at')
+            .eq('denuncia_id', reportId)
+            .order('created_at', { ascending: false });
+          if (error2) {
+            console.error('fetchReportComments profile.api error after fallback', error2);
+            return [];
+          }
+          // Normalize: ensure parent_id absent => null on consumer
+          return (data2 ?? []) as any[];
+        }
+        console.error('fetchReportComments profile.api error', error);
+        return [];
+      }
+
+      // Merge comment reaction stats (if view exists) to supply likes/liked per comment
+      try {
+        const rows = (data ?? []) as any[];
+
+        // Try view first
+        try {
+          const { data: statsData, error: statsErr } = await supabase
+            .from('v_comentario_reacciones_stats')
+            .select('comentario_id, likes, user_reaction')
+            .eq('denuncia_id', reportId);
+          if (!statsErr && Array.isArray(statsData) && statsData.length > 0) {
+            const statsMap: Record<string, any> = {};
+            statsData.forEach((s: any) => { statsMap[String(s.comentario_id)] = s; });
+            return rows.map((r: any) => ({ ...r, likes: statsMap[String(r.id)]?.likes ?? r.likes, liked: (statsMap[String(r.id)]?.user_reaction ?? '').toUpperCase() === 'LIKE' || !!r.liked }));
+          }
+        } catch (e) {
+          // fall through to table aggregation
+        }
+
+        // Fallback: aggregate directly from comentario_reacciones table
+        try {
+          const commentIds = rows.map((r: any) => Number(r.id)).filter((v) => Number.isFinite(v));
+          if (commentIds.length === 0) return rows;
+
+          // Get all reactions for these comments
+          const { data: reactions, error: reactionsErr } = await supabase
+            .from('comentario_reacciones')
+            .select('comentario_id, tipo, usuario_id')
+            .in('comentario_id', commentIds as any[]);
+
+          if (reactionsErr || !Array.isArray(reactions)) return rows;
+
+          const likesMap: Record<string, number> = {};
+          reactions.forEach((r: any) => {
+            if ((r.tipo ?? '').toUpperCase() === 'LIKE') likesMap[String(r.comentario_id)] = (likesMap[String(r.comentario_id)] || 0) + 1;
+          });
+
+          // Determine current user reactions (if authenticated)
+          const { data: userData } = await supabase.auth.getUser();
+          const userId = userData?.user?.id ?? null;
+          const userReactionMap: Record<string, string | null> = {};
+          if (userId) {
+            const { data: userReacts, error: urErr } = await supabase
+              .from('comentario_reacciones')
+              .select('comentario_id, tipo')
+              .eq('usuario_id', userId)
+              .in('comentario_id', commentIds as any[]);
+            if (!urErr && Array.isArray(userReacts)) {
+              userReacts.forEach((ur: any) => { userReactionMap[String(ur.comentario_id)] = (ur.tipo ?? '').toUpperCase(); });
+            }
+          }
+
+          return rows.map((r: any) => ({
+            ...r,
+            likes: likesMap[String(r.id)] ?? r.likes ?? 0,
+            liked: (userReactionMap[String(r.id)] ?? '').toUpperCase() === 'LIKE' || !!r.liked,
+          }));
+        } catch (e) {
+          return rows;
+        }
+      } catch (e) {
+        return (data ?? []) as any[];
+      }
+    } catch (inner) {
+      console.error('fetchReportComments profile.api inner exception', inner);
+      return [];
+    }
+  } catch (e: any) {
+    console.error('fetchReportComments profile.api exception', e);
+    return [];
+  }
+}
+
+/** Crea un comentario en comentarios_denuncias */
+export async function createReportComment(reportId: string, contenido: string, anonimo: boolean = true, parentId?: number | null) {
+  try {
+    const insertObj: any = { denuncia_id: reportId, contenido, anonimo };
+    // Si nos pasan parentId lo incluimos
+    if (parentId != null) insertObj.parent_id = parentId;
+    // Intentar insertar; si falla por ausencia de columna parent_id (PGRST204), reintentar sin esa propiedad
+    let res: any;
+    try {
+      res = await supabase.from('comentarios_denuncias').insert(insertObj).select().maybeSingle();
+    } catch (e: any) {
+      // Supabase client may throw; fallback to handling via response object
+      res = e;
+    }
+
+    // Res puede ser { data, error } o una excepción. Normalizamos:
+    const data = res?.data ?? null;
+    const error = res?.error ?? (res?.message ? res : null);
+    if (error) {
+      const code = (error as any)?.code ?? (error as any)?.status ?? null;
+      const msg = String((error as any)?.message ?? '').toLowerCase();
+      if (parentId != null && (String(code) === 'PGRST204' || msg.includes('parent_id') || msg.includes('column') && msg.includes('parent_id'))) {
+        // Reintentar sin parent_id
+        const insertFallback: any = { denuncia_id: reportId, contenido, anonimo };
+        const { data: data2, error: error2 } = await supabase.from('comentarios_denuncias').insert(insertFallback).select().maybeSingle();
+        if (error2) {
+          console.error('createReportComment profile.api error after fallback', error2);
+          return { data: null, error: error2 };
+        }
+        return { data: data2, error: null };
+      }
+      console.error('createReportComment profile.api error', error);
+      return { data: null, error };
+    }
+
+    return { data, error: null };
+  } catch (e: any) {
+    console.error('createReportComment profile.api exception', e);
+    return { data: null, error: e };
+  }
+}
+
+/** Reaccionar a un comentario (RPC fn_comentario_reaccionar) */
+export async function reactToComment(commentId: number, tipo: 'LIKE'|'DISLIKE') {
+  try {
+    const { data, error } = await supabase.rpc('fn_comentario_reaccionar', { p_comentario_id: commentId, p_tipo: tipo });
+    if (error) {
+      console.error('reactToComment profile.api error', error);
+      return { data: null, error };
+    }
+    return { data, error: null };
+  } catch (e: any) {
+    console.error('reactToComment profile.api exception', e);
+    return { data: null, error: e };
+  }
+}

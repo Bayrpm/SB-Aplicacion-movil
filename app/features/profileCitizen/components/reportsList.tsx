@@ -5,11 +5,11 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import * as Network from 'expo-network';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { CitizenReport, getAllCategories, getAllEstados, getCitizenReports } from '../api/profile.api';
 import FilterModal, { FilterOptions } from './filterModal';
@@ -152,7 +152,6 @@ export default function ReportsList() {
   }, []);
 
   const handleReportPress = useCallback((report: CitizenReport) => {
-    try { console.warn('ReportsList: handleReportPress -> abrir detalle:', report?.id); } catch {}
     // Evitar reentradas rápidas (doble trigger de onPress)
     if (openingRef.current) return;
     openingRef.current = true;
@@ -179,17 +178,14 @@ export default function ReportsList() {
 
   const handleToggleLike = useCallback(() => {
     // TODO: Implementar funcionalidad de like
-    console.log('Toggle like para reporte:', selectedReport?.id);
+    // debug removed
   }, [selectedReport]);
 
   useEffect(() => {
     loadInitialReports();
   }, [loadInitialReports]);
 
-  // Diagnóstico: saber cuándo se intenta abrir el modal y con qué reporte
-  useEffect(() => {
-    try { console.warn('ReportsList: selectedReport=', selectedReport?.id, ' showDetailModal=', showDetailModal); } catch {}
-  }, [selectedReport, showDetailModal]);
+  // (Removed diagnostic logging)
 
   if (loading) {
     return (
@@ -230,25 +226,7 @@ export default function ReportsList() {
 
   return (
     <>
-      {/* Debug helper: en modo desarrollo permite abrir el primer reporte manualmente */}
-      {__DEV__ && reports.length > 0 && (
-        <TouchableOpacity
-          style={{ paddingHorizontal: 20, marginBottom: 8 }}
-          onPress={() => {
-            try { console.warn('ReportsList: debug open first report ->', reports[0].id); } catch {}
-            try { handleReportPress(reports[0]); } catch (e) { try { console.warn('ReportsList: debug open error', e); } catch {} }
-          }}
-        >
-          <Text style={{ color: accentColor }}>[DEBUG] Abrir primer reporte</Text>
-        </TouchableOpacity>
-      )}
-      {/* Banner de diagnóstico en pantalla (solo en desarrollo) */}
-      {__DEV__ && (
-        <View style={{ paddingHorizontal: 20, paddingVertical: 8, backgroundColor: '#00000010', marginBottom: 8 }}>
-          <Text style={{ color: textColor, fontSize: 12 }}>DEBUG: selectedReport = {selectedReport?.id ?? 'undefined'}</Text>
-          <Text style={{ color: textColor, fontSize: 12 }}>DEBUG: showDetailModal = {String(showDetailModal)}</Text>
-        </View>
-      )}
+      
       <View style={styles.container}>
       {/* Título de sección con botón de filtro */}
       <View style={styles.headerRow}>

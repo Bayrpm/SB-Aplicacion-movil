@@ -1,8 +1,8 @@
 import {
-  getInitialNotification,
-  NotificationData,
-  registerForPushNotifications,
-  setupNotificationListeners,
+    getInitialNotification,
+    NotificationData,
+    registerForPushNotifications,
+    setupNotificationListeners,
 } from '@/app/services/notificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
@@ -34,7 +34,7 @@ export function useNotifications() {
           await AsyncStorage.setItem('@notifications_enabled', 'true');
         }
       } else {
-        console.log('ℹ️ Notificaciones desactivadas por el usuario');
+        // Notificaciones desactivadas por el usuario (sin log de depuración)
       }
 
       // Verificar si la app se abrió desde una notificación
@@ -64,8 +64,6 @@ export function useNotifications() {
     setNotification(data);
     
     if (data.type === 'report_status_change' && data.reportId) {
-      console.log('🔔 Navegando al reporte:', data.reportId);
-      
       // Navegar al perfil del ciudadano con el parámetro openReportId
       // El componente citizenProfile detectará este parámetro y abrirá el modal automáticamente
       router.push({

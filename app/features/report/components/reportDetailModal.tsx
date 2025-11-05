@@ -1,23 +1,29 @@
 // app/features/report/components/reportDetailModal.tsx
+import { listEvidencesSigned } from '@/app/features/report/api/evidences.api';
 import { useFontSize } from '@/app/features/settings/fontSizeContext';
+import CommentsPanel from '@/components/commentsPanel';
 import { Alert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Modal,
-    PanResponder,
-    ScrollView,
-    Share,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Image,
+  Modal,
+  PanResponder,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { getRelativeTime } from '../../profileCitizen/utils/timeFormat';
-import { fetchPublicReportDetail } from '../api/report.api';
+import { getCitizenProfile } from '../../profileCitizen/api/profile.api';
+import { createReportComment, fetchPublicReportDetail, fetchReportComments, fetchReportStats, reactToComment, reactToReport } from '../api/report.api';
+// screen width used by gallery styles
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ReportDetail {
   id: string;
@@ -76,9 +82,26 @@ export default function ReportDetailModal({
     hasDisliked: boolean;
     commentsCount: number;
   }>>({});
+  const [comments, setComments] = useState<Array<any>>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null);
+  const [currentUserNombre, setCurrentUserNombre] = useState<string | null>(null);
+  const [currentUserApellido, setCurrentUserApellido] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [submittingComment, setSubmittingComment] = useState(false);
   const [commentsModalVisible, setCommentsModalVisible] = useState(false);
   const [selectedReportForComments, setSelectedReportForComments] = useState<string | null>(null);
+  // Evidences (images/videos) por reporte
+  const [evidencesMap, setEvidencesMap] = useState<Record<string, Array<{ tipo: 'FOTO'|'VIDEO'; url: string; storage_path: string }>>>({});
+  const [loadingEvidencesMap, setLoadingEvidencesMap] = useState<Record<string, boolean>>({});
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [selectedImageReport, setSelectedImageReport] = useState<string | null>(null);
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
+  const [VideoModule, setVideoModule] = useState<any>(null);
   const [translateY] = useState(new Animated.Value(0));
+
+  const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
   // PanResponder para detectar el gesto de deslizar hacia abajo
   const panResponder = PanResponder.create({
@@ -130,6 +153,26 @@ export default function ReportDetailModal({
     }
   }, [visible, reportId, reportIds]);
 
+  // Cargar perfil del usuario actual para usar su avatar en comentarios propios
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await getCitizenProfile();
+        if (!mounted) return;
+        if (res?.data) {
+          setCurrentUserId(res.data.usuario_id ?? null);
+          setCurrentUserAvatar(res.data.avatar_url ?? null);
+          setCurrentUserNombre(res.data.nombre ?? null);
+          setCurrentUserApellido(res.data.apellido ?? null);
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   // Reset translateY cuando se abre/cierra el modal de comentarios
   useEffect(() => {
     if (commentsModalVisible) {
@@ -140,6 +183,23 @@ export default function ReportDetailModal({
       translateY.setValue(0);
     }
   }, [commentsModalVisible]);
+
+  // Intentar cargar expo-av/expo-video dinámicamente para reproducción de videos en-app
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const mod = await import('expo-video');
+        const m: any = mod;
+        const VideoComp = (m && (m.Video || m.default)) ?? null;
+        const ResizeMode = m?.ResizeMode ?? (m?.Video?.ResizeMode) ?? null;
+        if (mounted) setVideoModule({ Video: VideoComp, ResizeMode });
+      } catch (e) {
+        // No disponible en este entorno: se ignora
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   // Helper Haversine (metros)
   const distanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
@@ -173,21 +233,70 @@ export default function ReportDetailModal({
         }
       }
 
-      setReports(loadedReports);
+      // Normalizar: si la API no incluye usuario_id ni avatar para el ciudadano pero el nombre/apellido
+      // coincide con el perfil actual, inyectamos usuario_id y avatar para que el cliente muestre tu foto.
+      const normalized = loadedReports.map((r: any) => {
+        const c = r.ciudadano ?? {};
+        // If no usuario_id and we have current user data, try to match by exact name+apellido
+        if (!c.usuario_id && currentUserId && currentUserNombre && currentUserApellido) {
+          const rn = String(c.nombre ?? '').trim();
+          const ra = String(c.apellido ?? '').trim();
+          if (rn && ra && rn === String(currentUserNombre).trim() && ra === String(currentUserApellido).trim()) {
+            c.usuario_id = currentUserId;
+            if (!c.avatar_url && currentUserAvatar) c.avatar_url = currentUserAvatar;
+          }
+        }
+        r.ciudadano = c;
+        return r;
+      });
 
-      // Inicializar stats para cada reporte
+      setReports(normalized);
+
+      // Inicializar stats para cada reporte y luego obtener valores reales
       const initialStats: Record<string, any> = {};
-      loadedReports.forEach((report) => {
-        // TODO: reemplazar con datos reales de la API
-        initialStats[report.id] = {
-          likes: 0,
-          dislikes: 0,
-          hasLiked: false,
-          hasDisliked: false,
-          commentsCount: 0,
-        };
+      loadedReports.forEach((r) => {
+        initialStats[r.id] = { likes: 0, dislikes: 0, hasLiked: false, hasDisliked: false, commentsCount: 0 };
       });
       setReportStats(initialStats);
+
+      // Cargar stats reales en background
+      try {
+        await Promise.all(loadedReports.map(async (r) => {
+          try {
+            const s = await fetchReportStats(r.id);
+            setReportStats((prev) => ({
+              ...prev,
+              [r.id]: {
+                likes: s.likes,
+                dislikes: s.dislikes,
+                hasLiked: s.userReaction === 'LIKE',
+                hasDisliked: s.userReaction === 'DISLIKE',
+                commentsCount: s.commentsCount,
+              }
+            }));
+          } catch (e) {
+            // ignore per-report
+          }
+        }));
+        // Cargar evidencias firmadas por reporte (si existe la API)
+        try {
+          await Promise.all(loadedReports.map(async (r) => {
+            try {
+              setLoadingEvidencesMap((p) => ({ ...p, [r.id]: true }));
+              const ev = await listEvidencesSigned(r.id);
+              setEvidencesMap((p) => ({ ...p, [r.id]: ev || [] }));
+            } catch (e) {
+              setEvidencesMap((p) => ({ ...p, [r.id]: [] }));
+            } finally {
+              setLoadingEvidencesMap((p) => ({ ...p, [r.id]: false }));
+            }
+          }));
+        } catch (e) {
+          // ignore
+        }
+      } catch (e) {
+        // ignore
+      }
 
       // Ya no buscamos "cercanas" porque el grupo ya contiene todas las relevantes
       setNearbyReports([]);
@@ -200,75 +309,41 @@ export default function ReportDetailModal({
 
   const handleLike = async (reportId: string) => {
     try {
-      const currentStats = reportStats[reportId] || {
-        likes: 0,
-        dislikes: 0,
-        hasLiked: false,
-        hasDisliked: false,
-        commentsCount: 0,
-      };
-
-      // Si ya tiene dislike, quitarlo primero
-      let newDislikes = currentStats.dislikes;
-      let newHasDisliked = currentStats.hasDisliked;
-      if (currentStats.hasDisliked) {
-        newHasDisliked = false;
-        newDislikes = currentStats.dislikes - 1;
-      }
-      
-      // Toggle like
-      const newHasLiked = !currentStats.hasLiked;
-      const newLikes = newHasLiked ? currentStats.likes + 1 : currentStats.likes - 1;
-
-      setReportStats({
-        ...reportStats,
+      // Llamada RPC para marcar LIKE (crea o actualiza)
+      await reactToReport(reportId, 'LIKE');
+      // Refrescar stats del reporte
+      const s = await fetchReportStats(reportId);
+      setReportStats((prev) => ({
+        ...prev,
         [reportId]: {
-          ...currentStats,
-          likes: newLikes,
-          dislikes: newDislikes,
-          hasLiked: newHasLiked,
-          hasDisliked: newHasDisliked,
-        },
-      });
-      // TODO: Implementar API call
+          likes: s.likes,
+          dislikes: s.dislikes,
+          hasLiked: s.userReaction === 'LIKE',
+          hasDisliked: s.userReaction === 'DISLIKE',
+          commentsCount: s.commentsCount,
+        }
+      }));
     } catch (error) {
+      // ignore
     }
   };
 
   const handleDislike = async (reportId: string) => {
     try {
-      const currentStats = reportStats[reportId] || {
-        likes: 0,
-        dislikes: 0,
-        hasLiked: false,
-        hasDisliked: false,
-        commentsCount: 0,
-      };
-
-      // Si ya tiene like, quitarlo primero
-      let newLikes = currentStats.likes;
-      let newHasLiked = currentStats.hasLiked;
-      if (currentStats.hasLiked) {
-        newHasLiked = false;
-        newLikes = currentStats.likes - 1;
-      }
-      
-      // Toggle dislike
-      const newHasDisliked = !currentStats.hasDisliked;
-      const newDislikes = newHasDisliked ? currentStats.dislikes + 1 : currentStats.dislikes - 1;
-
-      setReportStats({
-        ...reportStats,
+      await reactToReport(reportId, 'DISLIKE');
+      const s = await fetchReportStats(reportId);
+      setReportStats((prev) => ({
+        ...prev,
         [reportId]: {
-          ...currentStats,
-          likes: newLikes,
-          dislikes: newDislikes,
-          hasLiked: newHasLiked,
-          hasDisliked: newHasDisliked,
-        },
-      });
-      // TODO: Implementar API call
+          likes: s.likes,
+          dislikes: s.dislikes,
+          hasLiked: s.userReaction === 'LIKE',
+          hasDisliked: s.userReaction === 'DISLIKE',
+          commentsCount: s.commentsCount,
+        }
+      }));
     } catch (error) {
+      // ignore
     }
   };
 
@@ -319,7 +394,59 @@ export default function ReportDetailModal({
 
   const handleComments = (reportId: string) => {
     setSelectedReportForComments(reportId);
+    // cargar comentarios antes de abrir el modal
+    loadComments(reportId);
     setCommentsModalVisible(true);
+  };
+
+  const loadComments = async (reportId: string) => {
+    try {
+      setLoadingComments(true);
+      const list = await fetchReportComments(reportId);
+      // Normalizar y preferir avatar del usuario actual cuando corresponda
+      const normalized = (list || []).map((c: any) => ({
+        id: String(c.id),
+        usuario_id: c.usuario_id ?? null,
+        autor: c.autor ?? c.author ?? 'Usuario',
+        contenido: c.contenido ?? c.text ?? '',
+        created_at: c.created_at ? String(c.created_at) : undefined,
+        avatar: (c.autor_avatar ?? c.avatar_url ?? c.foto ?? c.imagen_url) || (c.usuario_id && currentUserId && c.usuario_id === currentUserId ? currentUserAvatar : null),
+        parent_id: c.parent_id ?? null,
+        likes: c.likes ?? 0,
+        liked: !!c.liked,
+      }));
+      setComments(normalized);
+    } catch (e) {
+      setComments([]);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  const submitComment = async (parentId?: number | null) => {
+    if (!selectedReportForComments || !commentText.trim()) return;
+    try {
+      setSubmittingComment(true);
+      await createReportComment(selectedReportForComments, commentText.trim(), false, parentId ?? null);
+      setCommentText('');
+      // refrescar lista y contador
+      await loadComments(selectedReportForComments);
+      const s = await fetchReportStats(selectedReportForComments);
+      setReportStats((prev) => ({
+        ...prev,
+        [selectedReportForComments]: {
+          likes: s.likes,
+          dislikes: s.dislikes,
+          hasLiked: s.userReaction === 'LIKE',
+          hasDisliked: s.userReaction === 'DISLIKE',
+          commentsCount: s.commentsCount,
+        }
+      }));
+    } catch (e) {
+      // ignore
+    } finally {
+      setSubmittingComment(false);
+    }
   };
 
   // Helper para obtener iniciales (primeras letras del nombre y apellido)
@@ -393,39 +520,35 @@ export default function ReportDetailModal({
                       </View>
                     ) : (
                       <View style={styles.userInfo}>
-                        <View style={[styles.userAvatar, { backgroundColor: accentColor }]}>
-                          <Text style={styles.userAvatarText}>
-                            {getInitials(report?.ciudadano?.nombre, report?.ciudadano?.apellido)}
-                          </Text>
-                        </View>
-                        <View>
-                          <Text style={[styles.userName, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
-                            {report?.ciudadano?.nombre || ''} {report?.ciudadano?.apellido || ''}
-                          </Text>
-                        </View>
-                      </View>
-                    )}
-                    {/* Meta: fecha y hora + relativo */}
-                    {report?.fecha_creacion && (
-                      <View style={styles.metaRow}>
-                        <View style={styles.metaItem}>
-                          <IconSymbol name="clock" size={14} color={mutedColor} />
-                          <Text style={[styles.metaText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]} numberOfLines={1}>
-                            {formatDateTime(report.fecha_creacion)} · {getRelativeTime(report.fecha_creacion)}
-                          </Text>
+                        {/* Avatar preferente: imagen si existe, sino iniciales. Si ciudadano.usuario_id === currentUserId usar currentUserAvatar */}
+                        {(
+                          ((report as any).ciudadano?.avatar_url ?? (report as any).ciudadano?.imagen_url ?? (report as any).ciudadano?.foto) ??
+                          (((report as any).ciudadano?.usuario_id && currentUserId && String((report as any).ciudadano?.usuario_id) === String(currentUserId)) ? currentUserAvatar : null)
+                        ) ? (
+                          <Image source={{ uri: ((report as any).ciudadano?.avatar_url ?? (report as any).ciudadano?.imagen_url ?? (report as any).ciudadano?.foto) ?? (((report as any).ciudadano?.usuario_id && currentUserId && String((report as any).ciudadano?.usuario_id) === String(currentUserId)) ? currentUserAvatar : null) }} style={styles.userAvatarImage} />
+                        ) : (
+                          <View style={[styles.userAvatar, { backgroundColor: accentColor }]}> 
+                            <Text style={[styles.userAvatarText, { fontSize: getFontSizeValue(fontSize, 18) }]}>{getInitials(report.ciudadano?.nombre, report.ciudadano?.apellido)}</Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.userName, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>{`${report.ciudadano?.nombre || ''} ${report.ciudadano?.apellido || ''}`.trim() || 'Usuario'}</Text>
+                          <Text style={[styles.reportDate, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>{formatDateTime(report.fecha_creacion)}</Text>
                         </View>
                       </View>
                     )}
-                  </View>
 
-                  {/* Título y descripción */}
-                  <View style={styles.section}>
-                    <Text style={[styles.title, { color: textColor, fontSize: getFontSizeValue(fontSize, 20) }]}>
-                      {report?.titulo || 'Cargando...'}
-                    </Text>
-                    <Text style={[styles.description, { color: textColor, fontSize: getFontSizeValue(fontSize, 15) }]}>
-                      {report?.descripcion || ''}
-                    </Text>
+                    {/* Separador visual entre perfil (avatar/nombre) y contenido */}
+                    <View style={{ height: 1, backgroundColor: borderColor, marginVertical: 10 }} />
+
+                    {/* Espaciado adicional entre avatar/usuario y contenido */}
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={[{ color: mutedColor, fontSize: getFontSizeValue(fontSize, 14), marginBottom: 6, fontWeight: '600' }]}>Titulo:</Text>
+                      <Text style={[styles.title, { color: textColor, fontSize: getFontSizeValue(fontSize, 20) }]}>{report.titulo}</Text>
+
+                      <Text style={[{ color: mutedColor, fontSize: getFontSizeValue(fontSize, 14), marginTop: 10, marginBottom: 6, fontWeight: '600' }]}>descripcion:</Text>
+                      <Text style={[styles.description, { color: textColor, fontSize: getFontSizeValue(fontSize, 15), marginTop: 4 }]}>{report.descripcion || ''}</Text>
+                    </View>
                   </View>
 
                   {/* Ubicación */}
@@ -451,10 +574,55 @@ export default function ReportDetailModal({
                         Evidencia
                       </Text>
                     </View>
-                    {/* TODO: Mostrar imágenes/videos cuando estén disponibles */}
-                    <Text style={[styles.noEvidenceText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>
-                      Sin evidencia adjunta
-                    </Text>
+
+                    {loadingEvidencesMap[report.id] ? (
+                      <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                        <ActivityIndicator size="small" color={accentColor} />
+                        <Text style={{ marginTop: 8, color: mutedColor }}>Cargando fotos y videos...</Text>
+                      </View>
+                    ) : (evidencesMap[report.id] == null || evidencesMap[report.id].length === 0) ? (
+                      <Text style={[styles.noEvidenceText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>Sin evidencia adjunta</Text>
+                    ) : (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={{ paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center' }}
+                      >
+                        {(() => {
+                          const evList = evidencesMap[report.id] || [];
+                          const photos = evList.filter(e => e.tipo === 'FOTO');
+                          return evList.map((ev) => {
+                            if (ev.tipo === 'FOTO') {
+                              const photoIndex = photos.findIndex(p => p.storage_path === ev.storage_path);
+                              return (
+                                <TouchableOpacity
+                                  key={ev.storage_path}
+                                  onPress={() => { if (photoIndex >= 0) { setSelectedImageReport(report.id); setSelectedImageIndex(photoIndex); } }}
+                                  activeOpacity={0.8}
+                                  style={{ marginRight: 10 }}
+                                >
+                                  <Image source={{ uri: ev.url }} style={[styles.thumbnail, { width: (SCREEN_WIDTH - 60) / 3, height: (SCREEN_WIDTH - 60) / 3 }]} />
+                                </TouchableOpacity>
+                              );
+                            }
+
+                            // Video thumbnail
+                            return (
+                              <TouchableOpacity
+                                key={ev.storage_path}
+                                onPress={() => setSelectedVideoUrl(ev.url)}
+                                activeOpacity={0.8}
+                                style={{ marginRight: 10 }}
+                              >
+                                <View style={[styles.thumbnail, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#00000010', width: (SCREEN_WIDTH - 60) / 3, height: (SCREEN_WIDTH - 60) / 3 }]}>
+                                  <IconSymbol name="play-circle" size={28} color={accentColor} />
+                                </View>
+                              </TouchableOpacity>
+                            );
+                          });
+                        })()}
+                      </ScrollView>
+                    )}
                   </View>
 
                   {/* Barra de acciones estilo Instagram - Individual para cada denuncia */}
@@ -595,31 +763,112 @@ export default function ReportDetailModal({
                 </TouchableOpacity>
               </View>
 
-              {/* Contenido de comentarios */}
-              <ScrollView style={styles.commentsContent} showsVerticalScrollIndicator={false}>
-                <View style={styles.commentsEmpty}>
-                  <IconSymbol name="bubble.left" size={48} color={mutedColor} />
-                  <Text style={[styles.commentsEmptyText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
-                    Sin comentarios aún
-                  </Text>
-                  <Text style={[styles.commentsEmptySubtext, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>
-                    Sé el primero en comentar
-                  </Text>
-                </View>
-                {/* TODO: Implementar lista de comentarios */}
-              </ScrollView>
-
-              {/* Input de comentarios */}
-              <View style={[styles.commentsInputContainer, { borderTopColor: borderColor }]}>
-                <View style={[styles.commentsInput, { backgroundColor: itemBg, borderColor }]}>
-                  <Text style={[styles.commentsInputPlaceholder, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>
-                    Agregar un comentario...
-                  </Text>
-                </View>
+              {/* Contenido de comentarios (componente reutilizable) */}
+              <View style={{ flex: 1 }}>
+                {/* CommentsPanel maneja internamente su propio ScrollView y KeyboardAvoidingView. */}
+                <CommentsPanel
+                  comments={comments.map((c: any) => ({
+                    id: String(c.id),
+                    usuario_id: c.usuario_id ?? null,
+                    author: c.autor ?? c.author ?? 'Usuario',
+                    text: c.contenido ?? c.text ?? '',
+                    created_at: c.created_at ? String(c.created_at) : undefined,
+                    avatar: c.avatar ?? (c.avatar_url ?? c.autor_avatar ?? c.foto ?? c.imagen_url ?? null),
+                    likes: c.likes ?? 0,
+                    liked: !!c.liked,
+                    parent_id: c.parent_id ?? null,
+                  }))}
+                  loading={loadingComments}
+                  commentText={commentText}
+                  setCommentText={setCommentText}
+                  onSubmit={submitComment}
+                  onLike={async (commentId: string, currentlyLiked: boolean) => {
+                    // Optimistically update local comments state
+                    setComments((prev) => prev.map((c: any) => c.id === commentId ? ({ ...c, likes: (c.likes ?? 0) + (currentlyLiked ? -1 : 1), liked: !currentlyLiked }) : c));
+                    // Call API and inspect result to rollback on failure
+                    try {
+                      const res = await reactToComment(Number(commentId), currentlyLiked ? 'DISLIKE' : 'LIKE');
+                      if (res == null || (res as any).error) {
+                        // rollback
+                        setComments((prev) => prev.map((c: any) => c.id === commentId ? ({ ...c, likes: (c.likes ?? 0) + (currentlyLiked ? 1 : -1), liked: currentlyLiked }) : c));
+                      }
+                    } catch (e) {
+                      // rollback on throw
+                      setComments((prev) => prev.map((c: any) => c.id === commentId ? ({ ...c, likes: (c.likes ?? 0) + (currentlyLiked ? 1 : -1), liked: currentlyLiked }) : c));
+                    }
+                  }}
+                  currentUserId={currentUserId}
+                  currentUserAvatar={currentUserAvatar}
+                />
               </View>
             </Animated.View>
           </View>
         </Modal>
+
+          {/* Modal de galería de imágenes */}
+          {selectedImageIndex !== null && selectedImageReport && (evidencesMap[selectedImageReport] || []).filter(e=>e.tipo==='FOTO').length > 0 && selectedImageIndex < (evidencesMap[selectedImageReport] || []).filter(e=>e.tipo==='FOTO').length && (
+            <Modal
+              visible
+              animationType="fade"
+              transparent
+              onRequestClose={() => { setSelectedImageIndex(null); setSelectedImageReport(null); }}
+            >
+              <View style={styles.galleryOverlay}>
+                <TouchableOpacity
+                  style={styles.galleryClose}
+                  onPress={() => { setSelectedImageIndex(null); setSelectedImageReport(null); }}
+                >
+                  <IconSymbol name="close" size={32} color="#fff" />
+                </TouchableOpacity>
+                <Image
+                  source={{ uri: (evidencesMap[selectedImageReport || ''] || []).filter(e=>e.tipo==='FOTO')[selectedImageIndex || 0]?.url || '' }}
+                  style={styles.fullImage}
+                  resizeMode="contain"
+                />
+                <View style={styles.galleryIndicator}>
+                  <Text style={[styles.galleryIndicatorText, { fontSize: getFontSizeValue(fontSize, 14) }]}>
+                    {(selectedImageIndex || 0) + 1} / {(evidencesMap[selectedImageReport || ''] || []).filter(e=>e.tipo==='FOTO').length}
+                  </Text>
+                </View>
+              </View>
+            </Modal>
+          )}
+
+          {/* Modal de reproducción de video (in-app) */}
+          {selectedVideoUrl && (
+            <Modal
+              visible
+              animationType="slide"
+              transparent
+              onRequestClose={() => setSelectedVideoUrl(null)}
+            >
+              <View style={styles.galleryOverlay}>
+                <TouchableOpacity
+                  style={styles.galleryClose}
+                  onPress={() => setSelectedVideoUrl(null)}
+                >
+                  <IconSymbol name="close" size={32} color="#fff" />
+                </TouchableOpacity>
+                {VideoModule?.Video ? (
+                  <VideoModule.Video
+                    source={{ uri: selectedVideoUrl }}
+                    style={styles.videoPlayer}
+                    useNativeControls
+                    resizeMode={VideoModule?.ResizeMode?.CONTAIN}
+                    shouldPlay={true}
+                  />
+                ) : (
+                  <View style={{ padding: 20, alignItems: 'center' }}>
+                    <Text style={{ color: textColor, marginBottom: 12 }}>El reproductor nativo no está disponible en esta build.</Text>
+                    <Text style={{ color: mutedColor, marginBottom: 20, textAlign: 'center' }}>Para reproducir videos dentro de la app necesitas instalar un Dev Client o generar una build que incluya el módulo nativo.</Text>
+                    <TouchableOpacity onPress={() => setSelectedVideoUrl(null)} style={[styles.backButton, { width: 160, alignSelf: 'center' }]}> 
+                      <Text style={[styles.backButtonBottomText, { color: '#fff' }]}>Cerrar</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </Modal>
+          )}
       </View>
     </Modal>
   );
@@ -976,6 +1225,68 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 24,
     borderWidth: 1,
+  },
+  // Gallery & media styles (copied from profile modal)
+  thumbnail: {
+    borderRadius: 12,
+    backgroundColor: '#00000010',
+  },
+  userAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  commentAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  commentAvatarFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commentAvatarText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  galleryOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  galleryClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  fullImage: {
+    width: SCREEN_WIDTH,
+    height: '80%'
+  },
+  galleryIndicator: {
+    position: 'absolute',
+    bottom: 50,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  galleryIndicatorText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  videoPlayer: {
+    width: SCREEN_WIDTH,
+    height: '60%',
+    backgroundColor: '#000',
+    borderRadius: 12,
   },
   commentsInputPlaceholder: {
     fontSize: 14,

@@ -111,10 +111,7 @@ export default function ReportCard({ report, onPress }: ReportCardProps) {
               borderColor: accentButtonBorder,
             },
           ]}
-          onPress={() => {
-            try { console.warn('ReportCard: pressed ->', report.id); } catch {}
-            try { onPress(); } catch (e) { try { console.warn('ReportCard: onPress error', e); } catch {} }
-          }}
+          onPress={onPress}
           activeOpacity={0.7}
         >
           <Text style={[styles.detailButtonText, { color: accentButtonText, fontSize: getFontSizeValue(fontSize, 13) }]}>Ver detalle</Text>

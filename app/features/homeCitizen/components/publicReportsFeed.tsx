@@ -160,7 +160,7 @@ export default function PublicReportsFeed() {
 
   const handleToggleLike = useCallback(() => {
     // TODO: Implementar funcionalidad de like
-    console.log('Toggle like para reporte público:', selectedReport?.id);
+    // debug removed
   }, [selectedReport]);
 
   // Verificar si un reporte está dentro del rango

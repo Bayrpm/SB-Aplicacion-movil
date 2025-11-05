@@ -42,9 +42,11 @@ const SNAP_KEY_SEP = '__COUNT__';
 // Umbral de píxeles para considerar "centrado"
 const CENTER_PX_THRESHOLD = Math.max(3, Math.round(4 * SCALE));
 const ROT_EPS_DEG = 0.5;
-const TARGET_ZOOM = 16;
-const TARGET_LAT_DELTA = 0.0015;
-const TARGET_LON_DELTA = 0.0015;
+// Aumentamos zoom objetivo para mostrar el mapa más cerca (menos área visible)
+const TARGET_ZOOM = 18; 
+// Reducimos los deltas usados cuando no hay cámara con zoom disponible (regions)
+const TARGET_LAT_DELTA = 0.0009; // antes 0.0015
+const TARGET_LON_DELTA = 0.0009; // antes 0.0015
 // Zoom a partir del cual cambiamos de agrupado -> individual
 const ZOOM_CLUSTER_BREAK = 18.5;
 
@@ -691,21 +693,32 @@ export default function CurrentLocationMap() {
 
   useEffect(() => {
     // capturar cada CategoryPin (individual y agrupado) offscreen y guardar data-uri en cache
+    // Nota: algunas veces los iconos (fuentes/SVG) tardan en pintarse; hacemos un pequeño
+    // retry con espera más larga para evitar capturas parciales que resultan en iconos cortados.
     (async () => {
       try {
         for (const key of uniqueIconKeys) {
           if (iconUris[key]) continue;
           const ref = hiddenRefs.current[key];
           if (!ref) continue;
-          try {
-            // Esperar un frame para asegurar layout medido, evitando capturas parciales/cortadas
-            await new Promise((r) => requestAnimationFrame(() => r(null)));
-            await new Promise((r) => setTimeout(r, 16));
-            const uri = await captureRef(ref, { format: 'png', quality: 1, result: 'data-uri' });
-            setIconUris((s) => ({ ...s, [key]: uri }));
-          } catch (err) {
-            // ignore capture errors and leave fallback
+          let captured = false;
+          // intentos con backoff corto
+          for (let attempt = 0; attempt < 3 && !captured; attempt++) {
+            try {
+              // esperar un frame y un pequeño delay para asegurar layout y carga de fuentes
+              await new Promise((r) => requestAnimationFrame(() => r(null)));
+              // backoff: 40ms, 80ms, 160ms
+              await new Promise((r) => setTimeout(r, 40 * Math.pow(2, attempt)));
+              const uri = await captureRef(ref, { format: 'png', quality: 1, result: 'data-uri' });
+              if (uri && typeof uri === 'string' && uri.length > 100) {
+                setIconUris((s) => ({ ...s, [key]: uri }));
+                captured = true;
+              }
+            } catch (err) {
+              // esperar y reintentar
+            }
           }
+          // si no pudimos capturar, dejamos que el marker renderice el CategoryPin directamente
         }
       } catch {}
     })();
@@ -780,6 +793,8 @@ export default function CurrentLocationMap() {
               key={`hidden-${key}`}
               ref={(r) => { hiddenRefs.current[key] = r; }}
               collapsable={false}
+              style={[styles.markerWrapper, { position: 'relative', left: 0, top: 0, opacity: 1 }]}
+              pointerEvents="none"
             >
               <CategoryPin iconName={iconName} size={PIN_SIZE} count={count > 1 ? count : undefined} />
             </View>
@@ -795,8 +810,9 @@ export default function CurrentLocationMap() {
         initialRegion={{
           latitude: location.latitude,
           longitude: location.longitude,
-          latitudeDelta: 0.002,
-          longitudeDelta: 0.002,
+          // initialRegion usa deltas; ponemos un delta menor para un zoom inicial más cercano
+          latitudeDelta: 0.001,
+          longitudeDelta: 0.001,
         }}
         showsUserLocation
         showsMyLocationButton={false}

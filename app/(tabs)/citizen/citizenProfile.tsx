@@ -57,7 +57,7 @@ export default function HomeScreen() {
   // Detectar si viene desde una notificación y cargar el reporte
   React.useEffect(() => {
     if (params.openReportId) {
-      console.log('🔔 Abriendo reporte desde notificación:', params.openReportId);
+      // Abrir reporte desde notificación (sin log de depuración)
       loadReportFromNotification(params.openReportId as string);
     }
   }, [params.openReportId]);

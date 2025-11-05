@@ -90,9 +90,12 @@ export default function ProfileHeader({
   const editButtonTop = Math.max(minTop, Math.min(desiredTop, maxTop));
 
   return (
-    <View style={[styles.headerContainer, { height: headerHeight }]}> 
-      {/* Curva azul superior con área segura */}
-      <Svg style={styles.topSection} width={width} height={Math.round(headerHeight + bellyOffset + 12)}>
+    // Permitimos que las áreas transparentes del header no bloqueen toques
+    // hacia elementos que queden debajo en la lista. Usamos `box-none` para
+    // que los hijos sigan recibiendo eventos normalmente.
+    <View pointerEvents="box-none" style={[styles.headerContainer, { height: headerHeight }]}> 
+      {/* Curva azul superior con área segura. No debe capturar toques sobre la lista. */}
+      <Svg pointerEvents="none" style={styles.topSection} width={width} height={Math.round(headerHeight + bellyOffset + 12)}>
         <Path d={headerCurvePath()} fill={topFill} />
       </Svg>
 

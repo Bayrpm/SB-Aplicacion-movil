@@ -3,20 +3,24 @@ import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 // expo-av will be imported dynamically at runtime to avoid native-module require on startup
+import CommentsPanel, { CommentItem } from '@/components/commentsPanel';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
-  Image, Linking, Modal,
+  Image,
+  Modal,
+  PanResponder,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CitizenReport, getCategoryById, getCitizenProfile, getEstadoById } from '../api/profile.api';
+import { CitizenReport, createReportComment, fetchReportComments, fetchReportStats, getCategoryById, getCitizenProfile, getEstadoById, reactToComment, reactToReport } from '../api/profile.api';
 
 interface ReportDetailModalProps {
   visible: boolean;
@@ -78,7 +82,6 @@ export default function ReportDetailModal({
   onToggleLike,
   isLiked = false,
 }: ReportDetailModalProps) {
-  try { console.warn('ReportDetailModal: render -> visible=', visible, ' reportId=', report?.id); } catch {}
   const insets = useSafeAreaInsets();
   const { fontSize } = useFontSize();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background'); // Color específico para cards
@@ -86,6 +89,7 @@ export default function ReportDetailModal({
   const accentColor = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint'); // Azul siempre
   const mutedColor = useThemeColor({}, 'icon');
   const borderColor = mutedColor + '26';
+  const itemBg = useThemeColor({ light: '#F9FAFB', dark: '#0A1628' }, 'background');
   const buttonBg = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint'); // Botones azules
   const buttonText = '#FFFFFF'; // Texto blanco en botones
 
@@ -98,13 +102,62 @@ export default function ReportDetailModal({
     email: string | null;
     telefono: string | null;
   } | null>(null);
+  const [resolvedCitizenAvatar, setResolvedCitizenAvatar] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [evidences, setEvidences] = useState<Array<{ tipo: 'FOTO'|'VIDEO'; url: string; storage_path: string }>>([]);
+  const [loadingEvidences, setLoadingEvidences] = useState<boolean>(false);
   const [VideoModule, setVideoModule] = useState<any>(null);
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
+  // Stats and comments UI (per-report)
+  const [reportStats, setReportStats] = useState<Record<string, {
+    likes: number;
+    dislikes: number;
+    hasLiked: boolean;
+    hasDisliked: boolean;
+    commentsCount: number;
+  }>>({});
+  const [commentsModalVisible, setCommentsModalVisible] = useState(false);
+  const [selectedReportForComments, setSelectedReportForComments] = useState<string | null>(null);
+  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [loadingComments, setLoadingComments] = useState(false);
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [translateY] = useState(new Animated.Value(0));
+  // PanResponder para el modal de comentarios (drag to dismiss)
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_: any, gestureState: any) => {
+      return Math.abs(gestureState.dy) > 5;
+    },
+    onPanResponderMove: (_: any, gestureState: any) => {
+      if (gestureState.dy > 0) translateY.setValue(gestureState.dy);
+    },
+    onPanResponderRelease: (_: any, gestureState: any) => {
+      const threshold = 150;
+      const velocity = gestureState.vy;
+      if (gestureState.dy > threshold || (gestureState.dy > 50 && velocity > 0.5)) {
+        Animated.timing(translateY, { toValue: 1000, duration: 250, useNativeDriver: true }).start(() => {
+          setCommentsModalVisible(false);
+          setSelectedReportForComments(null);
+        });
+      } else {
+        Animated.timing(translateY, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+      }
+    },
+  });
+
+  useEffect(() => {
+    // Reset translate when modal opens/closes
+    translateY.setValue(0);
+  }, [commentsModalVisible]);
 
   // Cargar evidencias (firmadas) al abrir el modal
   useEffect(() => {
     let active = true;
     (async () => {
+      if (visible && report?.id) {
+        setLoadingEvidences(true);
+      }
       try {
         if (visible && report?.id) {
           const ev = await listEvidencesSigned(report.id);
@@ -113,11 +166,142 @@ export default function ReportDetailModal({
           setEvidences([]);
         }
       } catch (e) {
-        try { console.warn('reportDetailModal: fallo al cargar evidencias:', e); } catch {}
+        // Error al cargar evidencias: se omite el log de depuración en producción
+      }
+      finally {
+        if (active) setLoadingEvidences(false);
       }
     })();
     return () => { active = false; };
   }, [visible, report?.id]);
+
+  // Initialize stats when report changes
+  useEffect(() => {
+    if (report) {
+      setReportStats({
+        [report.id]: {
+          likes: report.likes_count ?? 0,
+          dislikes: (report as any).dislikes_count ?? 0,
+          hasLiked: false,
+          hasDisliked: false,
+          commentsCount: (report as any).comments_count ?? 0,
+        }
+      });
+
+      // cargar stats reales
+      (async () => {
+        try {
+          const s = await fetchReportStats(report.id);
+          setReportStats((prev) => ({
+            ...prev,
+            [report.id]: {
+              likes: s.likes,
+              dislikes: s.dislikes,
+              hasLiked: s.userReaction === 'LIKE',
+              hasDisliked: s.userReaction === 'DISLIKE',
+              commentsCount: s.commentsCount,
+            }
+          }));
+        } catch (e) {
+          // ignore
+        }
+      })();
+    }
+  }, [report?.id]);
+
+  // Handlers that operate per-report (mirror app/features/report implementation)
+  const handleLike = async (reportId: string) => {
+    try {
+      await reactToReport(reportId, 'LIKE');
+      const s = await fetchReportStats(reportId);
+      setReportStats((prev) => ({
+        ...prev,
+        [reportId]: {
+          likes: s.likes,
+          dislikes: s.dislikes,
+          hasLiked: s.userReaction === 'LIKE',
+          hasDisliked: s.userReaction === 'DISLIKE',
+          commentsCount: s.commentsCount,
+        }
+      }));
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const handleDislike = async (reportId: string) => {
+    try {
+      await reactToReport(reportId, 'DISLIKE');
+      const s = await fetchReportStats(reportId);
+      setReportStats((prev) => ({
+        ...prev,
+        [reportId]: {
+          likes: s.likes,
+          dislikes: s.dislikes,
+          hasLiked: s.userReaction === 'LIKE',
+          hasDisliked: s.userReaction === 'DISLIKE',
+          commentsCount: s.commentsCount,
+        }
+      }));
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const handleComments = (reportId: string) => {
+    setSelectedReportForComments(reportId);
+    loadComments(reportId);
+    setCommentsModalVisible(true);
+  };
+
+  const loadComments = async (reportId: string) => {
+    try {
+      setLoadingComments(true);
+      const list = await fetchReportComments(reportId);
+      const normalized = (list || []).map((c: any) => ({
+        id: String(c.id),
+        usuario_id: c.usuario_id ?? null,
+        author: c.autor ?? c.author ?? 'Usuario',
+        text: c.contenido ?? c.text ?? '',
+        created_at: c.created_at ? String(c.created_at) : undefined,
+        // Si el comentario pertenece al usuario actual, preferimos su avatar de perfil
+        avatar: (c.autor_avatar ?? c.avatar_url ?? c.foto ?? c.imagen_url) || (c.usuario_id && currentUserId && c.usuario_id === currentUserId ? resolvedCitizenAvatar : null),
+        parent_id: c.parent_id ?? null,
+        likes: c.likes ?? 0,
+        liked: !!c.liked,
+      }));
+      setComments(normalized);
+    } catch (e) {
+      setComments([]);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
+
+  const submitComment = async (parentId?: number | null) => {
+    if (!selectedReportForComments || !commentText.trim()) return;
+    try {
+      setSubmittingComment(true);
+      await createReportComment(selectedReportForComments, commentText.trim(), false, parentId ?? null);
+      setCommentText('');
+      await loadComments(selectedReportForComments);
+      const s = await fetchReportStats(selectedReportForComments);
+      setReportStats((prev) => ({
+        ...prev,
+        [selectedReportForComments]: {
+          likes: s.likes,
+          dislikes: s.dislikes,
+          hasLiked: s.userReaction === 'LIKE',
+          hasDisliked: s.userReaction === 'DISLIKE',
+          commentsCount: s.commentsCount,
+        }
+      }));
+    } catch (e) {
+      // ignore
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
 
   // Intentar cargar expo-av de forma dinámica para evitar crash cuando el módulo nativo
   // no está disponible en el entorno (Expo Go vs Dev Client). Si falla, dejamos fallback.
@@ -134,8 +318,6 @@ export default function ReportDetailModal({
   if (mounted) setVideoModule({ Video: VideoComp, ResizeMode });
       } catch (e) {
         // No disponible: no hacemos nada, usaremos fallback (abrir URL externa)
-        try { console.warn('reportDetailModal: fallo al importar expo-video:', e); } catch {}
-        
       }
     })();
     return () => { mounted = false; };
@@ -176,11 +358,15 @@ export default function ReportDetailModal({
   React.useEffect(() => {
     let mounted = true;
     const isAnonymous = !!report?.anonimo;
-    if (!isAnonymous && report && !report.ciudadano) {
-      getCitizenProfile().then((res) => {
-        if (!mounted || !res?.data) return;
-        const { nombre, apellido, email, telefono } = res.data;
-        setResolvedCitizen({ nombre, apellido, email, telefono });
+    if (!isAnonymous && report) {
+    getCitizenProfile().then((res) => {
+      if (!mounted || !res?.data) return;
+      const { nombre, apellido, email, telefono, avatar_url, usuario_id } = res.data as any;
+      // Guardar datos básicos, usuario_id y avatar por separado. Esto cubre el caso
+      // en que `report.ciudadano` existe pero no incluye `avatar_url`.
+      setResolvedCitizen({ nombre, apellido, email, telefono });
+      setResolvedCitizenAvatar(avatar_url ?? null);
+      setCurrentUserId(usuario_id ?? null);
       });
     }
     return () => {
@@ -224,6 +410,14 @@ export default function ReportDetailModal({
   const userEmail = !isAnonymous && (user?.email ?? null);
   const userPhone = !isAnonymous && (user?.telefono ?? null);
 
+  const stats = report ? (reportStats[report.id] ?? {
+    likes: report.likes_count ?? 0,
+    dislikes: (report as any).dislikes_count ?? 0,
+    hasLiked: false,
+    hasDisliked: false,
+    commentsCount: (report as any).comments_count ?? 0,
+  }) : { likes: 0, dislikes: 0, hasLiked: false, hasDisliked: false, commentsCount: 0 };
+
   return (
     <>
       <Modal
@@ -254,7 +448,12 @@ export default function ReportDetailModal({
                   </View>
                 ) : (
                   <View style={styles.userInfoHeader}>
-                    <IconSymbol name="account" size={20} color={textColor} />
+                    {/* Avatar del ciudadano si existe */}
+                    {(report.ciudadano && (((report.ciudadano as any).avatar_url) || (report.ciudadano as any).foto || (report.ciudadano as any).imagen_url || resolvedCitizenAvatar)) ? (
+                      <Image source={{ uri: (report.ciudadano as any).avatar_url || (report.ciudadano as any).foto || resolvedCitizenAvatar || (report.ciudadano as any).imagen_url }} style={styles.headerAvatar} />
+                    ) : (
+                      <IconSymbol name="account" size={20} color={textColor} />
+                    )}
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.userNameHeader, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>
                         {userName}
@@ -328,100 +527,144 @@ export default function ReportDetailModal({
                   Evidencias
                 </Text>
 
-                {evidences.length > 0 ? (
-                  <>
-                    {/* Fotos */}
-                    <View style={styles.imageGrid}>
-                      {evidences.filter(e => e.tipo === 'FOTO').map((ev, index) => (
-                        <TouchableOpacity
-                          key={ev.storage_path}
-                          onPress={() => setSelectedImageIndex(index)}
-                          activeOpacity={0.8}
-                        >
-                          <Image source={{ uri: ev.url }} style={styles.thumbnail} />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-
-                    {/* Videos */}
-                    {evidences.some(e => e.tipo === 'VIDEO') && (
-                      <View style={{ marginTop: 12, gap: 12 }}>
-                        {evidences.filter(e => e.tipo === 'VIDEO').map((ev) => (
-                          <View key={ev.storage_path} style={{ width: '100%' }}>
-                            {VideoModule?.Video ? (
-                              <VideoModule.Video
-                                source={{ uri: ev.url }}
-                                style={{ width: '100%', height: 220, backgroundColor: '#00000020', borderRadius: 12 }}
-                                useNativeControls
-                                resizeMode={VideoModule?.ResizeMode?.CONTAIN}
-                                shouldPlay={false}
-                              />
-                            ) : (
-                              <TouchableOpacity
-                                onPress={() => { try { Linking.openURL(ev.url); } catch { /* ignore */ } }}
-                                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 }}
-                              >
-                                <IconSymbol name="play-circle" size={22} color={accentColor} />
-                                <Text style={{ color: textColor }}>Ver video</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                  </>
-                ) : (
-                  <View style={styles.noFilesBox}>
-                    <Image
-                      source={require('../../../../assets/images/icon.png')}
-                      style={styles.noFilesImage}
-                    />
-                    <Text style={[styles.noFilesText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>                      
-                      No hay archivos, fotos o videos
-                    </Text>
+                {loadingEvidences ? (
+                  <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color={accentColor} />
+                    <Text style={{ marginTop: 8, color: mutedColor }}>Cargando fotos y videos...</Text>
                   </View>
+                ) : (
+                  evidences.length === 0 ? (
+                    <View style={styles.noFilesBox}>
+                      <IconSymbol name="image" size={64} color={mutedColor} />
+                      <Text style={[styles.noFilesText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>                      
+                        No hay fotos ni videos disponibles
+                      </Text>
+                    </View>
+                  ) : (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{ paddingVertical: 8, paddingHorizontal: 4, alignItems: 'center' }}
+                    >
+                      {(() => {
+                        const photos = evidences.filter(e => e.tipo === 'FOTO');
+                        return evidences.map((ev) => {
+                          if (ev.tipo === 'FOTO') {
+                            const photoIndex = photos.findIndex(p => p.storage_path === ev.storage_path);
+                            return (
+                              <TouchableOpacity
+                                key={ev.storage_path}
+                                onPress={() => { if (photoIndex >= 0) setSelectedImageIndex(photoIndex); }}
+                                activeOpacity={0.8}
+                                style={{ marginRight: 10 }}
+                              >
+                                <Image source={{ uri: ev.url }} style={styles.thumbnail} />
+                              </TouchableOpacity>
+                            );
+                          }
+
+                          // VIDEO thumbnail with in-app playback
+                          return (
+                            <TouchableOpacity
+                              key={ev.storage_path}
+                              onPress={() => setSelectedVideoUrl(ev.url)}
+                              activeOpacity={0.8}
+                              style={{ marginRight: 10 }}
+                            >
+                              <View style={[styles.thumbnail, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#00000010' }]}>
+                                <IconSymbol name="play-circle" size={28} color={accentColor} />
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        });
+                      })()}
+                    </ScrollView>
+                  )
+                )}
+              </View>
+
+              {/* Acciones: estilo Instagram (like, dislike, comentarios) justo debajo de Evidencias */}
+              <View style={[styles.instagramActions, { borderTopColor: borderColor, marginTop: 6 }]}> 
+                <View style={styles.instagramActionsLeft}>
+                  <TouchableOpacity
+                    onPress={() => handleLike(report.id)}
+                    activeOpacity={0.7}
+                    style={styles.instagramActionButton}
+                  >
+                    <IconSymbol
+                      name={(reportStats[report.id]?.hasLiked) ? 'heart.fill' : 'heart'}
+                      size={28}
+                      color={(reportStats[report.id]?.hasLiked) ? '#EF4444' : textColor}
+                    />
+                    {(reportStats[report.id]?.likes || 0) > 0 && (
+                      <Text style={[styles.actionCountText, { color: textColor, fontSize: getFontSizeValue(fontSize, 12) }]}>
+                        {reportStats[report.id]?.likes}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => handleDislike(report.id)}
+                    activeOpacity={0.7}
+                    style={styles.instagramActionButton}
+                  >
+                    <IconSymbol
+                      name={(reportStats[report.id]?.hasDisliked) ? 'hand.thumbsdown.fill' : 'hand.thumbsdown'}
+                      size={26}
+                      color={(reportStats[report.id]?.hasDisliked) ? '#EF4444' : textColor}
+                    />
+                    {(reportStats[report.id]?.dislikes || 0) > 0 && (
+                      <Text style={[styles.actionCountText, { color: textColor, fontSize: getFontSizeValue(fontSize, 12) }]}>
+                        {reportStats[report.id]?.dislikes}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => handleComments(report.id)}
+                    activeOpacity={0.7}
+                    style={styles.instagramActionButton}
+                  >
+                    <IconSymbol
+                      name="bubble.left"
+                      size={26}
+                      color={textColor}
+                    />
+                    {(reportStats[report.id]?.commentsCount || 0) > 0 && (
+                      <Text style={[styles.actionCountText, { color: textColor, fontSize: getFontSizeValue(fontSize, 12) }]}>
+                        {reportStats[report.id]?.commentsCount}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+              {/* Contador de likes/dislikes y enlace para ver comentarios (igual que en report modal) */}
+              <View style={styles.instagramStats}>
+                {((stats.likes || 0) > 0 || (stats.dislikes || 0) > 0) && (
+                  <Text style={[styles.instagramStatsText, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>
+                    {(stats.likes || 0) > 0 && `${stats.likes} Me gusta`}
+                    {(stats.likes || 0) > 0 && (stats.dislikes || 0) > 0 && ' · '}
+                    {(stats.dislikes || 0) > 0 && `${stats.dislikes} No me gusta`}
+                  </Text>
+                )}
+                {(stats.commentsCount || 0) > 0 && (
+                  <TouchableOpacity onPress={() => handleComments(report.id)} activeOpacity={0.7}>
+                    <Text style={[styles.instagramCommentsLink, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}> 
+                      Ver los {stats.commentsCount} comentarios
+                    </Text>
+                  </TouchableOpacity>
                 )}
               </View>
             </ScrollView>
 
-            {/* Footer con botones */}
-            <View
-              style={[
-                styles.footer,
-                { borderTopColor: borderColor, paddingBottom: 16 + insets.bottom, paddingTop: 16 },
-              ]}
-            >
+            {/* Footer con botón Volver (estilo igual que en report/components) */}
+            <View style={[styles.footer, { borderTopColor: borderColor }]}> 
               <TouchableOpacity
-                style={[
-                  styles.likeButton, 
-                  { 
-                    borderColor: accentColor,
-                    backgroundColor: 'transparent' 
-                  }
-                ]}
-                onPress={onToggleLike}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  name={isLiked ? 'heart' : 'heart-outline'}
-                  size={22}
-                  color={isLiked ? accentColor : mutedColor}
-                />
-                <Text
-                  style={[
-                    styles.likeCount,
-                    { color: isLiked ? accentColor : mutedColor, fontSize: getFontSizeValue(fontSize, 16) },
-                  ]}
-                >
-                  {report.likes_count || 0}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.backButton, { backgroundColor: buttonBg }]}
                 onPress={onClose}
+                activeOpacity={0.8}
+                style={[styles.backButtonBottom, { backgroundColor: accentColor }]}
               >
-                <Text style={[styles.backButtonText, { color: buttonText, fontSize: getFontSizeValue(fontSize, 16) }]}>Volver</Text>
+                <Text style={[styles.backButtonBottomText, { color: '#FFFFFF', fontSize: getFontSizeValue(fontSize, 15) }]}>Volver</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -456,6 +699,105 @@ export default function ReportDetailModal({
           </View>
         </Modal>
       )}
+
+      {/* Modal de reproducción de video (in-app) */}
+      {selectedVideoUrl && (
+        <Modal
+          visible
+          animationType="slide"
+          transparent
+          onRequestClose={() => setSelectedVideoUrl(null)}
+        >
+          <View style={styles.galleryOverlay}>
+            <TouchableOpacity
+              style={styles.galleryClose}
+              onPress={() => setSelectedVideoUrl(null)}
+            >
+              <IconSymbol name="close" size={32} color="#fff" />
+            </TouchableOpacity>
+            {VideoModule?.Video ? (
+              <VideoModule.Video
+                source={{ uri: selectedVideoUrl }}
+                style={styles.videoPlayer}
+                useNativeControls
+                resizeMode={VideoModule?.ResizeMode?.CONTAIN}
+                shouldPlay={true}
+              />
+            ) : (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: textColor, marginBottom: 12 }}>El reproductor nativo no está disponible en esta build.</Text>
+                <Text style={{ color: mutedColor, marginBottom: 20, textAlign: 'center' }}>Para reproducir videos dentro de la app necesitas instalar un Dev Client o generar una build que incluya el módulo nativo.</Text>
+                <TouchableOpacity onPress={() => setSelectedVideoUrl(null)} style={[styles.backButton, { width: 160, alignSelf: 'center' }]}> 
+                  <Text style={[styles.backButtonText, { color: buttonText }]}>Cerrar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </Modal>
+      )}
+
+      {/* Modal de comentarios (estilo deslizable similar a report/components) */}
+      <Modal
+        visible={commentsModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCommentsModalVisible(false)}
+      >
+        <View style={styles.commentsOverlay}>
+          <Animated.View
+            style={[
+              styles.commentsContainer,
+              {
+                backgroundColor: bgColor,
+                transform: [{ translateY }],
+              },
+            ]}
+          >
+            <View style={styles.commentsHandle} {...panResponder.panHandlers}>
+              <View style={[styles.commentsHandleBar, { backgroundColor: mutedColor }]} />
+            </View>
+
+            <View style={[styles.commentsHeader, { borderBottomColor: borderColor }]}>
+              <Text style={[styles.commentsHeaderTitle, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>Comentarios</Text>
+              <TouchableOpacity
+                onPress={() => setCommentsModalVisible(false)}
+                style={styles.commentsCloseButton}
+              >
+                <IconSymbol name="xmark.circle.fill" size={24} color={mutedColor} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <CommentsPanel
+                comments={comments}
+                loading={loadingComments}
+                commentText={commentText}
+                setCommentText={setCommentText}
+                onSubmit={submitComment}
+                onLike={async (commentId: string, currentlyLiked: boolean) => {
+                  // Optimistically update comments locally
+                  setComments((prev) => prev.map((c) => c.id === commentId ? ({ ...c, likes: (c.likes ?? 0) + (currentlyLiked ? -1 : 1), liked: !currentlyLiked }) : c));
+                  try {
+                    const res = await reactToComment(Number(commentId), currentlyLiked ? 'DISLIKE' : 'LIKE');
+                    if (res == null || (res as any).error) {
+                      setComments((prev) => prev.map((c) => c.id === commentId ? ({ ...c, likes: (c.likes ?? 0) + (currentlyLiked ? 1 : -1), liked: currentlyLiked }) : c));
+                    }
+                  } catch (e) {
+                    // rollback
+                    setComments((prev) => prev.map((c) => c.id === commentId ? ({ ...c, likes: (c.likes ?? 0) + (currentlyLiked ? 1 : -1), liked: currentlyLiked }) : c));
+                  }
+                }}
+                onReply={(c) => {
+                  // Prefill handled by CommentsPanel but we still expose this hook
+                  setCommentText(`@${(c.author || 'Usuario').split(' ')[0]} `);
+                }}
+                currentUserId={currentUserId}
+                currentUserAvatar={resolvedCitizenAvatar}
+              />
+            </View>
+          </Animated.View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -673,8 +1015,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 0,
+    paddingVertical: 12,
     borderTopWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   likeButton: {
     flexDirection: 'row',
@@ -688,6 +1032,61 @@ const styles = StyleSheet.create({
   likeCount: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  // Footer bottom button (igual que en report/components)
+  backButtonBottom: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  backButtonBottomText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  // Estilos estilo Instagram para acciones pequeñas
+  instagramActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  instagramActionsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  instagramStats: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  instagramStatsText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  instagramCommentsLink: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  instagramActionButton: {
+    padding: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  actionCountText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   backButton: {
     flex: 1,
@@ -729,5 +1128,118 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  videoPlayer: {
+    width: SCREEN_WIDTH,
+    height: '60%',
+    backgroundColor: '#000',
+    borderRadius: 12,
+  },
+  commentsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  commentsContainer: {
+    height: '75%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  commentsHandle: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  commentsHandleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+  },
+  commentsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  commentsHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  commentsCloseButton: {
+    padding: 4,
+  },
+  commentsContent: {
+    flex: 1,
+  },
+  commentsEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  commentsEmptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  commentsEmptySubtext: {
+    fontSize: 14,
+  },
+  commentsInputContainer: {
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  commentsInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  commentsInputPlaceholder: {
+    fontSize: 14,
+  },
+  commentsModalContainer: {
+    width: '100%',
+    height: '70%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+  },
+  commentsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#00000010',
+  },
+  headerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: 10,
+    backgroundColor: '#EEE',
+  },
+  commentAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  commentAvatarFallback: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  commentAvatarText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });
