@@ -15,21 +15,67 @@ export async function fetchPublicReportsFeed({
   radiusMeters = 200,
 }: PublicReportFeedParams): Promise<{ data: any[]; hasMore: boolean; error?: string }> {
   try {
-    // 1) Trae sólo lo público/24h desde el server (tu RPC ya lo hace)
-    const { data: rpc, error } = await supabase.rpc('get_denuncias_publicas_recientes');
-    if (error) {
-      return { data: [], hasMore: false, error: error.message };
+    // instrumentación simple para medir latencia
+    const start = Date.now();
+    // si recibimos coords, intentamos consultar directamente la tabla con un
+    // bounding-box para reducir la cantidad de filas transferidas desde el
+    // servidor. Esto evita traer *todas* las denuncias públicas y filtrar en
+    // el cliente, lo que puede ser muy lento en backend con muchos registros.
+    let rpcResult: any[] | null = null;
+    let fromResult: any[] | null = null;
+
+    if (coords) {
+      // calcular bounding box aproximado en grados
+      const lat = coords.lat;
+      const lon = coords.lon;
+      const latDelta = radiusMeters / 111320; // metros por grado aprox
+      const lonDelta = radiusMeters / (111320 * Math.cos(lat * Math.PI / 180));
+      const minLat = lat - latDelta;
+      const maxLat = lat + latDelta;
+      const minLon = lon - lonDelta;
+      const maxLon = lon + lonDelta;
+
+      const cutoff = new Date(Date.now() - (maxAgeHours * 60 * 60 * 1000));
+
+      const { data: rows, error } = await supabase
+        .from('denuncias')
+        .select('id, folio, titulo, descripcion, ubicacion_texto, coords_x, coords_y, fecha_creacion, anonimo, categoria_publica_id')
+        .gte('fecha_creacion', cutoff.toISOString())
+        .eq('es_publica', true)
+        .gte('coords_x', minLat)
+        .lte('coords_x', maxLat)
+        .gte('coords_y', minLon)
+        .lte('coords_y', maxLon)
+        .order('fecha_creacion', { ascending: false })
+        .limit(limit * 3); // traer algo más por si el haversine filtra
+
+      if (error) {
+        // si falla la consulta directa, caemos al RPC como fallback
+        // eslint-disable-next-line no-console
+        console.debug('[feed.api] from denuncias failed, falling back to rpc', error.message);
+      } else {
+        fromResult = rows ?? [];
+      }
     }
 
-    // 2) Filtro adicional por edad si pides algo distinto a 24h
-    const cutoff = new Date(Date.now() - (maxAgeHours * 60 * 60 * 1000));
+    if (!fromResult) {
+      const { data: rpc, error } = await supabase.rpc('get_denuncias_publicas_recientes');
+      if (error) {
+        return { data: [], hasMore: false, error: error.message };
+      }
+      rpcResult = rpc ?? [];
+    }
 
+    // 2) Filtro adicional por edad si pides algo distinto a 24h (cuando viene del rpc)
+    
     // 3) Filtrar por radio en el cliente y mapear shape estable
-    const rows = (rpc ?? [])
+    const sourceRows = fromResult ?? rpcResult ?? [];
+    const rows = (sourceRows ?? [])
       .filter((r: any) => {
         if (maxAgeHours !== 24) {
           const ts = new Date(r.fecha_creacion);
-          if (ts < cutoff) return false;
+          const cutoff2 = new Date(Date.now() - (maxAgeHours * 60 * 60 * 1000));
+          if (ts < cutoff2) return false;
         }
         if (!coords) return true; // si no hay coords, no filtramos por distancia
         if (r.coords_x == null || r.coords_y == null) return false;
@@ -58,6 +104,10 @@ export async function fetchPublicReportsFeed({
     const items = rows.slice(0, limit);
     const hasMore = rows.length > limit;
 
+    // instrumentación: medir duración
+    const ms = Date.now() - start;
+    // eslint-disable-next-line no-console
+    console.debug(`[feed.api] fetchPublicReportsFeed finished in ${ms}ms; sourceRows=${(sourceRows ?? []).length}; returned=${items.length}`);
     return { data: items, hasMore };
   } catch (e: any) {
     return { data: [], hasMore: false, error: e?.message || 'Error desconocido' };

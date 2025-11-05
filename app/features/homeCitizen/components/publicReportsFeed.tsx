@@ -1,5 +1,6 @@
 import ReportCard from '@/app/features/profileCitizen/components/reportCard';
-import ReportDetailModal from '@/app/features/profileCitizen/components/reportDetailModal';
+// Use report detail modal from the `report` feature (public report detail UI)
+import ReportDetailModal from '@/app/features/report/components/reportDetailModal';
 import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -8,13 +9,13 @@ import * as Location from 'expo-location';
 import * as Network from 'expo-network';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { fetchPublicReportsFeed, subscribeToPublicReports, unsubscribeFromPublicReports } from '../api/feed.api';
 
@@ -40,6 +41,7 @@ export default function PublicReportsFeed() {
   const { fontSize } = useFontSize();
   const [reports, setReports] = useState<CitizenReport[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -51,6 +53,10 @@ export default function PublicReportsFeed() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   
   const channelRef = useRef<RealtimeChannel | null>(null);
+  // Cuando true, la suscripción ignorará (o bufferizará) eventos entrantes.
+  const suspendSubscriptionRef = useRef(false);
+  // Evitar recargas concurrentes que puedan provocar parpadeo
+  const isLoadingRef = useRef(false);
 
   const textColor = useThemeColor({}, 'text');
   const accentColor = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint');
@@ -115,35 +121,109 @@ export default function PublicReportsFeed() {
   }, [userLocation, getUserLocation]);
 
   // Cargar inicial y activar suscripción
-  const loadInitial = useCallback(async () => {
-    setLoading(true);
+  const loadInitial = useCallback(async (manual = false) => {
+    // Protegemos contra reentradas
+    if (isLoadingRef.current) {
+      // eslint-disable-next-line no-console
+      console.debug('[feed] loadInitial called but already running; ignoring');
+      return;
+    }
+    isLoadingRef.current = true;
+
+    // Si es recarga manual y ya tenemos datos, usamos `refreshing` para
+    // no ocultar el contenido existente con el spinner de carga completo.
+    if (manual && reports.length > 0) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    // eslint-disable-next-line no-console
+    console.debug('[feed] loadInitial start', new Date().toISOString(), { manual });
     setNetworkError(false);
     setLocationError(false);
+
+  // Suspender temporalmente la suscripción para evitar que los eventos
+  // en vuelo durante la recarga causen re-renders / parpadeo.
+  // Si es recarga manual, usamos una ventana más corta.
+  suspendSubscriptionRef.current = true;
 
     const coords = await getUserLocation();
     if (!coords) {
       setLoading(false);
+      isLoadingRef.current = false;
+      // reanudar suscripción con pequeña latencia
+      setTimeout(() => { suspendSubscriptionRef.current = false; }, 600);
+      // eslint-disable-next-line no-console
+      console.debug('[feed] loadInitial aborted: no coords');
       return;
     }
 
-    const { data, hasMore } = await loadPublicReports(INITIAL_LIMIT, coords);
-    setReports(data);
+  const { data, hasMore } = await loadPublicReports(INITIAL_LIMIT, coords);
+    // Evitar reemplazar el estado si los datos son iguales para evitar re-renders innecesarios
+    setReports((prev) => {
+      try {
+        if (JSON.stringify(prev) === JSON.stringify(data)) {
+          return prev;
+        }
+      } catch (_) {
+        // en caso de error stringify, continuar y reemplazar
+      }
+      return data;
+    });
     setHasMore(hasMore);
     setShowAll(false);
-    setLoading(false);
-    
+    if (manual && reports.length > 0) {
+      setRefreshing(false);
+    } else {
+      setLoading(false);
+    }
+    isLoadingRef.current = false;
+    // eslint-disable-next-line no-console
+    console.debug('[feed] loadInitial finished', new Date().toISOString(), { manual });
+
     // Activar suscripción en tiempo real después de la carga inicial
     setIsSubscribed(true);
+
+    // reanudar suscripción después de una ventana corta para permitir que
+    // la UI se estabilice (evita que los eventos que llegan justo después
+    // del fetch provoquen parpadeo). Si es manual, reanudamos más rápido.
+    setTimeout(() => { suspendSubscriptionRef.current = false; }, manual ? 700 : 1200);
   }, [getUserLocation, loadPublicReports]);
+
+  // Ejecutar carga inicial automáticamente al montar el componente
+  useEffect(() => {
+    // Llamamos a loadInitial una sola vez al montar
+    loadInitial().catch(() => {
+      // ignore errors here; estados locales ya manejan errores
+    });
+  }, [loadInitial]);
 
   // Cargar todas
   const loadAll = useCallback(async () => {
+    // Protegemos contra reentradas
+    if (isLoadingRef.current) {
+      // eslint-disable-next-line no-console
+      console.debug('[feed] loadAll called but load in progress; ignoring');
+      return;
+    }
+    isLoadingRef.current = true;
     setLoadingMore(true);
+    // Suspender suscripción durante loadAll para evitar churn
+    suspendSubscriptionRef.current = true;
     const { data, hasMore } = await loadPublicReports(9999); // sin límite práctico
-    setReports(data);
+    setReports((prev) => {
+      try {
+        if (JSON.stringify(prev) === JSON.stringify(data)) return prev;
+      } catch (_) {}
+      return data;
+    });
     setHasMore(false);
     setShowAll(true);
     setLoadingMore(false);
+    isLoadingRef.current = false;
+    setTimeout(() => { suspendSubscriptionRef.current = false; }, 1200);
+    // eslint-disable-next-line no-console
+    console.debug('[feed] loadAll finished', new Date().toISOString());
   }, [loadPublicReports]);
 
   // Ver menos (volver a las 3 iniciales)
@@ -200,41 +280,161 @@ export default function PublicReportsFeed() {
   useEffect(() => {
     if (!isSubscribed || !userLocation) return;
 
-    const channel = subscribeToPublicReports(
-      // onNewReport: agregar si está en rango
-      (newReport: any) => {
-        if (!isReportInRange(newReport)) return;
-        const mapped = mapReportToCitizen(newReport);
+    // Helper to compare reports quickly
+    const reportsEqual = (a: CitizenReport | null | undefined, b: CitizenReport | null | undefined) => {
+      try {
+        return JSON.stringify(a) === JSON.stringify(b);
+      } catch (_) {
+        return false;
+      }
+    };
+
+    // Buffer events and apply in batch to reduce rapid re-renders/flicker
+    const queuedAdds: Map<string, any> = new Map();
+    const queuedUpdates: Map<string, any> = new Map();
+    const queuedDeletes: Map<string, true> = new Map();
+    const lastApplied: Map<string, string> = new Map(); // store last applied payload hash per id
+
+    let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleFlush = () => {
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = setTimeout(() => {
+        // Apply batched changes
         setReports((prev) => {
-          // Evitar duplicados
-          if (prev.some(r => r.id === mapped.id)) return prev;
-          // Insertar al principio (más reciente primero)
-          return [mapped, ...prev];
+          let next = [...prev];
+
+          // Apply deletes first
+          if (queuedDeletes.size > 0) {
+            const deleteIds = Array.from(queuedDeletes.keys());
+            next = next.filter(r => !deleteIds.includes(r.id));
+          }
+
+          // Apply updates
+          queuedUpdates.forEach((mapped, id) => {
+            const idx = next.findIndex(r => r.id === id);
+            if (idx === -1) {
+              // Not present, insert at top
+              next = [mapped, ...next];
+            } else {
+              // Replace only if different
+              try {
+                if (JSON.stringify(next[idx]) !== JSON.stringify(mapped)) {
+                  next[idx] = mapped;
+                }
+              } catch (_) {
+                next[idx] = mapped;
+              }
+            }
+          });
+
+          // Apply adds (new items) — ensure not duplicated; maintain original order (newest first)
+          const addIds = Array.from(queuedAdds.keys());
+          for (let i = addIds.length - 1; i >= 0; i--) {
+            const id = addIds[i];
+            const mapped = queuedAdds.get(id);
+            if (!next.some(r => r.id === id)) {
+              next = [mapped, ...next];
+            }
+          }
+
+          // Clear queues
+          queuedAdds.clear();
+          queuedUpdates.clear();
+          queuedDeletes.clear();
+
+          return next;
         });
-      },
-      // onUpdateReport: actualizar si existe
-      (updatedReport: any) => {
-        if (!isReportInRange(updatedReport)) {
-          // Si ya no está en rango, eliminarlo
-          setReports((prev) => prev.filter(r => r.id !== String(updatedReport.id)));
+        if (flushTimer) {
+          clearTimeout(flushTimer);
+          flushTimer = null;
+        }
+      }, 800);
+    };
+
+    const logEvent = (type: string, payloadSummary: any) => {
+      // Small, informative debug log to inspect event flux during development
+      try {
+        const short = typeof payloadSummary === 'string' ? payloadSummary.slice(0, 200) : JSON.stringify(payloadSummary).slice(0, 200);
+        // Use console.debug so logs can be filtered in debug builds
+        // eslint-disable-next-line no-console
+        console.debug(`[feed:sub] ${type} ${new Date().toISOString()} -> ${short}`);
+      } catch (_) {
+        // ignore logging errors
+      }
+    };
+
+    const channel = subscribeToPublicReports(
+      // onNewReport: enqueue if in range
+      (newReport: any) => {
+        if (suspendSubscriptionRef.current) {
+          // eslint-disable-next-line no-console
+          console.debug('[feed:sub] suspended new -> ignored', new Date().toISOString());
           return;
         }
-        const mapped = mapReportToCitizen(updatedReport);
-        setReports((prev) => {
-          const idx = prev.findIndex(r => r.id === mapped.id);
-          if (idx === -1) {
-            // No existe, agregarlo
-            return [mapped, ...prev];
-          }
-          // Existe, actualizarlo
-          const updated = [...prev];
-          updated[idx] = mapped;
-          return updated;
-        });
+        if (!isReportInRange(newReport)) return;
+        const mapped = mapReportToCitizen(newReport);
+        const payloadHash = JSON.stringify(mapped);
+        const last = lastApplied.get(mapped.id);
+        // If identical to last applied, skip enqueuing
+        if (last === payloadHash) {
+          logEvent('skip-new(same)', { id: mapped.id });
+          return;
+        }
+        logEvent('new', { id: mapped.id, title: mapped.titulo });
+        queuedAdds.set(mapped.id, mapped);
+        // ensure we don't have stale delete queued
+        if (queuedDeletes.has(mapped.id)) queuedDeletes.delete(mapped.id);
+        // update lastApplied to avoid immediate duplicates
+        lastApplied.set(mapped.id, payloadHash);
+        scheduleFlush();
       },
-      // onDeleteReport: eliminar si existe
+      // onUpdateReport: enqueue update
+      (updatedReport: any) => {
+        if (suspendSubscriptionRef.current) {
+          // eslint-disable-next-line no-console
+          console.debug('[feed:sub] suspended update -> ignored', new Date().toISOString());
+          return;
+        }
+        if (!isReportInRange(updatedReport)) {
+          // enqueue delete
+          queuedDeletes.set(String(updatedReport.id), true as true);
+          // also remove any pending adds/updates
+          if (queuedAdds.has(String(updatedReport.id))) queuedAdds.delete(String(updatedReport.id));
+          if (queuedUpdates.has(String(updatedReport.id))) queuedUpdates.delete(String(updatedReport.id));
+          logEvent('delete-enqueue', { id: String(updatedReport.id) });
+          scheduleFlush();
+          return;
+        }
+
+        const mapped = mapReportToCitizen(updatedReport);
+        const payloadHash = JSON.stringify(mapped);
+        const last = lastApplied.get(mapped.id);
+        if (last === payloadHash) {
+          logEvent('skip-update(same)', { id: mapped.id });
+          return;
+        }
+        logEvent('update', { id: mapped.id, title: mapped.titulo });
+        queuedUpdates.set(mapped.id, mapped);
+        // If it was in adds, replace it
+        if (queuedAdds.has(mapped.id)) queuedAdds.set(mapped.id, mapped);
+        lastApplied.set(mapped.id, payloadHash);
+        scheduleFlush();
+      },
+      // onDeleteReport: enqueue delete
       (reportId: string) => {
-        setReports((prev) => prev.filter(r => r.id !== reportId));
+        if (suspendSubscriptionRef.current) {
+          // eslint-disable-next-line no-console
+          console.debug('[feed:sub] suspended delete -> ignored', new Date().toISOString());
+          return;
+        }
+        queuedDeletes.set(reportId, true as true);
+        // also remove any pending adds/updates
+        if (queuedAdds.has(reportId)) queuedAdds.delete(reportId);
+        if (queuedUpdates.has(reportId)) queuedUpdates.delete(reportId);
+        lastApplied.delete(reportId);
+        logEvent('delete', { id: reportId });
+        scheduleFlush();
       }
     );
 
@@ -256,11 +456,11 @@ export default function PublicReportsFeed() {
           <Text style={[styles.sectionTitle, { color: textColor, fontSize: getFontSizeValue(fontSize, 22) }]}>Denuncias</Text>
           <TouchableOpacity
             style={styles.refreshButton}
-            onPress={loadInitial}
+            onPress={() => loadInitial(true)}
             activeOpacity={0.7}
-            disabled={loading}
+            disabled={loading || refreshing}
           >
-            {loading ? (
+            {(loading || refreshing) ? (
               <ActivityIndicator size="small" color={accentColor} />
             ) : (
               <>
@@ -391,10 +591,8 @@ export default function PublicReportsFeed() {
       {/* Modal de detalle */}
       <ReportDetailModal
         visible={showDetailModal}
+        reportId={selectedReport ? String(selectedReport.id) : null}
         onClose={() => setShowDetailModal(false)}
-        report={selectedReport}
-        onToggleLike={handleToggleLike}
-        isLiked={false}
       />
     </>
   );
