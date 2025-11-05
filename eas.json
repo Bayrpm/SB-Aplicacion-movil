@@ -4,14 +4,8 @@
     "version": ">= 1.0.0"
   },
   "build": {
-    "development": {
-      "developmentClient": true,
-      "channel": "development",
-      "android": {
-        "buildType": "apk"
-      }
-    },
-    "despliegue-apk": {
+    "internal-apk": {
+      "distribution": "internal",
       "channel": "despliegue",
       "android": {
         "buildType": "apk"
