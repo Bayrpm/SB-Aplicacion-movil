@@ -21,7 +21,7 @@ import {
   View
 } from 'react-native';
 import { getCitizenProfile } from '../../profileCitizen/api/profile.api';
-import { createReportComment, fetchPublicReportDetail, fetchReportComments, fetchReportStats, reactToComment, reactToReport } from '../api/report.api';
+import { createReportComment, deleteReportComment, fetchPublicReportDetail, fetchReportComments, fetchReportStats, reactToComment, reactToReport, updateReportComment } from '../api/report.api';
 // screen width used by gallery styles
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -799,6 +799,63 @@ export default function ReportDetailModal({
                   }}
                   currentUserId={currentUserId}
                   currentUserAvatar={currentUserAvatar}
+                  onEdit={async (commentId: string, newText: string) => {
+                    if (!selectedReportForComments) return;
+                    // Optimistic update
+                    const prev = comments;
+                    setComments((prevList) => prevList.map((c: any) => c.id === commentId ? ({ ...c, contenido: newText, text: newText }) : c));
+                    try {
+                      const res = await updateReportComment(Number(commentId), newText);
+                      if (res?.error) {
+                        // rollback
+                        setComments(prev);
+                      } else {
+                        // refresh list and stats
+                        await loadComments(selectedReportForComments);
+                        const s = await fetchReportStats(selectedReportForComments);
+                        setReportStats((prev) => ({
+                          ...prev,
+                          [selectedReportForComments]: {
+                            likes: s.likes,
+                            dislikes: s.dislikes,
+                            hasLiked: s.userReaction === 'LIKE',
+                            hasDisliked: s.userReaction === 'DISLIKE',
+                            commentsCount: s.commentsCount,
+                          }
+                        }));
+                      }
+                    } catch (e) {
+                      setComments(prev);
+                    }
+                  }}
+                  onDelete={async (commentId: string) => {
+                    if (!selectedReportForComments) return;
+                    const prev = comments;
+                    // Optimistic remove
+                    setComments((prevList) => prevList.filter((c: any) => c.id !== commentId));
+                    try {
+                      const res = await deleteReportComment(Number(commentId));
+                      if (res?.error) {
+                        // rollback
+                        setComments(prev);
+                      } else {
+                        // refresh stats
+                        const s = await fetchReportStats(selectedReportForComments);
+                        setReportStats((prev) => ({
+                          ...prev,
+                          [selectedReportForComments]: {
+                            likes: s.likes,
+                            dislikes: s.dislikes,
+                            hasLiked: s.userReaction === 'LIKE',
+                            hasDisliked: s.userReaction === 'DISLIKE',
+                            commentsCount: s.commentsCount,
+                          }
+                        }));
+                      }
+                    } catch (e) {
+                      setComments(prev);
+                    }
+                  }}
                 />
               </View>
             </Animated.View>

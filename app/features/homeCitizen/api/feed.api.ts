@@ -51,8 +51,6 @@ export async function fetchPublicReportsFeed({
 
       if (error) {
         // si falla la consulta directa, caemos al RPC como fallback
-        // eslint-disable-next-line no-console
-        console.debug('[feed.api] from denuncias failed, falling back to rpc', error.message);
       } else {
         fromResult = rows ?? [];
       }
@@ -104,10 +102,8 @@ export async function fetchPublicReportsFeed({
     const items = rows.slice(0, limit);
     const hasMore = rows.length > limit;
 
-    // instrumentación: medir duración
-    const ms = Date.now() - start;
-    // eslint-disable-next-line no-console
-    console.debug(`[feed.api] fetchPublicReportsFeed finished in ${ms}ms; sourceRows=${(sourceRows ?? []).length}; returned=${items.length}`);
+  // instrumentación: medir duración (silenciada en producción)
+  const ms = Date.now() - start;
     return { data: items, hasMore };
   } catch (e: any) {
     return { data: [], hasMore: false, error: e?.message || 'Error desconocido' };

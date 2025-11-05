@@ -697,3 +697,72 @@ export async function reactToComment(commentId: number, tipo: 'LIKE'|'DISLIKE') 
     return { data: null, error: e };
   }
 }
+
+/**
+ * Elimina el avatar del usuario: intenta borrar el objeto del bucket 'avatars'
+ * (si puede derivar la ruta desde la URL pública) y deja avatar_url = NULL
+ */
+export async function deleteCitizenAvatar(currentAvatarUrl?: string): Promise<{
+  data: CitizenProfile | null;
+  error: string | null;
+}> {
+  try {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData?.user) return { data: null, error: 'Usuario no autenticado' };
+
+    const userId = userData.user.id;
+
+    // Si no recibimos la URL actual, consultamos el perfil
+    let avatarUrl = currentAvatarUrl ?? null;
+    if (!avatarUrl) {
+      try {
+        const { data: profileRow } = await supabase.from('perfiles_ciudadanos').select('avatar_url').eq('usuario_id', userId).maybeSingle();
+        avatarUrl = profileRow?.avatar_url ?? null;
+      } catch (e) {
+        avatarUrl = null;
+      }
+    }
+
+    // Intentar eliminar el objeto en storage si podemos obtener la ruta relativa
+    if (avatarUrl) {
+      try {
+        let path: string | null = null;
+        // Soportar varios formatos de URL que pueda retornar Supabase
+        const variants = ['/avatars/', '/object/public/avatars/', '/storage/v1/object/public/avatars/'];
+        for (const v of variants) {
+          const idx = avatarUrl.indexOf(v);
+          if (idx !== -1) {
+            path = decodeURIComponent(avatarUrl.slice(idx + v.length));
+            const q = path.indexOf('?');
+            if (q !== -1) path = path.slice(0, q);
+            break;
+          }
+        }
+
+        if (path) {
+          const { error: delErr } = await supabase.storage.from('avatars').remove([path]);
+          if (delErr) {
+            // No fatal: registrar y continuar para limpiar la URL en el perfil
+            console.warn('deleteCitizenAvatar: error removing storage object', delErr.message ?? delErr);
+          }
+        }
+      } catch (e) {
+        console.warn('deleteCitizenAvatar: error while removing from storage', e);
+      }
+    }
+
+    // Finalmente actualizar el perfil poniendo avatar_url a NULL
+    const { data, error } = await supabase
+      .from('perfiles_ciudadanos')
+      .update({ avatar_url: null })
+      .eq('usuario_id', userId)
+      .select()
+      .maybeSingle();
+
+    if (error) return { data: null, error: error.message ?? String(error) };
+    return { data, error: null };
+  } catch (e: any) {
+    console.error('deleteCitizenAvatar exception', e);
+    return { data: null, error: e?.message ?? 'Error inesperado' };
+  }
+}

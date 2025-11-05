@@ -123,11 +123,7 @@ export default function PublicReportsFeed() {
   // Cargar inicial y activar suscripción
   const loadInitial = useCallback(async (manual = false) => {
     // Protegemos contra reentradas
-    if (isLoadingRef.current) {
-      // eslint-disable-next-line no-console
-      console.debug('[feed] loadInitial called but already running; ignoring');
-      return;
-    }
+    if (isLoadingRef.current) return;
     isLoadingRef.current = true;
 
     // Si es recarga manual y ya tenemos datos, usamos `refreshing` para
@@ -137,8 +133,7 @@ export default function PublicReportsFeed() {
     } else {
       setLoading(true);
     }
-    // eslint-disable-next-line no-console
-    console.debug('[feed] loadInitial start', new Date().toISOString(), { manual });
+  // loadInitial start
     setNetworkError(false);
     setLocationError(false);
 
@@ -153,8 +148,7 @@ export default function PublicReportsFeed() {
       isLoadingRef.current = false;
       // reanudar suscripción con pequeña latencia
       setTimeout(() => { suspendSubscriptionRef.current = false; }, 600);
-      // eslint-disable-next-line no-console
-      console.debug('[feed] loadInitial aborted: no coords');
+      // aborted: no coords
       return;
     }
 
@@ -177,9 +171,8 @@ export default function PublicReportsFeed() {
     } else {
       setLoading(false);
     }
-    isLoadingRef.current = false;
-    // eslint-disable-next-line no-console
-    console.debug('[feed] loadInitial finished', new Date().toISOString(), { manual });
+  isLoadingRef.current = false;
+  // loadInitial finished
 
     // Activar suscripción en tiempo real después de la carga inicial
     setIsSubscribed(true);
@@ -200,12 +193,8 @@ export default function PublicReportsFeed() {
 
   // Cargar todas
   const loadAll = useCallback(async () => {
-    // Protegemos contra reentradas
-    if (isLoadingRef.current) {
-      // eslint-disable-next-line no-console
-      console.debug('[feed] loadAll called but load in progress; ignoring');
-      return;
-    }
+    // Protegemos contra recentradas
+    if (isLoadingRef.current) return;
     isLoadingRef.current = true;
     setLoadingMore(true);
     // Suspender suscripción durante loadAll para evitar churn
@@ -221,9 +210,8 @@ export default function PublicReportsFeed() {
     setShowAll(true);
     setLoadingMore(false);
     isLoadingRef.current = false;
-    setTimeout(() => { suspendSubscriptionRef.current = false; }, 1200);
-    // eslint-disable-next-line no-console
-    console.debug('[feed] loadAll finished', new Date().toISOString());
+  setTimeout(() => { suspendSubscriptionRef.current = false; }, 1200);
+  // loadAll finished
   }, [loadPublicReports]);
 
   // Ver menos (volver a las 3 iniciales)

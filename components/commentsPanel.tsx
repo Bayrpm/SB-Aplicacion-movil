@@ -3,7 +3,7 @@ import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type CommentItem = {
@@ -31,6 +31,8 @@ type Props = {
   onReply?: (comment: CommentItem) => void;
   currentUserId?: string | null;
   currentUserAvatar?: string | null;
+  onEdit?: (commentId: string, newText: string) => Promise<void> | void;
+  onDelete?: (commentId: string) => Promise<void> | void;
 };
 
 export default function CommentsPanel({
@@ -41,14 +43,22 @@ export default function CommentsPanel({
   onSubmit,
   onLike,
   onReply,
+  onEdit,
+  onDelete,
   currentUserId,
   currentUserAvatar,
 }: Props) {
   const insets = useSafeAreaInsets();
   const textColor = useThemeColor({}, 'text');
   const mutedColor = useThemeColor({}, 'icon');
-  const accentColor = useThemeColor({ light: '#0A4A90', dark: '#ffffffff' }, 'tint');
+  // Accent usado para acciones y también como fondo del avatar fallback.
+  // Dark value previous was invalid ('#ffffffff') which puede causar que el fondo
+  // sea blanco y las iniciales (texto blanco) queden invisibles en dark mode.
+  const accentColor = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint');
   const itemBg = useThemeColor({ light: '#F9FAFB', dark: '#0A1628' }, 'background');
+  const modalBg = useThemeColor({ light: '#FFFFFF', dark: '#071018' }, 'background');
+  const overlayBg = useThemeColor({ light: 'rgba(0,0,0,0.45)', dark: 'rgba(255,255,255,0.03)' }, 'background');
+  const selectedBg = useThemeColor({ light: '#FFF7ED', dark: '#17202A' }, 'background');
   const { fontSize } = useFontSize();
   const inputRef = useRef<TextInput | null>(null);
 
@@ -58,6 +68,9 @@ export default function CommentsPanel({
   const [replyTo, setReplyTo] = useState<{ id: string; author: string } | null>(null);
   const [collapsedReplies, setCollapsedReplies] = useState<Record<string, boolean>>({});
   const [isSubmittingLocal, setIsSubmittingLocal] = useState(false);
+  const [selectedComment, setSelectedComment] = useState<CommentItem | null>(null);
+  const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
 
   useEffect(() => {
     const map: Record<string, { count: number; liked: boolean }> = {};
@@ -132,7 +145,8 @@ export default function CommentsPanel({
   const isSubmitting = isSubmittingLocal;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={insets.bottom + 10}>
+    // Usar 'padding' en ambos OS mejora el comportamiento dentro de modals y vistas anidadas.
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={'padding'} keyboardVerticalOffset={insets.bottom + 80}>
       {loading ? (
         <View style={{ padding: 20, alignItems: 'center' }}>
           <ActivityIndicator size="small" color={accentColor} />
@@ -144,7 +158,7 @@ export default function CommentsPanel({
         </View>
       ) : null}
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
+  <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
         {tops.map((c) => {
           const likesState = localLikes[String(c.id)] ?? { count: c.likes ?? 0, liked: !!c.liked };
           const avatarUri = c.avatar ?? (c.usuario_id && currentUserId && c.usuario_id === currentUserId ? currentUserAvatar : null);
@@ -153,18 +167,30 @@ export default function CommentsPanel({
           collectDescendants(String(c.id), childrenFlat);
           const collapsed = !!collapsedReplies[String(c.id)];
 
+          const isSelected = selectedComment?.id === String(c.id);
+
           return (
-            <View key={c.id}>
-              <View style={styles.commentRow}>
+            <View key={c.id} style={optionsModalVisible && !isSelected ? { opacity: 0.2 } : undefined}>
+              <TouchableOpacity
+                activeOpacity={0.95}
+                onLongPress={() => {
+                  // Allow long-press if this comment belongs to current user
+                  if (currentUserId && c.usuario_id && String(c.usuario_id) === String(currentUserId)) {
+                    setSelectedComment(c);
+                    setOptionsModalVisible(true);
+                  }
+                }}
+                style={styles.commentRow}
+              >
                 {avatarUri ? (
                   <Image source={{ uri: avatarUri }} style={styles.commentAvatar} />
                 ) : (
-                  <View style={[styles.commentAvatarFallback, { backgroundColor: accentColor }]}>
-                    <Text style={styles.commentAvatarText}>{(String(((c.author ?? c.autor) || 'U')).trim().charAt(0) || 'U').toUpperCase()}</Text>
+                  <View style={[styles.commentAvatarFallback, { backgroundColor: accentColor }]}> 
+                    <Text style={[styles.commentAvatarText, { fontSize: getFontSizeValue(fontSize, 16) }]}>{getInitials(String((c.author ?? c.autor) || 'U'))}</Text>
                   </View>
                 )}
 
-                <View style={{ flex: 1 }}>
+                <View style={[{ flex: 1 }, optionsModalVisible && isSelected ? { backgroundColor: selectedBg, borderRadius: 8, padding: 6 } : undefined]}>
                   <View style={styles.commentHeaderRow}>
                     <Text style={[styles.commentAuthor, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>{c.author ?? c.autor}</Text>
                     {c.created_at ? <Text style={{ color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }}>{getRelativeTime(c.created_at)}</Text> : null}
@@ -188,7 +214,7 @@ export default function CommentsPanel({
                     </View>
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
 
               {childrenFlat.length > 0 ? (
                 <View style={{ paddingLeft: REPLY_INDENT, paddingRight: 12, marginTop: 4 }}>
@@ -199,32 +225,45 @@ export default function CommentsPanel({
                   {!collapsed && childrenFlat.map((r) => {
                     const rLikes = localLikes[String(r.id)] ?? { count: r.likes ?? 0, liked: !!r.liked };
                     const rAvatar = r.avatar ?? null;
+                    const isReplySelected = selectedComment?.id === String(r.id);
                     return (
-                      <View key={r.id} style={[styles.replyRow]}> 
-                        {rAvatar ? (
-                          <Image source={{ uri: rAvatar }} style={[styles.replyAvatar]} />
-                        ) : (
-                          <View style={[styles.replyAvatarFallback, { backgroundColor: accentColor }]}>
-                            <Text style={[styles.commentAvatarText, { fontSize: 12 }]}>{(String(((r.author ?? r.autor) || 'U')).trim().charAt(0) || 'U').toUpperCase()}</Text>
+                      <View key={r.id} style={optionsModalVisible && !isReplySelected ? { opacity: 0.2 } : undefined}>
+                        <TouchableOpacity
+                          activeOpacity={0.95}
+                          onLongPress={() => {
+                            if (currentUserId && r.usuario_id && String(r.usuario_id) === String(currentUserId)) {
+                              setSelectedComment(r);
+                              setOptionsModalVisible(true);
+                            }
+                          }}
+                          style={[styles.replyRow]}
+                        >
+                          {rAvatar ? (
+                            <Image source={{ uri: rAvatar }} style={[styles.replyAvatar]} />
+                          ) : (
+                            <View style={[styles.replyAvatarFallback, { backgroundColor: accentColor }]}> 
+                              <Text style={[styles.commentAvatarText, { fontSize: getFontSizeValue(fontSize, 12) }]}>{getInitials(String((r.author ?? r.autor) || 'U'))}</Text>
+                            </View>
+                          )}
+
+                          <View style={{ flex: 1, marginLeft: 8 }}>
+                            <View style={styles.commentHeaderRow}>
+                              <Text style={[styles.commentAuthor, { color: textColor, fontSize: getFontSizeValue(fontSize, 13) }]}>{r.author ?? r.autor}</Text>
+                              {r.created_at ? <Text style={{ color: mutedColor, fontSize: getFontSizeValue(fontSize, 11) }}>{getRelativeTime(r.created_at)}</Text> : null}
+                            </View>
+                            <Text style={{ color: textColor, marginTop: 4, fontSize: getFontSizeValue(fontSize, 13) }}>{r.text ?? r.contenido}</Text>
+                            <View style={[styles.commentActionsRow, { marginTop: 6 }]}> 
+                              <TouchableOpacity onPress={() => handleLike(r)} style={styles.commentActionButton}>
+                                <IconSymbol name={rLikes.liked ? 'heart.fill' : 'heart'} size={16} color={rLikes.liked ? '#EF4444' : textColor} />
+                                <Text style={[styles.commentActionText, { color: textColor }]}>{rLikes.count || 0}</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => handleReply(r)} style={[styles.commentActionButton, { marginLeft: 10 }]}> 
+                                <IconSymbol name="reply" size={14} color={mutedColor} />
+                                <Text style={[styles.commentActionText, { color: mutedColor, fontSize: 13 }]}>Responder</Text>
+                              </TouchableOpacity>
+                            </View>
                           </View>
-                        )}
-                        <View style={{ flex: 1, marginLeft: 8 }}>
-                          <View style={styles.commentHeaderRow}>
-                            <Text style={[styles.commentAuthor, { color: textColor, fontSize: getFontSizeValue(fontSize, 13) }]}>{r.author ?? r.autor}</Text>
-                            {r.created_at ? <Text style={{ color: mutedColor, fontSize: getFontSizeValue(fontSize, 11) }}>{getRelativeTime(r.created_at)}</Text> : null}
-                          </View>
-                          <Text style={{ color: textColor, marginTop: 4, fontSize: getFontSizeValue(fontSize, 13) }}>{r.text ?? r.contenido}</Text>
-                          <View style={[styles.commentActionsRow, { marginTop: 6 }]}>
-                            <TouchableOpacity onPress={() => handleLike(r)} style={styles.commentActionButton}>
-                              <IconSymbol name={rLikes.liked ? 'heart.fill' : 'heart'} size={16} color={rLikes.liked ? '#EF4444' : textColor} />
-                              <Text style={[styles.commentActionText, { color: textColor }]}>{rLikes.count || 0}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleReply(r)} style={[styles.commentActionButton, { marginLeft: 10 }]}> 
-                              <IconSymbol name="reply" size={14} color={mutedColor} />
-                              <Text style={[styles.commentActionText, { color: mutedColor, fontSize: 13 }]}>Responder</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
+                        </TouchableOpacity>
                       </View>
                     );
                   })}
@@ -235,9 +274,67 @@ export default function CommentsPanel({
         })}
       </ScrollView>
 
+      {/* Options modal for modify/delete */}
+      <Modal visible={optionsModalVisible} transparent animationType="fade" onRequestClose={() => setOptionsModalVisible(false)}>
+        <View style={[styles.modalOverlay, { backgroundColor: overlayBg }]}> 
+          <View style={[styles.modalInner, { backgroundColor: modalBg }]}> 
+            <Text style={[styles.modalTitle, { color: textColor }]}>Acciones</Text>
+            {/* Determine permission: canEdit if within 1 hour and authored by current user */}
+            {selectedComment ? (() => {
+              const authored = currentUserId && selectedComment.usuario_id && String(selectedComment.usuario_id) === String(currentUserId);
+              const created = selectedComment.created_at ? new Date(selectedComment.created_at) : null;
+              const canEdit = authored && created ? (Date.now() - created.getTime()) <= (60 * 60 * 1000) : false;
+              return (
+                <>
+                  {canEdit ? (
+                    <TouchableOpacity style={styles.modalButton} onPress={() => {
+                      // Prefill input and enter editing mode
+                      setOptionsModalVisible(false);
+                      setEditingCommentId(String(selectedComment.id));
+                      setCommentText(selectedComment.text ?? selectedComment.contenido ?? '');
+                      setTimeout(() => inputRef.current?.focus(), 100);
+                    }}>
+                      <Text style={[styles.modalButtonText, { color: accentColor }]}>Modificar</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  <TouchableOpacity style={[styles.modalButton, { marginTop: 8 }]} onPress={async () => {
+                    // Delete action
+                    setOptionsModalVisible(false);
+                    if (selectedComment && typeof onDelete === 'function') {
+                      try {
+                        await onDelete(String(selectedComment.id));
+                      } catch (e) {
+                        // ignore
+                      }
+                    }
+                    setSelectedComment(null);
+                  }}>
+                    <Text style={[styles.modalButtonText, { color: '#EF4444', fontWeight: '700' }]}>Eliminar</Text>
+                  </TouchableOpacity>
+                </>
+              );
+            })() : null}
+
+            <TouchableOpacity style={[styles.modalButton, { marginTop: 12 }]} onPress={() => { setOptionsModalVisible(false); setSelectedComment(null); }}>
+              <Text style={[styles.modalCancelText, { color: mutedColor }]}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Input */}
       <View style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
-        {replyTo ? (
+        {editingCommentId ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <View style={{ backgroundColor: itemBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, flex: 1 }}>
+              <Text style={{ color: textColor }}>Editando comentario</Text>
+            </View>
+            <TouchableOpacity onPress={() => { setEditingCommentId(null); setCommentText(''); }} style={{ marginLeft: 8, padding: 6 }}>
+              <IconSymbol name="close" size={16} color={mutedColor} />
+            </TouchableOpacity>
+          </View>
+        ) : replyTo ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
             <View style={{ backgroundColor: itemBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, flex: 1 }}>
               <Text style={{ color: textColor }}>Respondiendo a @{replyTo.author}</Text>
@@ -266,11 +363,18 @@ export default function CommentsPanel({
               if (isSubmitting || !commentText.trim()) return;
               const prevText = commentText;
               try {
-                // Optimistic UI: clear input immediately so user sees fast feedback
                 setIsSubmittingLocal(true);
-                setReplyTo(null);
-                setCommentText('');
-                await onSubmit(replyTo ? Number(replyTo.id) : undefined);
+                // If editing a comment, call onEdit
+                if (editingCommentId && typeof onEdit === 'function') {
+                  await onEdit(editingCommentId, commentText.trim());
+                  setEditingCommentId(null);
+                  setCommentText('');
+                } else {
+                  setReplyTo(null);
+                  // Optimistic UI: clear input immediately so user sees fast feedback
+                  setCommentText('');
+                  await onSubmit(replyTo ? Number(replyTo.id) : undefined);
+                }
               } catch (e) {
                 // restore previous text on error
                 setCommentText(prevText);
@@ -299,6 +403,26 @@ function getFontSizeValue(fontSize: 'small' | 'medium' | 'large', base: number):
       return base * 1.25;
     default:
       return base;
+  }
+}
+
+// Devuelve las iniciales (primera y última palabra) en mayúsculas. Ej: "Juan Pérez Gómez" -> "JG"
+function getInitials(name: string): string {
+  // Regla: devolver inicial del primer nombre y del primer apellido.
+  // Para nombres con 1 palabra: usar primera letra.
+  // Para 2 palabras: usar primera letra de cada una.
+  // Para 3+ palabras: asumir que las últimas dos palabras son apellidos -> usar la penúltima como primer apellido.
+  try {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return 'U';
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    if (parts.length === 2) return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+    // 3 o más: tomar primera palabra y la penúltima (primer apellido)
+    const first = parts[0].charAt(0).toUpperCase();
+    const firstSurname = parts[parts.length - 2].charAt(0).toUpperCase();
+    return `${first}${firstSurname}`;
+  } catch (e) {
+    return 'U';
   }
 }
 
@@ -342,4 +466,11 @@ const styles = StyleSheet.create({
   replyRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 8, paddingHorizontal: 0 },
   replyAvatar: { width: 36, height: 36, borderRadius: 18, overflow: 'hidden' },
   replyAvatarFallback: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  selectedCommentHighlight: { backgroundColor: '#fff7ed', borderRadius: 8, padding: 6 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalInner: { width: '100%', maxWidth: 360, backgroundColor: '#fff', borderRadius: 12, padding: 18, alignItems: 'stretch' },
+  modalTitle: { fontSize: 16, fontWeight: '800', marginBottom: 8 },
+  modalButton: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
+  modalButtonText: { fontSize: 15, fontWeight: '700' },
+  modalCancelText: { color: '#6B7280', fontSize: 15, textAlign: 'center' },
 });

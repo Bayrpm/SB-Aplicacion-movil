@@ -1,4 +1,4 @@
-import { uploadCitizenAvatar } from '@/app/features/profileCitizen/api/profile.api';
+import { deleteCitizenAvatar, uploadCitizenAvatar } from '@/app/features/profileCitizen/api/profile.api';
 import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -45,8 +45,8 @@ export default function ProfileHeader({
   const buttonContentColor = useThemeColor({ light: '#0A4A90', dark: '#FFFFFF' }, 'tint'); // Azul en light, blanco en dark
 
   // Altura del header más adaptable y limitada (aumentada para más espacio de curva)
-  const maxHeaderHeight = Math.min(500, height * 0.45);
-   const headerHeight = Math.round(Math.max(280, Math.min(420, height * 0.45))); // Altura del header adaptable: proporcional a la pantalla pero con límites
+  const maxHeaderHeight = Math.min(520, height * 0.5);
+  const headerHeight = Math.round(Math.max(320, Math.min(480, height * 0.5))); // Altura del header adaptable: proporcional a la pantalla pero con límites
    // razonables para que en pantallas pequeñas no ocupe demasiado espacio y en
    // pantallas grandes permita la curva deseada.
 
@@ -87,7 +87,9 @@ export default function ProfileHeader({
   // clamp por safe area y límite inferior razonable
   const minTop = insets.top + 8;
   const maxTop = headerHeight + Math.round(bellyOffset * 0.45);
-  const editButtonTop = Math.max(minTop, Math.min(desiredTop, maxTop));
+  // Ajuste fino: empujamos el botón sólo un poco para que quede mitad dentro/mitad fuera
+  const EDIT_BUTTON_EXTRA = Math.round(BUTTON_HEIGHT * 0.13); // pequeño desplazamiento (~8px)
+  const editButtonTop = Math.max(minTop, Math.min(desiredTop + EDIT_BUTTON_EXTRA, maxTop + EDIT_BUTTON_EXTRA));
 
   return (
     // Permitimos que las áreas transparentes del header no bloqueen toques
@@ -111,9 +113,12 @@ export default function ProfileHeader({
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={() => {
-            AppAlert.alert('Cambiar foto', '¿Seguro que quieres cambiar tu foto de perfil?', [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Sí, cambiar', onPress: async () => {
+            // Construir botones dinámicamente: Modificar, Eliminar (solo si hay avatar), Cancelar
+            const buttons: any[] = [];
+
+            buttons.push({
+              text: 'Modificar',
+              onPress: async () => {
                 try {
                   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
                   if (!perm.granted) { AppAlert.alert('Avatar', 'Permiso denegado para acceder a la galería'); return; }
@@ -123,23 +128,60 @@ export default function ProfileHeader({
                   const { data, error } = await uploadCitizenAvatar(uri);
                   if (error || !data) { AppAlert.alert('Error', error || 'No se pudo subir la imagen'); return; }
                   AppAlert.alert('Éxito', 'Avatar actualizado correctamente');
-                  try { onAvatarUpdated && onAvatarUpdated(data); } catch {}
+                  try { onAvatarUpdated && onAvatarUpdated(data); } catch (e) { console.warn('onAvatarUpdated error', e); }
                 } catch (e) {
                   AppAlert.alert('Error', 'No se pudo cambiar la foto de perfil');
                 }
-              } }
-            ]);
+              }
+            });
+
+            if (avatarUrl) {
+              buttons.push({
+                text: 'Eliminar',
+                style: 'destructive',
+                onPress: async () => {
+                  // Confirmación adicional
+                  AppAlert.alert('Eliminar avatar', '¿Estás seguro? Esta acción quitará tu avatar.', [
+                    { text: 'Cancelar', style: 'cancel' },
+                    { text: 'Sí, eliminar', style: 'destructive', onPress: async () => {
+                        try {
+                          const { data, error } = await deleteCitizenAvatar(avatarUrl);
+                          if (error) {
+                            console.error('deleteCitizenAvatar error:', error);
+                            AppAlert.alert('Error', typeof error === 'string' ? error : String(error));
+                            return;
+                          }
+                          AppAlert.alert('Avatar', 'Avatar eliminado correctamente');
+                          try {
+                            if (onAvatarUpdated) onAvatarUpdated(data ?? null);
+                          } catch (cbErr) {
+                            console.warn('onAvatarUpdated callback error:', cbErr);
+                          }
+                        } catch (e) {
+                          console.error('Eliminar avatar exception:', e);
+                          AppAlert.alert('Error', 'No se pudo eliminar avatar');
+                        }
+                      } }
+                  ]);
+                }
+              });
+            }
+
+            // Siempre agregar la opción Cancelar al final (estilo cancel)
+            buttons.push({ text: 'Cancelar', style: 'cancel' });
+
+            AppAlert.alert('Avatar', '¿Qué quieres hacer con tu foto de perfil?', buttons);
           }}
           style={[styles.avatarContainer, { backgroundColor: avatarBg }]}
         >
           {avatarUrl ? (
             <RNImage source={{ uri: avatarUrl }} style={styles.avatarImage} />
           ) : (
-            <Text style={[styles.avatarText, { fontSize: getFontSizeValue(fontSize, 32) }]}>{userInitials}</Text>
+            <Text style={[styles.avatarText, { fontSize: getFontSizeValue(fontSize, 44) }]}>{userInitials}</Text>
           )}
           {/* pequeño icono superpuesto */}
           <View style={styles.avatarOverlayBtn} pointerEvents="none">
-            <IconSymbol name="camera" size={16} color="#fff" />
+            <IconSymbol name="camera" size={18} color="#fff" />
           </View>
         </TouchableOpacity>
 
@@ -249,9 +291,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, // Será sobreescrito dinámicamente
   },
   avatarContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -262,23 +304,23 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   avatarText: {
-    fontSize: 32,
+    fontSize: 44,
     fontWeight: '700',
     color: '#FFFFFF',
   },
   avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     resizeMode: 'cover',
   },
   avatarOverlayBtn: {
     position: 'absolute',
-    right: -4,
-    bottom: -4,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    right: -6,
+    bottom: -6,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#0A4A90',
     alignItems: 'center',
     justifyContent: 'center',

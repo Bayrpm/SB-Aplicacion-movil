@@ -3,7 +3,9 @@ import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 // expo-av will be imported dynamically at runtime to avoid native-module require on startup
+import { deleteReportComment, updateReportComment } from '@/app/features/report/api/report.api';
 import CommentsPanel, { CommentItem } from '@/components/commentsPanel';
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -448,12 +450,24 @@ export default function ReportDetailModal({
                   </View>
                 ) : (
                   <View style={styles.userInfoHeader}>
-                    {/* Avatar del ciudadano si existe */}
-                    {(report.ciudadano && (((report.ciudadano as any).avatar_url) || (report.ciudadano as any).foto || (report.ciudadano as any).imagen_url || resolvedCitizenAvatar)) ? (
-                      <Image source={{ uri: (report.ciudadano as any).avatar_url || (report.ciudadano as any).foto || resolvedCitizenAvatar || (report.ciudadano as any).imagen_url }} style={styles.headerAvatar} />
-                    ) : (
-                      <IconSymbol name="account" size={20} color={textColor} />
-                    )}
+                    {/* Avatar del ciudadano si existe. Si no hay imagen mostramos iniciales (Nombre + primer apellido) */}
+                        {(() => {
+                          const avatarUri = (report.ciudadano && (((report.ciudadano as any).avatar_url) || (report.ciudadano as any).foto || (report.ciudadano as any).imagen_url))
+                            ? ((report.ciudadano as any).avatar_url || (report.ciudadano as any).foto || (report.ciudadano as any).imagen_url)
+                            : (resolvedCitizenAvatar || null);
+
+                          if (avatarUri) {
+                            return <Image source={{ uri: avatarUri }} style={styles.headerAvatar} />;
+                          }
+
+                          // Fallback: iniciales
+                          const initials = getInitials(userName || `${(report.ciudadano as any)?.nombre || ''} ${(report.ciudadano as any)?.apellido || ''}`);
+                          return (
+                            <View style={[styles.headerAvatar, { backgroundColor: accentColor, alignItems: 'center', justifyContent: 'center' }]}> 
+                              <Text style={[styles.commentAvatarText, { fontSize: getFontSizeValue(fontSize, 14) }]}>{initials}</Text>
+                            </View>
+                          );
+                        })()}
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.userNameHeader, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>
                         {userName}
@@ -791,6 +805,64 @@ export default function ReportDetailModal({
                   // Prefill handled by CommentsPanel but we still expose this hook
                   setCommentText(`@${(c.author || 'Usuario').split(' ')[0]} `);
                 }}
+                onEdit={async (commentId: string, newText: string) => {
+                  if (!selectedReportForComments) return;
+                  // Optimistic update
+                  const prev = comments;
+                  setComments((p) => p.map((c) => c.id === commentId ? ({ ...c, text: newText }) : c));
+                  try {
+                    const res = await updateReportComment(Number(commentId), newText);
+                    if (res?.error) {
+                      console.error('updateReportComment error:', res.error);
+                      AppAlert.alert('Error', typeof res.error === 'string' ? res.error : String((res.error as any)?.message ?? res.error));
+                      setComments(prev);
+                      return;
+                    }
+                    // reload comments and stats
+                    await loadComments(selectedReportForComments);
+                    const s = await fetchReportStats(selectedReportForComments);
+                    setReportStats((prevStats) => ({
+                      ...prevStats,
+                      [selectedReportForComments]: {
+                        likes: s.likes,
+                        dislikes: s.dislikes,
+                        hasLiked: s.userReaction === 'LIKE',
+                        hasDisliked: s.userReaction === 'DISLIKE',
+                        commentsCount: s.commentsCount,
+                      }
+                    }));
+                  } catch (e) {
+                    console.error('updateReportComment exception', e);
+                    AppAlert.alert('Error', 'No se pudo modificar el comentario');
+                    setComments(prev);
+                  }
+                }}
+                onDelete={async (commentId: string) => {
+                  if (!selectedReportForComments) return;
+                  try {
+                    const res = await deleteReportComment(Number(commentId));
+                    if (res?.error) {
+                      console.error('deleteReportComment error:', res.error);
+                      AppAlert.alert('Error', typeof res.error === 'string' ? res.error : String((res.error as any)?.message ?? res.error));
+                      return;
+                    }
+                    await loadComments(selectedReportForComments);
+                    const s = await fetchReportStats(selectedReportForComments);
+                    setReportStats((prevStats) => ({
+                      ...prevStats,
+                      [selectedReportForComments]: {
+                        likes: s.likes,
+                        dislikes: s.dislikes,
+                        hasLiked: s.userReaction === 'LIKE',
+                        hasDisliked: s.userReaction === 'DISLIKE',
+                        commentsCount: s.commentsCount,
+                      }
+                    }));
+                  } catch (e) {
+                    console.error('deleteReportComment exception', e);
+                    AppAlert.alert('Error', 'No se pudo eliminar el comentario');
+                  }
+                }}
                 currentUserId={currentUserId}
                 currentUserAvatar={resolvedCitizenAvatar}
               />
@@ -813,6 +885,21 @@ function getFontSizeValue(fontSize: 'small' | 'medium' | 'large', base: number):
       return base * 1.25;
     default:
       return base;
+  }
+}
+
+// Devuelve iniciales: primera letra del primer nombre y primera letra del primer apellido (penúltima palabra si hay 3+)
+function getInitials(fullName: string): string {
+  try {
+    const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return 'U';
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    if (parts.length === 2) return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
+    const first = parts[0].charAt(0).toUpperCase();
+    const firstSurname = parts[parts.length - 2].charAt(0).toUpperCase();
+    return `${first}${firstSurname}`;
+  } catch (e) {
+    return 'U';
   }
 }
 
@@ -1223,6 +1310,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     marginRight: 10,
     backgroundColor: '#EEE',
+    overflow: 'hidden',
   },
   commentAvatar: {
     width: 36,

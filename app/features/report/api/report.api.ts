@@ -495,3 +495,154 @@ export async function reactToComment(commentId: number, tipo: 'LIKE'|'DISLIKE') 
     return { data: null, error: e };
   }
 }
+
+/**
+ * Actualiza el contenido de un comentario (solo autor) y solo si fue creado hace <= 1 hora.
+ * Retorna { data, error } donde data es el comentario actualizado.
+ */
+export async function updateReportComment(commentId: number | string, newContenido: string) {
+  try {
+    const idNum = Number(commentId);
+    if (!Number.isFinite(idNum)) return { data: null, error: new Error('commentId inválido') };
+    // Intentar primero una RPC personalizada (recomendado si hay RLS/policies que impiden updates directos)
+    try {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_update_comentario_denuncia', { p_comentario_id: idNum, p_contenido: newContenido });
+      if (!rpcErr) return { data: rpcData, error: null };
+      // Si la RPC devuelve error, decidimos cuándo propagar y cuándo intentar fallback.
+      // Permitir fallback cuando la RPC no existe (42883) o cuando la función falla por ambigüedad de columnas (42702)
+      const code = (rpcErr as any)?.code ?? '';
+      const msg = String(rpcErr?.message ?? '').toLowerCase();
+      const fallbackable = code === '42883' || code === '42702' || msg.includes('does not exist') || msg.includes('undefined function') || msg.includes('ambiguous') || msg.includes('column reference');
+      if (!fallbackable) {
+        // RPC devolvió un error que no queremos ocultar
+        console.warn('updateReportComment rpcErr', rpcErr);
+        return { data: null, error: rpcErr };
+      }
+      // Si es fallbackable, continuamos al flujo directo
+    } catch (e) {
+      // ignore and fallback to direct update
+    }
+
+    // Obtener comentario existente (fallback directo)
+    const { data: existing, error: fetchErr } = await supabase
+      .from('comentarios_denuncias')
+      .select('id, usuario_id, created_at, contenido')
+      .eq('id', idNum)
+      .maybeSingle();
+
+    if (fetchErr) {
+      console.warn('updateReportComment fetchErr', fetchErr);
+      return { data: null, error: fetchErr };
+    }
+    if (!existing) return { data: null, error: new Error('Comentario no encontrado') };
+
+    // Verificar usuario autenticado
+    const { data: userData } = await supabase.auth.getUser();
+    const currentUserId = userData?.user?.id ?? null;
+    if (!currentUserId) return { data: null, error: new Error('No autenticado') };
+
+    if (String(existing.usuario_id) !== String(currentUserId)) {
+      return { data: null, error: new Error('No autorizado: no eres el autor del comentario') };
+    }
+
+    // Verificar ventana de edición (1 hora desde created_at)
+    try {
+      const created = new Date(String(existing.created_at));
+      const now = new Date();
+      const diffMs = now.getTime() - created.getTime();
+      const ONE_HOUR_MS = 60 * 60 * 1000;
+      if (diffMs > ONE_HOUR_MS) {
+        return { data: null, error: new Error('La ventana de edición de 1 hora expiró') };
+      }
+    } catch (e) {
+      // Si no podemos parsear la fecha, bloquear la edición por seguridad
+      return { data: null, error: new Error('No se pudo verificar la fecha de creación del comentario') };
+    }
+
+    // Realizar la actualización directa (puede fallar si hay policies mal diseñadas)
+    const { data: updated, error: updateErr } = await supabase
+      .from('comentarios_denuncias')
+      .update({ contenido: newContenido })
+      .eq('id', idNum)
+      .select()
+      .maybeSingle();
+
+    if (updateErr) {
+      console.warn('updateReportComment updateErr', updateErr);
+      // Detectar política de recursión y dar mensaje más claro
+      if ((updateErr as any)?.code === '42P17' || String(updateErr?.message ?? '').toLowerCase().includes('infinite recursion')) {
+        return { data: null, error: new Error('Error de políticas en el servidor: recursion infinita detectada en policy para comentarios_denuncias. Crea una RPC segura (SECURITY DEFINER) para actualizar comentarios o ajusta las políticas RLS.') };
+      }
+      return { data: null, error: updateErr };
+    }
+    return { data: updated, error: null };
+  } catch (e) {
+    console.warn('updateReportComment exception', e);
+    return { data: null, error: e };
+  }
+}
+
+/**
+ * Elimina un comentario. Solo puede eliminarlo su autor (sin límite de tiempo) o un usuario con permisos.
+ */
+export async function deleteReportComment(commentId: number | string) {
+  try {
+    const idNum = Number(commentId);
+    if (!Number.isFinite(idNum)) return { data: null, error: new Error('commentId inválido') };
+    // Intentar RPC seguro primero
+    try {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_delete_comentario_denuncia', { p_comentario_id: idNum });
+      if (!rpcErr) return { data: rpcData, error: null };
+      const msg = String(rpcErr?.message ?? '').toLowerCase();
+      if (!(msg.includes('does not exist') || msg.includes('undefined function') || (rpcErr as any)?.code === '42883')) {
+        console.warn('deleteReportComment rpcErr', rpcErr);
+        return { data: null, error: rpcErr };
+      }
+      // Si no existe la RPC, continuar con flujo directo
+    } catch (e) {
+      // ignore and fallback
+    }
+
+    // Fallback directo
+    // Obtener comentario existente
+    const { data: existing, error: fetchErr } = await supabase
+      .from('comentarios_denuncias')
+      .select('id, usuario_id')
+      .eq('id', idNum)
+      .maybeSingle();
+
+    if (fetchErr) {
+      console.warn('deleteReportComment fetchErr', fetchErr);
+      return { data: null, error: fetchErr };
+    }
+    if (!existing) return { data: null, error: new Error('Comentario no encontrado') };
+
+    const { data: userData } = await supabase.auth.getUser();
+    const currentUserId = userData?.user?.id ?? null;
+    if (!currentUserId) return { data: null, error: new Error('No autenticado') };
+
+    if (String(existing.usuario_id) !== String(currentUserId)) {
+      return { data: null, error: new Error('No autorizado: no eres el autor del comentario') };
+    }
+
+    // Ejecutar borrado directo
+    const { data: deleted, error: delErr } = await supabase
+      .from('comentarios_denuncias')
+      .delete()
+      .eq('id', idNum)
+      .select()
+      .maybeSingle();
+
+    if (delErr) {
+      console.warn('deleteReportComment delErr', delErr);
+      if ((delErr as any)?.code === '42P17' || String(delErr?.message ?? '').toLowerCase().includes('infinite recursion')) {
+        return { data: null, error: new Error('Error de políticas en el servidor: recursion infinita detectada en policy para comentarios_denuncias. Crea una RPC segura (SECURITY DEFINER) para eliminar comentarios o ajusta las políticas RLS.') };
+      }
+      return { data: null, error: delErr };
+    }
+    return { data: deleted, error: null };
+  } catch (e) {
+    console.warn('deleteReportComment exception', e);
+    return { data: null, error: e };
+  }
+}
