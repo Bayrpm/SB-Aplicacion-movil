@@ -1,17 +1,19 @@
+import { listEvidencesSigned } from '@/app/features/report/api/evidences.api';
 import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import React, { useState } from 'react';
+// expo-av will be imported dynamically at runtime to avoid native-module require on startup
+import React, { useEffect, useState } from 'react';
 import {
-    Dimensions,
-    Image,
-    Modal,
-    Platform,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Image, Linking, Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CitizenReport, getCategoryById, getCitizenProfile, getEstadoById } from '../api/profile.api';
@@ -76,6 +78,7 @@ export default function ReportDetailModal({
   onToggleLike,
   isLiked = false,
 }: ReportDetailModalProps) {
+  try { console.warn('ReportDetailModal: render -> visible=', visible, ' reportId=', report?.id); } catch {}
   const insets = useSafeAreaInsets();
   const { fontSize } = useFontSize();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background'); // Color específico para cards
@@ -95,7 +98,48 @@ export default function ReportDetailModal({
     email: string | null;
     telefono: string | null;
   } | null>(null);
+  const [evidences, setEvidences] = useState<Array<{ tipo: 'FOTO'|'VIDEO'; url: string; storage_path: string }>>([]);
+  const [VideoModule, setVideoModule] = useState<any>(null);
 
+  // Cargar evidencias (firmadas) al abrir el modal
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        if (visible && report?.id) {
+          const ev = await listEvidencesSigned(report.id);
+          if (active) setEvidences(ev);
+        } else {
+          setEvidences([]);
+        }
+      } catch (e) {
+        try { console.warn('reportDetailModal: fallo al cargar evidencias:', e); } catch {}
+      }
+    })();
+    return () => { active = false; };
+  }, [visible, report?.id]);
+
+  // Intentar cargar expo-av de forma dinámica para evitar crash cuando el módulo nativo
+  // no está disponible en el entorno (Expo Go vs Dev Client). Si falla, dejamos fallback.
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        // Importar el nuevo paquete `expo-video` (reemplazo de expo-av)
+        const mod = await import('expo-video');
+        // Normalizar la API para que el resto del componente pueda usar VideoModule.Video y VideoModule.ResizeMode
+  const m: any = mod;
+  const VideoComp = (m && (m.Video || m.default)) ?? null;
+  const ResizeMode = m?.ResizeMode ?? (m?.Video?.ResizeMode) ?? null;
+  if (mounted) setVideoModule({ Video: VideoComp, ResizeMode });
+      } catch (e) {
+        // No disponible: no hacemos nada, usaremos fallback (abrir URL externa)
+        try { console.warn('reportDetailModal: fallo al importar expo-video:', e); } catch {}
+        
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
   // Resolver nombre de categoría si no vino por join (debe ejecutarse siempre en el mismo orden)
   React.useEffect(() => {
     let mounted = true;
@@ -143,6 +187,22 @@ export default function ReportDetailModal({
       mounted = false;
     };
   }, [report?.anonimo, report?.ciudadano]);
+
+  // Si el modal debe mostrarse pero el `report` todavía no está cargado,
+  // mostramos un Modal minimal con spinner para evitar no-render cuando
+  // `visible` es true pero `report` es null (caso race condition).
+  if (visible && !report) {
+    return (
+      <Modal visible animationType="none" transparent onRequestClose={onClose}>
+        <View style={styles.overlay}>
+          <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+            <ActivityIndicator size="large" color={accentColor} />
+            <Text style={{ marginTop: 12, color: textColor }}>Cargando detalle...</Text>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
 
   if (!report) return null;
 
@@ -264,29 +324,59 @@ export default function ReportDetailModal({
 
               {/* Imágenes */}
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
-                  Fotos adjuntas
+                <Text style={[styles.sectionTitle, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>                
+                  Evidencias
                 </Text>
 
-                {hasImages ? (
-                  <View style={styles.imageGrid}>
-                    {report.imagenes_url!.map((url, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        onPress={() => setSelectedImageIndex(index)}
-                        activeOpacity={0.8}
-                      >
-                        <Image source={{ uri: url }} style={styles.thumbnail} />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                {evidences.length > 0 ? (
+                  <>
+                    {/* Fotos */}
+                    <View style={styles.imageGrid}>
+                      {evidences.filter(e => e.tipo === 'FOTO').map((ev, index) => (
+                        <TouchableOpacity
+                          key={ev.storage_path}
+                          onPress={() => setSelectedImageIndex(index)}
+                          activeOpacity={0.8}
+                        >
+                          <Image source={{ uri: ev.url }} style={styles.thumbnail} />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    {/* Videos */}
+                    {evidences.some(e => e.tipo === 'VIDEO') && (
+                      <View style={{ marginTop: 12, gap: 12 }}>
+                        {evidences.filter(e => e.tipo === 'VIDEO').map((ev) => (
+                          <View key={ev.storage_path} style={{ width: '100%' }}>
+                            {VideoModule?.Video ? (
+                              <VideoModule.Video
+                                source={{ uri: ev.url }}
+                                style={{ width: '100%', height: 220, backgroundColor: '#00000020', borderRadius: 12 }}
+                                useNativeControls
+                                resizeMode={VideoModule?.ResizeMode?.CONTAIN}
+                                shouldPlay={false}
+                              />
+                            ) : (
+                              <TouchableOpacity
+                                onPress={() => { try { Linking.openURL(ev.url); } catch { /* ignore */ } }}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12 }}
+                              >
+                                <IconSymbol name="play-circle" size={22} color={accentColor} />
+                                <Text style={{ color: textColor }}>Ver video</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </>
                 ) : (
                   <View style={styles.noFilesBox}>
                     <Image
                       source={require('../../../../assets/images/icon.png')}
                       style={styles.noFilesImage}
                     />
-                    <Text style={[styles.noFilesText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>
+                    <Text style={[styles.noFilesText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>                      
                       No hay archivos, fotos o videos
                     </Text>
                   </View>
@@ -339,7 +429,7 @@ export default function ReportDetailModal({
       </Modal>
 
       {/* Modal de galería de imágenes */}
-      {selectedImageIndex !== null && hasImages && (
+      {selectedImageIndex !== null && evidences.filter(e=>e.tipo==='FOTO').length > 0 && selectedImageIndex < evidences.filter(e=>e.tipo==='FOTO').length && (
         <Modal
           visible
           animationType="fade"
@@ -354,13 +444,13 @@ export default function ReportDetailModal({
               <IconSymbol name="close" size={32} color="#fff" />
             </TouchableOpacity>
             <Image
-              source={{ uri: report.imagenes_url![selectedImageIndex] }}
+              source={{ uri: evidences.filter(e=>e.tipo==='FOTO')[selectedImageIndex]?.url || '' }}
               style={styles.fullImage}
               resizeMode="contain"
             />
             <View style={styles.galleryIndicator}>
               <Text style={[styles.galleryIndicatorText, { fontSize: getFontSizeValue(fontSize, 14) }]}>
-                {selectedImageIndex + 1} / {report.imagenes_url!.length}
+                {selectedImageIndex + 1} / {evidences.filter(e=>e.tipo==='FOTO').length}
               </Text>
             </View>
           </View>

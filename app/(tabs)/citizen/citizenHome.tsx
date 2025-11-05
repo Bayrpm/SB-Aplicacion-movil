@@ -3,10 +3,11 @@ import React, { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import EmergencyCarousel from "@/app/features/homeCitizen/components/emergencyCarousel";
+import EmergencyCarousel from "@/app/features/homeCitizen/components/EmergencyCarousel";
 import FollowSection from "@/app/features/homeCitizen/components/followSection";
 import HomeCard from "@/app/features/homeCitizen/components/homeCard";
 import MoreInfo from "@/app/features/homeCitizen/components/moreInfo";
+import PublicReportsFeed from "@/app/features/homeCitizen/components/publicReportsFeed";
 import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -89,6 +90,9 @@ export default function CitizenHome() {
             ]}
           />
         </View>
+
+        {/* Sección: Feed público de denuncias cercanas */}
+        <PublicReportsFeed />
 
         {/* Sección: Síguenos */}
         <FollowSection />

@@ -35,6 +35,7 @@ export default function ReportsList() {
   const [selectedReport, setSelectedReport] = useState<CitizenReport | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const openingRef = React.useRef(false);
 
   const textColor = useThemeColor({}, 'text');
   const accentColor = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint'); // Azul siempre
@@ -151,8 +152,18 @@ export default function ReportsList() {
   }, []);
 
   const handleReportPress = useCallback((report: CitizenReport) => {
+    try { console.warn('ReportsList: handleReportPress -> abrir detalle:', report?.id); } catch {}
+    // Evitar reentradas rápidas (doble trigger de onPress)
+    if (openingRef.current) return;
+    openingRef.current = true;
+    // Primero asignar el reporte seleccionado y esperar un tick antes de abrir el modal
+    // para evitar casos donde `report` sea null al renderizar el modal.
     setSelectedReport(report);
-    setShowDetailModal(true);
+    setTimeout(() => {
+      setShowDetailModal(true);
+      // permitir reintentos después de 700ms
+      setTimeout(() => { openingRef.current = false; }, 700);
+    }, 50);
   }, []);
 
   const handleFilterPress = useCallback(() => {
@@ -174,6 +185,11 @@ export default function ReportsList() {
   useEffect(() => {
     loadInitialReports();
   }, [loadInitialReports]);
+
+  // Diagnóstico: saber cuándo se intenta abrir el modal y con qué reporte
+  useEffect(() => {
+    try { console.warn('ReportsList: selectedReport=', selectedReport?.id, ' showDetailModal=', showDetailModal); } catch {}
+  }, [selectedReport, showDetailModal]);
 
   if (loading) {
     return (
@@ -214,6 +230,25 @@ export default function ReportsList() {
 
   return (
     <>
+      {/* Debug helper: en modo desarrollo permite abrir el primer reporte manualmente */}
+      {__DEV__ && reports.length > 0 && (
+        <TouchableOpacity
+          style={{ paddingHorizontal: 20, marginBottom: 8 }}
+          onPress={() => {
+            try { console.warn('ReportsList: debug open first report ->', reports[0].id); } catch {}
+            try { handleReportPress(reports[0]); } catch (e) { try { console.warn('ReportsList: debug open error', e); } catch {} }
+          }}
+        >
+          <Text style={{ color: accentColor }}>[DEBUG] Abrir primer reporte</Text>
+        </TouchableOpacity>
+      )}
+      {/* Banner de diagnóstico en pantalla (solo en desarrollo) */}
+      {__DEV__ && (
+        <View style={{ paddingHorizontal: 20, paddingVertical: 8, backgroundColor: '#00000010', marginBottom: 8 }}>
+          <Text style={{ color: textColor, fontSize: 12 }}>DEBUG: selectedReport = {selectedReport?.id ?? 'undefined'}</Text>
+          <Text style={{ color: textColor, fontSize: 12 }}>DEBUG: showDetailModal = {String(showDetailModal)}</Text>
+        </View>
+      )}
       <View style={styles.container}>
       {/* Título de sección con botón de filtro */}
       <View style={styles.headerRow}>
@@ -312,8 +347,10 @@ export default function ReportsList() {
       />
 
       <ReportDetailModal
-        visible={showDetailModal}
-        onClose={() => setShowDetailModal(false)}
+        // Mostrar el modal únicamente cuando haya un reporte seleccionado.
+        // Esto evita carreras entre `selectedReport` y `showDetailModal`.
+        visible={!!selectedReport}
+        onClose={() => { setShowDetailModal(false); setSelectedReport(null); }}
         report={selectedReport}
         onToggleLike={handleToggleLike}
         isLiked={false}

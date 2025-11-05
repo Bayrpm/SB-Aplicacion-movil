@@ -199,6 +199,8 @@ export default function HomeScreen() {
             userEmail={profile?.email || user?.email || 'correo@ejemplo.com'}
             userPhone={profile?.telefono || 'Sin teléfono'}
             userInitials={getUserInitials()}
+            avatarUrl={profile?.avatar_url ?? null}
+            onAvatarUpdated={handleProfileUpdated}
             onEditPress={handleEditProfile}
           />
           

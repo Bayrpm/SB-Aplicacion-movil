@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
+  Image,
   Keyboard,
   Modal,
   PixelRatio,
@@ -20,6 +21,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { uploadEvidenceForReportWithProgress, type EvidenceKind } from '../api/evidences.api';
 import { checkRecentReportByCategory, createReport } from '../api/report.api';
 import { useReportModal } from '../context';
 import { useReportCategories } from '../hooks/useReportCategories';
@@ -68,6 +70,8 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
 
   const [coords, setCoords] = useState<{ x?: number; y?: number }>({});
   const [submitting, setSubmitting] = useState(false);
+  type Attachment = { uri: string; kind: EvidenceKind; progress: number; status: 'queued'|'uploading'|'done'|'error'; tries: number };
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   // ===== Teclado
   const [kbH, setKbH] = useState(0);
@@ -150,7 +154,7 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
       return;
     }
 
-    setSubmitting(true);
+  setSubmitting(true);
     try {
       // Calcular coordenadas a usar en variables locales para evitar race con setState
       let useX: number | undefined = coords.x;
@@ -207,8 +211,44 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
   coords_y: useY ?? null,
         categoria_publica_id: categoryId ?? null,
       });
-  if (res.error) { RNAlert.alert('Error', 'No se pudo enviar la denuncia. Intenta de nuevo.'); }
-  else { RNAlert.alert('Enviado', 'Tu denuncia ha sido enviada correctamente.'); try { router.replace('/citizen/citizenReport'); } catch {} onClose?.(); }
+      if (res.error) {
+        RNAlert.alert('Error', 'No se pudo enviar la denuncia. Intenta de nuevo.');
+      } else {
+        // Subir evidencias si hay
+        try {
+          const inserted = (res.data as any[] | null)?.[0];
+          const denunciaId = inserted?.id as string | undefined;
+          if (denunciaId && attachments.length > 0) {
+            // actualizar estado a 'uploading'
+            setAttachments((prev) => prev.map((a)=> ({ ...a, status: 'uploading', tries: 0, progress: a.progress ?? 0 })));
+            // subir en paralelo con progreso individual y reintentos
+            const results = await Promise.all(attachments.map((a, i) => (
+              uploadEvidenceForReportWithProgress(
+                {
+                  denunciaId,
+                  usuarioId: user.id,
+                  fileUri: a.uri,
+                  kind: a.kind,
+                  orden: i + 1,
+                },
+                (p) => {
+                  setAttachments((prev) => prev.map((x, idx) => idx === i ? { ...x, progress: p } : x));
+                }
+              ).then((res) => {
+                setAttachments((prev) => prev.map((x, idx) => idx === i ? { ...x, status: res.ok ? 'done' : 'error', tries: (res.tries ?? x.tries) } : x));
+                return res;
+              })
+            )));
+            const failed = results.filter(r => !r.ok).length;
+            if (failed > 0) {
+              AppAlert.alert('Aviso', `La denuncia se envió, pero ${failed} evidencia(s) no pudieron subirse. Puedes reintentar desde tu denuncia.`);
+            }
+          }
+        } catch {}
+        RNAlert.alert('Enviado', 'Tu denuncia ha sido enviada correctamente.');
+        try { router.replace('/citizen/citizenReport'); } catch {}
+        onClose?.();
+      }
     } catch {
       RNAlert.alert('Error', 'Ocurrió un error al enviar.');
     } finally { setSubmitting(false); }
@@ -423,6 +463,69 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
     }
   };
 
+  // ===== Handlers unificados para cámara/galería
+  const handleCameraPress = async () => {
+    // Mostrar alert para elegir entre foto o video
+    AppAlert.alert(
+      '¿Qué deseas capturar?',
+      'Elige el tipo de contenido',
+      [
+        { text: 'Foto', onPress: () => handleTakePhoto() },
+        { text: 'Video', onPress: () => handleTakeVideo() },
+        { text: 'Cancelar', style: 'cancel' }
+      ]
+    );
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const ImagePicker = await import('expo-image-picker');
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) { AppAlert.alert('Cámara', 'Permiso denegado para usar la cámara'); return; }
+      const r = await ImagePicker.launchCameraAsync({ 
+        mediaTypes: 'images',
+        cameraType: ImagePicker.CameraType.back,
+        allowsEditing: false,
+        quality: 0.8,
+        exif: false,
+      });
+      if (r.canceled || !r.assets?.length) return;
+      const asset = r.assets[0];
+      const uri = asset.uri;
+      setAttachments((prev) => [...prev, { uri, kind: 'FOTO', progress: 0, status: 'queued', tries: 0 }]);
+    } catch (e) { AppAlert.alert('Cámara', 'No se pudo abrir la cámara'); }
+  };
+
+  const handleTakeVideo = async () => {
+    try {
+      const ImagePicker = await import('expo-image-picker');
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) { AppAlert.alert('Cámara', 'Permiso denegado para usar la cámara'); return; }
+      // Modo video explícitamente
+      const r = await ImagePicker.launchCameraAsync({ 
+        mediaTypes: 'videos', 
+        videoMaxDuration: 60, 
+        videoQuality: ImagePicker.UIImagePickerControllerQualityType.High,
+      });
+      if (r.canceled || !r.assets?.length) return;
+      const uri = r.assets[0].uri;
+      setAttachments((prev) => [...prev, { uri, kind: 'VIDEO', progress: 0, status: 'queued', tries: 0 }]);
+    } catch (e) { AppAlert.alert('Cámara', 'No se pudo abrir la cámara en modo video'); }
+  };
+
+  const handlePickFromGallery = async () => {
+    try {
+      const ImagePicker = await import('expo-image-picker');
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!perm.granted) { AppAlert.alert('Galería', 'Permiso denegado para abrir la galería'); return; }
+  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'] });
+      if (r.canceled || !r.assets?.length) return;
+      const a = r.assets[0];
+      const isVideo = (a.type === 'video') || /\.(mp4|mov|mkv|3gp)$/i.test(a.uri ?? '');
+      setAttachments((prev) => [...prev, { uri: a.uri, kind: isVideo ? 'VIDEO' : 'FOTO', progress: 0, status: 'queued', tries: 0 }]);
+    } catch (e) { AppAlert.alert('Galería', 'No se pudo abrir la galería'); }
+  };
+
   // ===== Render
   return (
     <Modal visible transparent animationType="fade" hardwareAccelerated={Platform.OS === 'android'} statusBarTranslucent onRequestClose={onClose}>
@@ -572,6 +675,52 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
                   </Text>
                 </View>
               </View>
+
+              {/* Previsualización de adjuntos: mover aquí arriba del footer */}
+              {attachments.length > 0 && (
+                <View style={{ marginTop: ms(12), marginBottom: ms(8) }}>
+                  <Text style={{ color: '#fff', fontSize: ms(15), fontWeight: '600', marginBottom: ms(8) }}>
+                    Evidencias adjuntas
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 4 }}>
+                    {attachments.map((a, idx) => (
+                      <View key={idx} style={{ marginRight: 12, position: 'relative' }}>
+                        {a.kind === 'FOTO' ? (
+                          <Image source={{ uri: a.uri }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#ffffff' }} />
+                        ) : (
+                          <View style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' }}>
+                            <IconSymbol name="play-circle" size={32} color="#0A4A90" />
+                          </View>
+                        )}
+                        {/* Barra de progreso durante subida */}
+                        {a.status !== 'queued' && a.status !== 'done' && (
+                          <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 6, backgroundColor: 'rgba(10,74,144,0.25)', borderBottomLeftRadius: 8, borderBottomRightRadius: 8 }}>
+                            <View style={{ width: `${Math.round((a.progress || 0)*100)}%`, height: '100%', backgroundColor: '#0A4A90', borderBottomLeftRadius: 8, borderBottomRightRadius: 8 }} />
+                          </View>
+                        )}
+                        {/* Estado error y botón de reintento */}
+                        {a.status === 'error' && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              setAttachments((prev) => prev.map((x,i)=> i===idx ? { ...x, status: 'queued', progress: 0 } : x));
+                            }}
+                            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 20, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', borderBottomLeftRadius: 8, borderBottomRightRadius: 8 }}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>Reintentar</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          onPress={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}
+                          style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#0A4A90', width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}
+                          hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                        >
+                          <IconSymbol name="close" size={16} color="#fff" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
             </View>
           </ScrollView>
         </View>
@@ -582,14 +731,23 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
           style={[styles.footerAbsolute, { bottom: footerBottomOffset, paddingBottom: kbShown ? bottomPadWhenKB : bottomPadNoKB }]}
         >
           <View style={styles.footerTopRowInner}>
-            <TouchableOpacity style={styles.footerCircleBtn} onPress={() => AppAlert.alert('Próximamente', 'Función de cámara disponible próximamente')}>
+            {/* Botón de cámara - abre alert para elegir foto/video */}
+            <TouchableOpacity
+              style={styles.footerCircleBtn}
+              onPress={handleCameraPress}
+            >
               <IconSymbol name="camera" size={20} color="#0A4A90" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.footerCircleBtn} onPress={() => AppAlert.alert('Próximamente', 'Función de selección de foto disponible próximamente')}>
+            {/* Botón para galería (foto o video) */}
+            <TouchableOpacity
+              style={styles.footerCircleBtn}
+              onPress={handlePickFromGallery}
+            >
               <IconSymbol name="image" size={20} color="#0A4A90" />
             </TouchableOpacity>
 
+            {/* Botón de dirección */}
             <TouchableOpacity
               style={styles.footerLocationBtnFull}
               onPress={() => {
@@ -597,16 +755,12 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
                   const lat = coords.x ?? '';
                   const lng = coords.y ?? '';
                   const addr = encodeURIComponent(ubicacionTexto ?? '');
-                  // persistimos snapshot para restaurar el formulario cuando volvamos
                   try { setReportFormSnapshot({ titulo, descripcion, anonimo, ubicacionTexto, coords, categoryId }); } catch {}
-                  // registrar callback por si el ReportForm aún estuviera montado (fallback)
                   setLocationEditCallback(({ ubicacionTexto: u, coords: c }) => {
                     setUbicacionTexto(u ?? '');
                     setCoords(c ?? {});
                   });
-                  // cerrar el modal primero para forzar el unmount (y que el tab bar vuelva a mostrarse)
                   try { onClose?.(); } catch {}
-                  // esperar un tick para permitir el unmount, luego navegar al editor
                   setTimeout(() => {
                     try { router.push((`/features/report/components/editLocation?lat=${lat}&lng=${lng}&addr=${addr}`) as any); } catch (e) { console.warn(e); }
                   }, 120);

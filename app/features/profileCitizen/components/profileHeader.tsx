@@ -1,10 +1,14 @@
+import { uploadCitizenAvatar } from '@/app/features/profileCitizen/api/profile.api';
 import { useFontSize } from '@/app/features/settings/fontSizeContext';
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import * as ImagePicker from 'expo-image-picker';
 import React from 'react';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image as RNImage, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+// Usamos un View plano en lugar de un SVG curvo para mantener la forma previa
 
 const { width, height } = Dimensions.get('window');
 
@@ -13,6 +17,8 @@ interface ProfileHeaderProps {
   userEmail?: string;
   userPhone?: string;
   userInitials?: string;
+  avatarUrl?: string | null;
+  onAvatarUpdated?: (updatedProfile: any) => void;
   backgroundColor?: string;
   onSettingsPress?: () => void;
   onEditPress?: () => void;
@@ -23,6 +29,8 @@ export default function ProfileHeader({
   userEmail,
   userPhone,
   userInitials = 'US',
+  avatarUrl = null,
+  onAvatarUpdated,
   backgroundColor,
   onSettingsPress,
   onEditPress,
@@ -36,30 +44,55 @@ export default function ProfileHeader({
   const buttonBorderColor = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint'); // Borde azul siempre
   const buttonContentColor = useThemeColor({ light: '#0A4A90', dark: '#FFFFFF' }, 'tint'); // Azul en light, blanco en dark
 
-  // Altura del header más adaptable y limitada (máximo 350px o 35% de la altura)
-  const maxHeaderHeight = Math.min(350, height * 0.35);
-  const headerHeight = Math.max(280, maxHeaderHeight); // Mínimo 280px
-  const curveDepth = 40; // Profundidad de la curva inferior reducida
+  // Altura del header más adaptable y limitada (aumentada para más espacio de curva)
+  const maxHeaderHeight = Math.min(500, height * 0.45);
+   const headerHeight = Math.round(Math.max(280, Math.min(420, height * 0.45))); // Altura del header adaptable: proporcional a la pantalla pero con límites
+   // razonables para que en pantallas pequeñas no ocupe demasiado espacio y en
+   // pantallas grandes permita la curva deseada.
 
-  // Curva inferior del header con forma de onda suave
+  const ry = Math.max(Math.round(headerHeight * 1.1), Math.round(height * 0.38));
+  // Calculamos un offset (bellyOffset) que representa cuanto baja la panza
+  const bellyOffset = Math.round(ry * 0.7);
+  // yEdge es la altura en la que empiezan los extremos de la curva (a ambos lados)
+  const yEdge = Math.max(8, headerHeight - Math.round(bellyOffset * 0.6));
+  const rx = width;
+  const rotation = 0;
   const headerCurvePath = () => {
-    const curveStartY = headerHeight - curveDepth;
-    const controlPointOffset = curveDepth * 1.5;
-    
-    let d = `M 0 0`; // Inicio en esquina superior izquierda
-    d += ` L ${width} 0`; // Línea al borde superior derecho
-    d += ` L ${width} ${curveStartY}`; // Línea vertical hasta antes de la curva
-    // Curva suave con bezier cuadrática
-    d += ` Q ${width / 2} ${headerHeight + controlPointOffset} 0 ${curveStartY}`;
-    d += ` L 0 0`; // Cierra en la esquina superior izquierda
-    d += ` Z`;
+    // Dibujar arco elíptico desde la derecha hasta la izquierda en y = yEdge
+    const d = `M 0 0 L ${width} 0 L ${width} ${yEdge} A ${rx} ${ry} ${rotation} 0 1 0 ${yEdge} L 0 0 Z`;
     return d;
   };
 
+  // calcular la posición vertical ideal del botón Editar: queremos que el centro
+  // del botón quede aproximadamente sobre el borde inferior del header (mitad
+  // dentro/mitad fuera). Usamos `headerHeight` como referencia y añadimos un
+  // pequeño empuje hacia abajo proporcional a la "panza" (bellyOffset) para que
+  // visualmente quede bien en la mayoría de dispositivos.
+
+  // Constantes del botón (usar constantes para mantener la altura/anchura
+  // sincronizadas entre el cálculo y el estilo). Cambia aquí si quieres probar
+  // variantes: ambos valores se usarán para calcular la posición y el render.
+  const BUTTON_WIDTH = 120;
+  const BUTTON_HEIGHT = 50;
+  
+  // Calcular dónde está el punto más bajo de la curva (la panza):
+  // Para un arco elíptico, el punto más bajo está aproximadamente en:
+  // yEdge + (ry - sqrt(ry^2 - rx^2)) pero simplificamos usando bellyOffset
+  // Ajustamos el factor para que el botón quede exactamente en la panza
+  const curveBottomY = yEdge + Math.round(bellyOffset * 0.18);
+  
+  // Posición ideal: centrar el botón en el punto más bajo de la curva
+  // para que quede mitad dentro/mitad fuera de la panza en todos los dispositivos
+  const desiredTop = curveBottomY - Math.round(BUTTON_HEIGHT / 2);
+  // clamp por safe area y límite inferior razonable
+  const minTop = insets.top + 8;
+  const maxTop = headerHeight + Math.round(bellyOffset * 0.45);
+  const editButtonTop = Math.max(minTop, Math.min(desiredTop, maxTop));
+
   return (
-    <View style={styles.headerContainer}>
+    <View style={[styles.headerContainer, { height: headerHeight }]}> 
       {/* Curva azul superior con área segura */}
-      <Svg style={styles.topSection} width={width} height={headerHeight + curveDepth}>
+      <Svg style={styles.topSection} width={width} height={Math.round(headerHeight + bellyOffset + 12)}>
         <Path d={headerCurvePath()} fill={topFill} />
       </Svg>
 
@@ -71,10 +104,41 @@ export default function ProfileHeader({
           paddingHorizontal: Math.max(20, insets.left + 8, insets.right + 8), // Área segura horizontal
         }
       ]}>
-        {/* Avatar circular */}
-        <View style={[styles.avatarContainer, { backgroundColor: avatarBg }]}>
-          <Text style={[styles.avatarText, { fontSize: getFontSizeValue(fontSize, 32) }]}>{userInitials}</Text>
-        </View>
+        {/* Avatar circular: mostrar imagen si existe, sino iniciales */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => {
+            AppAlert.alert('Cambiar foto', '¿Seguro que quieres cambiar tu foto de perfil?', [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Sí, cambiar', onPress: async () => {
+                try {
+                  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                  if (!perm.granted) { AppAlert.alert('Avatar', 'Permiso denegado para acceder a la galería'); return; }
+                  const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+                  if (r.canceled || !r.assets?.length) return;
+                  const uri = r.assets[0].uri;
+                  const { data, error } = await uploadCitizenAvatar(uri);
+                  if (error || !data) { AppAlert.alert('Error', error || 'No se pudo subir la imagen'); return; }
+                  AppAlert.alert('Éxito', 'Avatar actualizado correctamente');
+                  try { onAvatarUpdated && onAvatarUpdated(data); } catch {}
+                } catch (e) {
+                  AppAlert.alert('Error', 'No se pudo cambiar la foto de perfil');
+                }
+              } }
+            ]);
+          }}
+          style={[styles.avatarContainer, { backgroundColor: avatarBg }]}
+        >
+          {avatarUrl ? (
+            <RNImage source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <Text style={[styles.avatarText, { fontSize: getFontSizeValue(fontSize, 32) }]}>{userInitials}</Text>
+          )}
+          {/* pequeño icono superpuesto */}
+          <View style={styles.avatarOverlayBtn} pointerEvents="none">
+            <IconSymbol name="camera" size={16} color="#fff" />
+          </View>
+        </TouchableOpacity>
 
         {/* Nombre del usuario */}
         {userName && (
@@ -88,7 +152,7 @@ export default function ProfileHeader({
         )}
 
         {/* Información de contacto - con padding bottom para no llegar al botón */}
-        <View style={[styles.infoContainer, { paddingBottom: 35 }]}>
+        <View style={[styles.infoContainer, { paddingBottom: Math.round(BUTTON_HEIGHT * 0.7) + 8 }]}>
           {userPhone && (
             <View style={styles.infoRow}>
               <IconSymbol name="phone" size={20} color="#FFFFFF" />
@@ -119,14 +183,19 @@ export default function ProfileHeader({
 
       {/* Botón Editar en el centro inferior (mitad dentro, mitad fuera) */}
       <TouchableOpacity 
-        style={[
+            style={[
           styles.editButton, 
           { 
             backgroundColor: buttonBg,
             borderWidth: 2,
             borderColor: buttonBorderColor, // Borde azul
-            top: headerHeight - 25, // Mitad del botón (50px / 2)
-            left: Math.max(width / 2 - 60, insets.left + 8), // Área segura izquierda
+            // Alinear el centro del botón Editar aproximadamente sobre la panza,
+            // pero usar la posición calculada y limitada para evitar que caiga en mitad de la pantalla
+            top: editButtonTop,
+            left: Math.max((width - BUTTON_WIDTH) / 2, insets.left + 8), // Centrado horizontalmente con área segura
+            width: BUTTON_WIDTH,
+            height: BUTTON_HEIGHT,
+            borderRadius: Math.round(BUTTON_HEIGHT / 2),
           }
         ]}
         onPress={onEditPress}
@@ -193,6 +262,26 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    resizeMode: 'cover',
+  },
+  avatarOverlayBtn: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#0A4A90',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    zIndex: 6,
   },
   userName: {
     fontSize: 19,

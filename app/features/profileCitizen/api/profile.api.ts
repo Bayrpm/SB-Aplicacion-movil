@@ -1,4 +1,47 @@
 import { supabase } from '@/app/shared/lib/supabase';
+// Usar la API legacy para readAsStringAsync para evitar warnings deprecados en esta versión de Expo
+
+// Helper: convertir base64 a Uint8Array compatible con RN/Node
+function base64ToUint8Array(base64: string): Uint8Array {
+  // Si existe Buffer (Node o polyfill), usarlo
+  try {
+    // @ts-ignore
+    if (typeof Buffer !== 'undefined' && typeof Buffer.from === 'function') {
+      // @ts-ignore
+      return Uint8Array.from(Buffer.from(base64, 'base64'));
+    }
+  } catch (e) {
+    // continuar al fallback
+  }
+
+  // Si existe atob, usarlo
+  const atobFn = (globalThis as any).atob || (typeof atob === 'function' ? atob : null);
+  if (atobFn) {
+    const binaryString = atobFn(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+    return bytes;
+  }
+
+  // Último recurso: decodificar manualmente
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  let str = '';
+  let output = [] as number[];
+  let buffer = 0, bits = 0;
+  for (let i = 0; i < base64.length; i++) {
+    const c = base64.charAt(i);
+    const val = chars.indexOf(c);
+    if (val === -1) continue;
+    buffer = (buffer << 6) | val;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      output.push((buffer >> bits) & 0xff);
+    }
+  }
+  return new Uint8Array(output);
+}
 
 export interface CitizenProfile {
   usuario_id: string;
@@ -7,6 +50,7 @@ export interface CitizenProfile {
   email: string | null;
   telefono: string | null;
   created_at: string;
+  avatar_url?: string | null;
 }
 
 export interface CitizenReport {
@@ -49,7 +93,7 @@ export async function getCitizenProfile(): Promise<{
   try {
     // Obtener el usuario autenticado
     const { data: userData, error: userError } = await supabase.auth.getUser();
-    
+
     if (userError || !userData.user) {
       return {
         data: null,
@@ -102,7 +146,7 @@ export async function updateCitizenProfile(updates: {
   try {
     // Obtener el usuario autenticado
     const { data: userData, error: userError } = await supabase.auth.getUser();
-    
+
     if (userError || !userData.user) {
       return {
         data: null,
@@ -115,7 +159,7 @@ export async function updateCitizenProfile(updates: {
       const { error: emailError } = await supabase.auth.updateUser({
         email: updates.email,
       });
-      
+
       if (emailError) {
         console.error('Error al actualizar email en Auth:', emailError);
         return {
@@ -178,7 +222,7 @@ export async function getCitizenReports(
   try {
     // Obtener el usuario autenticado
     const { data: userData, error: userError } = await supabase.auth.getUser();
-    
+
     if (userError || !userData.user) {
       return {
         data: null,
@@ -209,14 +253,14 @@ export async function getCitizenReports(
       .eq('ciudadano_id', userData.user.id)
       .range(offset, offset + limit); // Pedimos uno extra para saber si hay más
 
-      // Aplicar filtros opcionales
-      if (categoryId !== undefined && categoryId !== null) {
-        query = query.eq('categoria_publica_id', categoryId);
-      }
+    // Aplicar filtros opcionales
+    if (categoryId !== undefined && categoryId !== null) {
+      query = query.eq('categoria_publica_id', categoryId);
+    }
 
-      if (estadoId !== undefined && estadoId !== null) {
-        query = query.eq('estado_id', estadoId);
-      }
+    if (estadoId !== undefined && estadoId !== null) {
+      query = query.eq('estado_id', estadoId);
+    }
 
     // Ordenar por fecha
     if (orderBy === 'fecha_desc') {
@@ -257,7 +301,7 @@ export async function getCitizenReports(
       likes_count: 0, // TODO: Implementar conteo de likes cuando exista la tabla
       // No usar fallback aquí - dejar null si no vino el join
       categoria: Array.isArray(report.categoria) && report.categoria.length > 0 && report.categoria[0].nombre
-        ? report.categoria[0] 
+        ? report.categoria[0]
         : null,
       estado: Array.isArray(report.estado) && report.estado.length > 0 && report.estado[0].nombre
         ? report.estado[0]
@@ -265,7 +309,7 @@ export async function getCitizenReports(
       ciudadano: Array.isArray(report.ciudadano) && report.ciudadano.length > 0
         ? report.ciudadano[0]
         : null,
-    })) || [];    return {
+    })) || []; return {
       data: reports,
       error: null,
       hasMore,
@@ -281,56 +325,56 @@ export async function getCitizenReports(
 }
 
 
-  /**
-   * Obtiene todas las categorías públicas activas
-   */
-  export async function getAllCategories(): Promise<{
-    data: { id: number; nombre: string }[] | null;
-    error: string | null;
-  }> {
-    try {
-      const { data, error } = await supabase
-        .from('categorias_publicas')
-        .select('id, nombre')
-        .eq('activo', true)
-        .order('orden', { ascending: true });
+/**
+ * Obtiene todas las categorías públicas activas
+ */
+export async function getAllCategories(): Promise<{
+  data: { id: number; nombre: string }[] | null;
+  error: string | null;
+}> {
+  try {
+    const { data, error } = await supabase
+      .from('categorias_publicas')
+      .select('id, nombre')
+      .eq('activo', true)
+      .order('orden', { ascending: true });
 
-      if (error) {
-        console.error('Error al obtener categorías:', error);
-        return { data: null, error: error.message };
-      }
-
-      return { data, error: null };
-    } catch (error: any) {
-      console.error('Error inesperado al obtener categorías:', error);
-      return { data: null, error: error?.message || 'Error inesperado' };
+    if (error) {
+      console.error('Error al obtener categorías:', error);
+      return { data: null, error: error.message };
     }
+
+    return { data, error: null };
+  } catch (error: any) {
+    console.error('Error inesperado al obtener categorías:', error);
+    return { data: null, error: error?.message || 'Error inesperado' };
   }
+}
 
-  /**
-   * Obtiene todos los estados de denuncia
-   */
-  export async function getAllEstados(): Promise<{
-    data: { id: number; nombre: string }[] | null;
-    error: string | null;
-  }> {
-    try {
-      const { data, error } = await supabase
-        .from('estados_denuncia')
-        .select('id, nombre')
-        .order('id', { ascending: true });
+/**
+ * Obtiene todos los estados de denuncia
+ */
+export async function getAllEstados(): Promise<{
+  data: { id: number; nombre: string }[] | null;
+  error: string | null;
+}> {
+  try {
+    const { data, error } = await supabase
+      .from('estados_denuncia')
+      .select('id, nombre')
+      .order('id', { ascending: true });
 
-      if (error) {
-        console.error('Error al obtener estados:', error);
-        return { data: null, error: error.message };
-      }
-
-      return { data, error: null };
-    } catch (error: any) {
-      console.error('Error inesperado al obtener estados:', error);
-      return { data: null, error: error?.message || 'Error inesperado' };
+    if (error) {
+      console.error('Error al obtener estados:', error);
+      return { data: null, error: error.message };
     }
+
+    return { data, error: null };
+  } catch (error: any) {
+    console.error('Error inesperado al obtener estados:', error);
+    return { data: null, error: error?.message || 'Error inesperado' };
   }
+}
 
 /** Obtiene una categoría pública por ID (sin filtrar por activo) */
 export async function getCategoryById(id: number): Promise<{
@@ -376,4 +420,80 @@ export async function getEstadoById(id: number): Promise<{
 
 export default function __expo_router_placeholder__(): any {
   return null;
+}
+
+/**
+ * Sube una imagen de avatar al bucket 'avatars' y actualiza la columna avatar_url
+ */
+export async function uploadCitizenAvatar(fileUri: string): Promise<{
+  data: CitizenProfile | null;
+  error: string | null;
+}> {
+  try {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError || !userData.user) return { data: null, error: 'Usuario no autenticado' };
+
+    const userId = userData.user.id;
+
+    // Estrategia simple: fetch -> arrayBuffer -> Uint8Array
+    // Esto funciona consistentemente en RN/Expo
+    const response = await fetch(fileUri);
+    if (!response.ok) {
+      return { data: null, error: 'No se pudo leer el archivo de imagen' };
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+
+    // Determinar extensión y contentType
+    const extMatch = (fileUri || '').match(/\.([a-zA-Z0-9]+)(?:\?|$)/);
+    const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg';
+    const filePath = `${userId}/avatar_${Date.now()}.${ext}`;
+    
+    let contentType = 'image/jpeg';
+    switch (ext) {
+      case 'png': contentType = 'image/png'; break;
+      case 'webp': contentType = 'image/webp'; break;
+      case 'gif': contentType = 'image/gif'; break;
+      case 'heic':
+      case 'heif':
+        contentType = 'image/heic'; break;
+      default: contentType = 'image/jpeg';
+    }
+
+    // Subir usando Uint8Array (compatible con storage API)
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, bytes, { 
+        upsert: true, 
+        contentType 
+      });
+
+    if (uploadError) {
+      console.error('Error al subir avatar:', uploadError);
+      return { data: null, error: uploadError.message || 'Error al subir la imagen' };
+    }
+
+    // Obtener URL pública
+    const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filePath);
+    const avatarUrl = publicUrlData.publicUrl;
+
+    // Actualizar la columna avatar_url en perfiles_ciudadanos
+    const { data, error } = await supabase
+      .from('perfiles_ciudadanos')
+      .update({ avatar_url: avatarUrl })
+      .eq('usuario_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error al actualizar avatar en perfil:', error);
+      return { data: null, error: error.message };
+    }
+
+    return { data, error: null };
+  } catch (e: any) {
+    console.error('Error inesperado al subir avatar:', e);
+    return { data: null, error: e?.message || 'Error inesperado' };
+  }
 }

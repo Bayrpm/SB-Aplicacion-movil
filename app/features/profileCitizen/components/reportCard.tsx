@@ -105,16 +105,19 @@ export default function ReportCard({ report, onPress }: ReportCardProps) {
         {/* Botón Ver detalle - ahora en su propia fila */}
         <TouchableOpacity
           style={[
-            styles.detailButton, 
-            { 
+            styles.detailButton,
+            {
               backgroundColor: accentButtonBg,
-              borderColor: accentButtonBorder 
-            }
+              borderColor: accentButtonBorder,
+            },
           ]}
-          onPress={onPress}
+          onPress={() => {
+            try { console.warn('ReportCard: pressed ->', report.id); } catch {}
+            try { onPress(); } catch (e) { try { console.warn('ReportCard: onPress error', e); } catch {} }
+          }}
           activeOpacity={0.7}
         >
-      <Text style={[styles.detailButtonText, { color: accentButtonText, fontSize: getFontSizeValue(fontSize, 13) }]}>Ver detalle</Text>
+          <Text style={[styles.detailButtonText, { color: accentButtonText, fontSize: getFontSizeValue(fontSize, 13) }]}>Ver detalle</Text>
         </TouchableOpacity>
       </View>
     </View>
