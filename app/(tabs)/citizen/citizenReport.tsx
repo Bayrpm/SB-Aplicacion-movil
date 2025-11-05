@@ -1,16 +1,21 @@
-import { useNavigation } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import CurrentLocationMap from '../../features/report/components/currentLocationMap';
-import ReportForm from '../../features/report/components/reportForm';
-import ReportPickerModal from '../../features/report/components/reportPickerModal';
-import { clearReportFormSnapshot, getReportFormSnapshot } from '../../features/report/types/reportFormBridge';
+import { useNavigation } from "@react-navigation/native";
+import React, { useEffect, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import CurrentLocationMap from "../../features/report/components/currentLocationMap";
+import ReportForm from "../../features/report/components/reportForm";
+import ReportPickerModal from "../../features/report/components/reportPickerModal";
+import {
+  clearReportFormSnapshot,
+  getReportFormSnapshot,
+} from "../../features/report/types/reportFormBridge";
 
 export default function CitizenReportScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [showPicker, setShowPicker] = useState(false);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(
+    null
+  );
   const [initialData, setInitialData] = useState<any | null>(null);
 
   // On mount, restore snapshot if present (coming back from editLocation)
@@ -18,7 +23,13 @@ export default function CitizenReportScreen() {
     const snap = getReportFormSnapshot();
     if (snap && snap.categoryId) {
       clearReportFormSnapshot();
-      setInitialData({ titulo: snap.titulo, descripcion: snap.descripcion, anonimo: snap.anonimo, ubicacionTexto: snap.ubicacionTexto, coords: snap.coords });
+      setInitialData({
+        titulo: snap.titulo,
+        descripcion: snap.descripcion,
+        anonimo: snap.anonimo,
+        ubicacionTexto: snap.ubicacionTexto,
+        coords: snap.coords,
+      });
       setSelectedCategoryId(snap.categoryId);
     }
   }, []);
@@ -29,23 +40,32 @@ export default function CitizenReportScreen() {
   // case when the screen was already mounted.
   useEffect(() => {
     const navAny = navigation as any;
-    const unsubFocus = navAny.addListener?.('focus', () => {
+    const unsubFocus = navAny.addListener?.("focus", () => {
       const snap = getReportFormSnapshot();
       if (snap && snap.categoryId) {
         clearReportFormSnapshot();
-        setInitialData({ titulo: snap.titulo, descripcion: snap.descripcion, anonimo: snap.anonimo, ubicacionTexto: snap.ubicacionTexto, coords: snap.coords });
+        setInitialData({
+          titulo: snap.titulo,
+          descripcion: snap.descripcion,
+          anonimo: snap.anonimo,
+          ubicacionTexto: snap.ubicacionTexto,
+          coords: snap.coords,
+        });
         setSelectedCategoryId(snap.categoryId);
       }
     });
-    return () => { if (typeof unsubFocus === 'function') unsubFocus(); };
+    return () => {
+      if (typeof unsubFocus === "function") unsubFocus();
+    };
   }, [navigation]);
 
   useEffect(() => {
-      const navAny = navigation as any;
-      const unsub = navAny.addListener?.('tabPress', (e: any) => {
+    const navAny = navigation as any;
+    const unsub = navAny.addListener?.("tabPress", (e: any) => {
       // Si la pantalla está enfocada al presionar la pestaña, abrimos el modal
       try {
-          const isFocused = typeof navAny.isFocused === 'function' ? navAny.isFocused() : false;
+        const isFocused =
+          typeof navAny.isFocused === "function" ? navAny.isFocused() : false;
         if (isFocused) {
           setShowPicker(true);
         }
@@ -55,7 +75,7 @@ export default function CitizenReportScreen() {
       }
     });
     return () => {
-      if (typeof unsub === 'function') unsub();
+      if (typeof unsub === "function") unsub();
     };
   }, [navigation]);
 
@@ -77,8 +97,15 @@ export default function CitizenReportScreen() {
         <ReportForm
           categoryId={selectedCategoryId}
           initialData={initialData ?? undefined}
-          onClose={() => { setSelectedCategoryId(null); setInitialData(null); }}
-          onBack={() => { setSelectedCategoryId(null); setInitialData(null); setShowPicker(true); }}
+          onClose={() => {
+            setSelectedCategoryId(null);
+            setInitialData(null);
+          }}
+          onBack={() => {
+            setSelectedCategoryId(null);
+            setInitialData(null);
+            setShowPicker(true);
+          }}
         />
       ) : null}
     </>
