@@ -18,17 +18,25 @@ const notify = () => {
 };
 
 const ensureSystemSubscription = () => {
-  if (currentMode === 'system') {
-    if (!systemSub) {
-      systemSub = Appearance.addChangeListener(({ colorScheme }) => {
+  // Ensure we have a single subscription to system changes. The callback
+  // will only notify consumers when the app theme mode is 'system'. Keeping
+  // the subscription active avoids timing issues where the listener wasn't
+  // registered and a system change was missed (requiring an app restart).
+  if (!systemSub) {
+    systemSub = Appearance.addChangeListener(({ colorScheme }) => {
+      // Only update and notify when the app is configured to follow system
+      if (currentMode === 'system') {
         currentScheme = colorScheme;
         notify();
-      });
-    }
-  } else if (systemSub) {
-    try { systemSub.remove(); } catch {}
-    systemSub = null;
+      } else {
+        // keep currentScheme in sync for completeness, but don't notify
+        currentScheme = currentMode as ColorSchemeName;
+      }
+    });
   }
+  // If the app is not following the system, we still keep the listener
+  // attached but we won't notify listeners until the mode is switched to
+  // 'system'. This avoids missing an event between mounting and registration.
 };
 
 const loadPersistedOnce = async () => {

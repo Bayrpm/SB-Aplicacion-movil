@@ -1,166 +1,208 @@
-import { Knewave_400Regular, useFonts } from '@expo-google-fonts/knewave';
+// SplashScreen.tsx
 import * as SplashScreenExpo from 'expo-splash-screen';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Dimensions, Easing, Image, Platform, StyleSheet, View } from 'react-native';
+import {
+	Animated,
+	Easing,
+	Image,
+	Platform,
+	StatusBar,
+	StyleSheet,
+	View,
+	useWindowDimensions,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
-const { width, height } = Dimensions.get('window');
+// Fuentes
+import { Knewave_400Regular, useFonts } from '@expo-google-fonts/knewave';
+import { Nunito_700Bold } from '@expo-google-fonts/nunito';
+
+SplashScreenExpo.preventAutoHideAsync().catch(() => {});
 
 const SplashScreen = () => {
-	const [fontsLoaded] = useFonts({ Knewave_400Regular });
+  const [fontsLoaded] = useFonts({
+    Knewave_400Regular,
+    Nunito_700Bold,
+  });
 
-	// Evitar que la splash nativa se oculte hasta que terminemos la animación
-	useEffect(() => {
-		SplashScreenExpo.preventAutoHideAsync().catch(() => {});
-	}, []);
+  const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
 
-	// Responsive measurements
-	const safeTop = height * 0.06;
-	const marginX = width * 0.08;
-	let titleFont = height * 0.065;
-	const titleBaseline = height * 0.17;
-	const maxAllowedWidth = width * 0.95;
-	const estimatedTextWidth = titleFont * 6;
-	if (estimatedTextWidth > maxAllowedWidth) {
-		titleFont = Math.max(height * 0.15, maxAllowedWidth / 6);
-	}
-	const titleTop = Math.max(safeTop, titleBaseline - titleFont * 0.6);
+  // Alto útil sin status/barra inferior
+  const H = Math.max(0, height - insets.top - insets.bottom);
 
-	// SVG path for top blue shape
-	const azulSuperiorPath = () => {
-		const x1 = width;
-		const y1 = height * 0.28 * 0.735;
-		const x2 = 0;
-		const y2 = height * 0.66 * 0.735;
-		const rx = 1.55 * width;
-		const ry = 0.42 * height * 1.1;
-		const rotation = -28;
-		let d = `M 0 0`;
-		d += ` L ${width} 0`;
-		d += ` L ${x1} ${y1}`;
-		d += ` A ${rx} ${ry} ${rotation} 0 1 ${x2} ${y2}`;
-		d += ` L 0 0`;
-		d += ` Z`;
-		return d;
-	};
+  // Proporciones (ajustadas al mock)
+  const TOP_WAVE_H = H * 0.50;
+  const PHOTO_H = H * 0.42;
+  const BOTTOM_BAND_H = H * 0.16;
 
-	// Bottom text position
-	const txtH = 0.05 * height;
-	const centerY = 0.855 * height;
-	const bottomTextTop = centerY - txtH * 0.5;
+  // Posicionamiento relativo
+  const photoTop = insets.top + TOP_WAVE_H - H * 0.02; // leve solape
+  const bottomBandBottom = insets.bottom; // anclado al borde inferior
 
-	// Animation refs
-	const titleAnim = useRef(new Animated.Value(0)).current;
-	// photoAnim removed: image should be static (no animation)
-	const bottomPulse = useRef(new Animated.Value(1)).current;
+  // Tipografías proporcionales
+  const base = Math.min(width, H);
+  const titleFont = base * 0.18;   // “Bienvenido”
+  const ctaFont = base * 0.11;     // “Comencemos”
 
-	useEffect(() => {
-		if (!fontsLoaded) return;
+  // Animaciones
+  const titleAnim = useRef(new Animated.Value(0)).current;
+  const bottomPulse = useRef(new Animated.Value(1)).current;
 
-		const entrance = Animated.sequence([
-			Animated.timing(titleAnim, {
-				toValue: 1,
-				duration: 600,
-				easing: Easing.out(Easing.cubic),
-				useNativeDriver: true,
-			}),
-					Animated.sequence([Animated.delay(80)]),
-		]);
+  useEffect(() => {
+    if (!fontsLoaded) return;
 
-		entrance.start(() => {
-			// Hide the native splash when the entrance animation finishes.
-			// This restores the original behavior where the native splash
-			// is dismissed only after our RN entrance animation completes.
-			SplashScreenExpo.hideAsync().catch(() => {});
+    Animated.sequence([
+      Animated.timing(titleAnim, {
+        toValue: 1,
+        duration: 600,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.delay(50),
+    ]).start(() => {
+      SplashScreenExpo.hideAsync().catch(() => {});
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(bottomPulse, {
+            toValue: 0.4,
+            duration: 1100,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(bottomPulse, {
+            toValue: 1,
+            duration: 1100,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    });
 
-			const loop = Animated.loop(
-				Animated.sequence([
-					Animated.timing(bottomPulse, { toValue: 0.4, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-					Animated.timing(bottomPulse, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-				])
-			);
-			loop.start();
-		});
+    return () => {
+      titleAnim.stopAnimation();
+      bottomPulse.stopAnimation();
+    };
+  }, [fontsLoaded]);
 
-		return () => {
-			titleAnim.stopAnimation();
-			bottomPulse.stopAnimation();
-		};
-		}, [fontsLoaded, titleAnim, bottomPulse]);
+  return (
+    <View style={[styles.container]}>
+      <StatusBar translucent barStyle="light-content" backgroundColor="transparent" />
+      <View style={{ height: insets.top }} />
 
-	return (
-		<View style={styles.container}>
-			<Svg style={styles.topSection} width={width} height={height}>
-				<Path d={azulSuperiorPath()} fill="#6FB0DF" />
-			</Svg>
+      {/* Ola superior: izquierda más baja, derecha más alta */}
+      <Svg
+        width={width}
+        height={TOP_WAVE_H}
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        style={styles.absoluteTop}
+        pointerEvents="none"
+      >
+        {/* Derecha (y≈60) arriba; izquierda (y≈90) abajo */}
+        <Path d="M0,0 H100 V60 Q52 100 0 95 Z" fill="#6FB0DF" />
+      </Svg>
 
-			{fontsLoaded && (
-				<Animated.Text
-					style={[
-						styles.bienvenidoText,
-						{
-							top: titleTop,
-							fontSize: titleFont,
-							paddingHorizontal: marginX,
-							opacity: titleAnim,
-							transform: [{ translateY: titleAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
-						},
-					]}
-				>
-					Bienvenido
-				</Animated.Text>
-			)}
+      {/* Título */}
+      {fontsLoaded && (
+        <Animated.Text
+          accessibilityRole="header"
+          style={[
+            styles.bienvenidoText,
+            {
+              top: insets.top + TOP_WAVE_H * 0.28,
+              fontSize: titleFont,
+              opacity: titleAnim,
+              transform: [
+                {
+                  translateY: titleAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [14, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          Bienvenido
+        </Animated.Text>
+      )}
 
-					<Image source={require('@/assets/images/delh.jpg')} style={styles.photoLayer} resizeMode="cover" />
+      {/* Foto central */}
+      <Image
+        source={require('@/assets/images/delh.jpg')}
+        style={{
+          position: 'absolute',
+          top: photoTop,
+          width,
+          height: PHOTO_H,
+        }}
+        resizeMode="cover"
+      />
 
-			<Svg style={styles.bottomBand} width={width + 2} height={height}>
-				<Path d={`M 0 ${height * (0.76 + (1 - 0.76) * 0.2)} L ${width + 1} ${height * (0.68 + (1 - 0.68) * 0.2)} L ${width + 1} ${height} L 0 ${height} Z`} fill="#0A4A90" />
-			</Svg>
+      {/* Banda inferior inclinada */}
+      <Svg
+        width={width}
+        height={BOTTOM_BAND_H}
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        style={{ position: 'absolute', left: 0, right: 0, bottom: bottomBandBottom }}
+        pointerEvents="none"
+      >
+        <Path d="M0,18 L100,0 L100,100 L0,100 Z" fill="#0A4A90" />
+      </Svg>
 
-			{fontsLoaded && (
-				<Animated.Text style={[styles.comencemosText, { top: bottomTextTop, fontSize: txtH, opacity: bottomPulse }]}>
-					Comencemos
-				</Animated.Text>
-			)}
-		</View>
-	);
+      {/* CTA */}
+      {fontsLoaded && (
+        <Animated.Text
+          style={[
+            styles.comencemosText,
+            {
+              fontSize: ctaFont,
+              opacity: bottomPulse,
+              bottom:
+                bottomBandBottom +
+                BOTTOM_BAND_H * 0.50 -
+                ctaFont * 0.60,
+              letterSpacing: Platform.select({ ios: 0.2, android: 0.4, default: 0.3 }),
+            },
+          ]}
+        >
+          Comencemos
+        </Animated.Text>
+      )}
+
+      <View style={{ height: insets.bottom }} />
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-	container: { flex: 1, backgroundColor: '#FEFEFE' },
-	topSection: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 2 },
-	bienvenidoText: {
-		position: 'absolute',
-		fontWeight: '400',
-		letterSpacing: width * 0.002,
-		color: '#FFFFFF',
-		textAlign: 'center',
-		zIndex: 4,
-		fontFamily: 'Knewave_400Regular',
-		width: '100%',
-	},
-	photoLayer: {
-		position: 'absolute',
-		top: height * 0.4,
-		left: 0,
-		right: 0,
-		width: '100%',
-		height: height * 0.41,
-		zIndex: 1,
-	},
-	bottomBand: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 3 },
-	comencemosText: {
-		position: 'absolute',
-		fontWeight: 'bold',
-		color: '#FFFFFF',
-		textAlign: 'center',
-		letterSpacing: width * 0.0006,
-		paddingLeft: width * 0.3,
-		fontFamily: Platform.OS === 'ios' ? 'Nunito-Bold' : Platform.OS === 'android' ? 'Nunito-Bold' : 'Quicksand-Bold',
-		zIndex: 5,
-		width: '100%',
-	},
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
+  absoluteTop: { position: 'absolute', left: 0, right: 0, top: 0 },
+  bienvenidoText: {
+    position: 'absolute',
+    width: '100%',
+    textAlign: 'center',
+    color: '#FFFFFF',
+    zIndex: 2,
+    fontFamily: 'Knewave_400Regular',
+    fontWeight: '400',
+  },
+  comencemosText: {
+    position: 'absolute',
+    width: '100%',
+    textAlign: 'right',
+    color: '#FFFFFF',
+    zIndex: 3,
+    fontFamily:
+      Platform.OS === 'ios' || Platform.OS === 'android'
+        ? 'Nunito_700Bold'
+        : 'Nunito_700Bold',
+    fontWeight: '700',
+  },
 });
 
 export default SplashScreen;
-

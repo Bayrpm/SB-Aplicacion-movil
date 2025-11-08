@@ -22,6 +22,7 @@ interface ProfileHeaderProps {
   backgroundColor?: string;
   onSettingsPress?: () => void;
   onEditPress?: () => void;
+  onHeightChange?: (height: number) => void;
 }
 
 export default function ProfileHeader({
@@ -34,6 +35,7 @@ export default function ProfileHeader({
   backgroundColor,
   onSettingsPress,
   onEditPress,
+  onHeightChange,
 }: ProfileHeaderProps) {
   const { fontSize } = useFontSize();
   const insets = useSafeAreaInsets();
@@ -44,72 +46,193 @@ export default function ProfileHeader({
   const buttonBorderColor = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint'); // Borde azul siempre
   const buttonContentColor = useThemeColor({ light: '#0A4A90', dark: '#FFFFFF' }, 'tint'); // Azul en light, blanco en dark
 
-  // Altura del header más adaptable y limitada (aumentada para más espacio de curva)
-  const maxHeaderHeight = Math.min(520, height * 0.5);
-  const headerHeight = Math.round(Math.max(320, Math.min(480, height * 0.5))); // Altura del header adaptable: proporcional a la pantalla pero con límites
-   // razonables para que en pantallas pequeñas no ocupe demasiado espacio y en
-   // pantallas grandes permita la curva deseada.
 
-  const ry = Math.max(Math.round(headerHeight * 1.1), Math.round(height * 0.38));
-  // Calculamos un offset (bellyOffset) que representa cuanto baja la panza
-  const bellyOffset = Math.round(ry * 0.7);
-  // yEdge es la altura en la que empiezan los extremos de la curva (a ambos lados)
-  const yEdge = Math.max(8, headerHeight - Math.round(bellyOffset * 0.6));
-  const rx = width;
-  const rotation = 0;
-  const headerCurvePath = () => {
-    // Dibujar arco elíptico desde la derecha hasta la izquierda en y = yEdge
-    const d = `M 0 0 L ${width} 0 L ${width} ${yEdge} A ${rx} ${ry} ${rotation} 0 1 0 ${yEdge} L 0 0 Z`;
-    return d;
-  };
-
-  // calcular la posición vertical ideal del botón Editar: queremos que el centro
-  // del botón quede aproximadamente sobre el borde inferior del header (mitad
-  // dentro/mitad fuera). Usamos `headerHeight` como referencia y añadimos un
-  // pequeño empuje hacia abajo proporcional a la "panza" (bellyOffset) para que
-  // visualmente quede bien en la mayoría de dispositivos.
-
-  // Constantes del botón (usar constantes para mantener la altura/anchura
-  // sincronizadas entre el cálculo y el estilo). Cambia aquí si quieres probar
-  // variantes: ambos valores se usarán para calcular la posición y el render.
+  // Hacemos el SVG más alto en pantallas grandes y adaptativo hasta un máximo
+  const SVG_HEIGHT = Math.round(Math.min(360, height * 0.40)); // altura base del área SVG (dp)
+  const MIN_SVG_HEIGHT = 350; // mínimo absoluto requerido por diseño (usuario solicitó 340)
   const BUTTON_WIDTH = 120;
   const BUTTON_HEIGHT = 50;
+  const RENDER_SVG_HEIGHT = Math.max(SVG_HEIGHT, MIN_SVG_HEIGHT);
+  const [svgLayout, setSvgLayout] = React.useState({ x: 0, y: 0, width: width, height: RENDER_SVG_HEIGHT });
+  const headerRef = React.useRef<View | null>(null);
+  const svgRef = React.useRef<View | null>(null);
+  const [buttonTopState, setButtonTopState] = React.useState<number | null>(null);
+  const [contentTopState, setContentTopState] = React.useState<number | null>(null);
+  const contentRef = React.useRef<View | null>(null);
+  const [contentHeight, setContentHeight] = React.useState<number>(0);
+  // Ajustamos la altura total del header para que no haya huecos grandes
+  // ni espacio sobrante: dejamos suficiente espacio para el SVG y la mitad
+  // del botón "Editar" que queda fuera del SVG. Incluimos el safe-area top
+  // para que las mediciones y posicionamientos sean consistentes.
+  // La altura real del header dependerá de la medida del SVG en runtime.
+  const AVATAR_SIZE = Math.min(120, Math.round(width * 0.28));
+  // Proporción vertical del fondo de la curva dentro del viewBox (coincide con headerCurvePath)
+  const CURVE_BOTTOM_RATIO = 0.65;
+  // curveBottomPx representa la posición (en píxeles) del punto inferior de la curva
+  // calculada a partir de la altura medida del SVG y la proporción usada en el path.
+  const curveBottomPx = Math.round((Math.max(svgLayout.height || 0, MIN_SVG_HEIGHT) || RENDER_SVG_HEIGHT) * CURVE_BOTTOM_RATIO); // CURVE_BOTTOM_RATIO
+  // Centramos el contenido (avatar/info) entre el inicio del header y el borde de la curva
+  // El área útil es desde la parte superior del header (0) hasta curveBottomPx
+  const usableTop = 0;
+  const usableHeight = curveBottomPx - usableTop;
+  // Posición base para centrar el avatar dentro del área usable
+  const baseContentTop = Math.max(0, usableTop + Math.round((usableHeight - AVATAR_SIZE) / 2));
+  // Ajuste para evitar que el contenido sea tapado por el botón: medimos contentHeight y forzamos
+  // que su fondo esté al menos `safeGap` px por encima de la mitad inferior del botón.
+  // Aumentado para reducir solapamientos; se puede ajustar según resultados en dispositivo.
+  const safeGap = 20;
+  const maxContentTop = Math.max(0, curveBottomPx - Math.round(BUTTON_HEIGHT / 2) - contentHeight - safeGap);
+  let contentTop = Math.min(baseContentTop, maxContentTop);
+  // Evitar que el contenido suba por encima del header: forzamos un mínimo
+  const MIN_CONTENT_TOP = 8;
+  if (contentTop < MIN_CONTENT_TOP) contentTop = MIN_CONTENT_TOP;
+  // El header debe cubrir hasta la base del botón (mitad fuera/mitad dentro)
+  // Esta es la altura que debe usar el padre para evitar solapamientos
+  const headerHeight = curveBottomPx + Math.round(BUTTON_HEIGHT / 2);
+
+
+  const VIEWBOX_W = 100;
+  // Incrementamos el viewBox vertical para permitir una curvatura más profunda
+  const VIEWBOX_H = 55;
+  const headerCurvePath = () => {
+    // cubic bezier curve in relative viewBox coordinates
+    return `M 0 0 L ${VIEWBOX_W} 0 L ${VIEWBOX_W} ${VIEWBOX_H * CURVE_BOTTOM_RATIO} C ${VIEWBOX_W * 0.78} ${VIEWBOX_H} ${VIEWBOX_W * 0.22} ${VIEWBOX_H} 0 ${VIEWBOX_H * CURVE_BOTTOM_RATIO} L 0 0 Z`;
+  };
+
+
+
+
+  // Cuando svgLayout cambia, medimos posiciones en ventana para calcular top absoluto relativo al header
+  React.useEffect(() => {
+    // medimos header y svg en pantalla solo para logging; no usamos la medida
+    // para posicionar el botón final (evita resultados inconsistentes entre
+    // dispositivos cuando measureInWindow devuelve offsets negativos).
+    const measure = async () => {
+      try {
+        // @ts-ignore: native measureInWindow exists on HostComponent
+        const headerMeasure = headerRef.current ? await new Promise<number[]>((res) => (headerRef.current as any).measureInWindow((x: number, y: number, w: number, h: number) => res([x, y, w, h]))) : null;
+        // @ts-ignore
+        const svgMeasure = svgRef.current ? await new Promise<number[]>((res) => (svgRef.current as any).measureInWindow((x: number, y: number, w: number, h: number) => res([x, y, w, h]))) : null;
+        if (headerMeasure && svgMeasure) {
+          const pageYHeader = headerMeasure[1];
+          const pageYSvg = svgMeasure[1];
+          const topRelative = Math.round((pageYSvg - pageYHeader) + curveBottomPx - BUTTON_HEIGHT / 2);
+          // diagnostic measurements available; no logging in production
+        }
+      } catch (e) {
+        console.warn('measure error', e);
+      }
+    };
+    const t = setTimeout(measure, 0);
+    return () => clearTimeout(t);
+  }, [svgLayout.height, curveBottomPx]);
+
+  // Calculamos top del botón a partir de la altura efectiva del SVG (usando el mínimo)
+  const effectiveSvgH = Math.max(svgLayout.height || RENDER_SVG_HEIGHT, MIN_SVG_HEIGHT);
+  const computedButtonTop = Math.round((effectiveSvgH * CURVE_BOTTOM_RATIO) - Math.round(BUTTON_HEIGHT / 2));
+
+  // Posicionar el botón para que quede mitad dentro/mitad fuera del SVG de forma determinista:
+  // colocamos el centro del botón en la línea inferior del SVG: top = svgHeight - BUTTON_HEIGHT/2
+  // Esto evita dependencias con insets y hace la posición independiente del contenido.
+  const safetyOffset = 0; // px: pequeño ajuste si es necesario
+  const svgHeightEffective = svgLayout.height && svgLayout.height > 0 ? svgLayout.height : RENDER_SVG_HEIGHT;
+  // Posición fallback: centro del botón en la línea inferior del SVG (relativo al header)
+  const computedButtonTopFallback = Math.round(svgHeightEffective - Math.round(BUTTON_HEIGHT / 2) + safetyOffset);
+
+  // Cuando svgLayout.height cambie, actualizamos el state para forzar re-render y usar la medida real
+  React.useEffect(() => {
+    if (svgLayout.height && svgLayout.height > 0) {
+      // Posicionar respecto al top del headerContainer (sin insets)
+      const bt = Math.round(svgLayout.height - Math.round(BUTTON_HEIGHT / 0.8) + safetyOffset);
+      setButtonTopState(bt);
+    } else {
+      setButtonTopState(null);
+    }
+  }, [svgLayout.height]);
+
+  // Calcular la posición absoluta del contenido (avatar, nombre, email, telefono)
+  // respecto al headerContainer para que queden dentro del área del SVG.
+  React.useEffect(() => {
+    // Compute content top relative to headerContainer and clamp to visible area.
+    // Avoid negative tops that place the content above the header.
+    const svgH = svgLayout.height && svgLayout.height > 0 ? svgLayout.height : RENDER_SVG_HEIGHT;
+    const raw = Math.round(contentTop - svgH);
+    // Ensure the content is at least below the top edge of the header
+    const minTop = 28;
+    const clamped = Math.max(raw, minTop);
+    setContentTopState(clamped);
   
-  // Calcular dónde está el punto más bajo de la curva (la panza):
-  // Para un arco elíptico, el punto más bajo está aproximadamente en:
-  // yEdge + (ry - sqrt(ry^2 - rx^2)) pero simplificamos usando bellyOffset
-  // Ajustamos el factor para que el botón quede exactamente en la panza
-  const curveBottomY = yEdge + Math.round(bellyOffset * 0.18);
-  
-  // Posición ideal: centrar el botón en el punto más bajo de la curva
-  // para que quede mitad dentro/mitad fuera de la panza en todos los dispositivos
-  const desiredTop = curveBottomY - Math.round(BUTTON_HEIGHT / 2);
-  // clamp por safe area y límite inferior razonable
-  const minTop = insets.top + 8;
-  const maxTop = headerHeight + Math.round(bellyOffset * 0.45);
-  // Ajuste fino: empujamos el botón sólo un poco para que quede mitad dentro/mitad fuera
-  const EDIT_BUTTON_EXTRA = Math.round(BUTTON_HEIGHT * 0.13); // pequeño desplazamiento (~8px)
-  const editButtonTop = Math.max(minTop, Math.min(desiredTop + EDIT_BUTTON_EXTRA, maxTop + EDIT_BUTTON_EXTRA));
+  }, [svgLayout.height, contentHeight, contentTop]);
 
   return (
-    // Permitimos que las áreas transparentes del header no bloqueen toques
-    // hacia elementos que queden debajo en la lista. Usamos `box-none` para
-    // que los hijos sigan recibiendo eventos normalmente.
-    <View pointerEvents="box-none" style={[styles.headerContainer, { height: headerHeight }]}> 
-      {/* Curva azul superior con área segura. No debe capturar toques sobre la lista. */}
-      <Svg pointerEvents="none" style={styles.topSection} width={width} height={Math.round(headerHeight + bellyOffset + 12)}>
-        <Path d={headerCurvePath()} fill={topFill} />
-      </Svg>
 
-      {/* Contenido del header con márgenes seguros */}
-      <View style={[
-        styles.contentContainer, 
-        { 
-          top: insets.top + 20, // Espaciado más consistente
-          paddingHorizontal: Math.max(20, insets.left + 8, insets.right + 8), // Área segura horizontal
+  <View ref={headerRef} pointerEvents="box-none" style={[styles.headerContainer, { height: headerHeight }]}> 
+
+      <View ref={svgRef} onLayout={(e) => {
+        const l = e.nativeEvent.layout;
+        // Guardamos la medida real del wrapper (height puede variar en algunos dispositivos)
+        // aplicamos mínimo absoluto para evitar inconsistencias entre dispositivos
+        const measured = Math.max(Math.round(l.height), MIN_SVG_HEIGHT);
+        setSvgLayout({ x: l.x, y: l.y, width: l.width, height: measured });
+        // Avisar al padre con la altura final del header (hasta el borde inferior del botón)
+        try { onHeightChange && onHeightChange(Math.round((measured * CURVE_BOTTOM_RATIO) + (BUTTON_HEIGHT / 2))); } catch (e) { /* noop */ }
+      }} style={[styles.topSection, { height: RENDER_SVG_HEIGHT, position: 'relative' }]}> 
+        <Svg
+          pointerEvents="none"
+          width={width}
+          height={RENDER_SVG_HEIGHT}
+          viewBox={`0 0 ${VIEWBOX_W} ${VIEWBOX_H}`}
+          preserveAspectRatio="none"
+        >
+          <Path d={headerCurvePath()} fill={topFill} />
+        </Svg>
+      </View>
+
+    {/* Botón Editar: hijo directo de headerContainer (posición absoluta respecto al header)
+        para quedar mitad dentro y mitad fuera del SVG. top se calcula sumando insets.top
+        porque el SVG está desplazado por el paddingTop del header. */}
+  <View style={{ position: 'absolute', left: 0, right: 0, top: (buttonTopState ?? computedButtonTopFallback), alignItems: 'center', zIndex: 30 }} pointerEvents="box-none">
+      <TouchableOpacity
+        style={[
+          styles.editButton,
+          {
+            backgroundColor: buttonBg,
+            borderWidth: 2,
+            borderColor: buttonBorderColor,
+            width: BUTTON_WIDTH,
+            height: BUTTON_HEIGHT,
+            borderRadius: Math.round(BUTTON_HEIGHT / 2),
+          },
+        ]}
+        onPress={onEditPress}
+        activeOpacity={0.7}
+      >
+        <IconSymbol name="edit" size={20} color={buttonContentColor} />
+        <Text style={[styles.editButtonText, { color: buttonContentColor, fontSize: getFontSizeValue(fontSize, 16) }]}>Editar</Text>
+      </TouchableOpacity>
+    </View>
+      {/* Botón Editar: ahora hijo de headerContainer, posición absoluta respecto a la pantalla */}
+
+      {/* Contenido del header dentro del área del SVG (posición absoluta) */}
+      <View ref={contentRef} onLayout={(e) => {
+          const h = Math.round(e.nativeEvent.layout.height);
+          if (h && h !== contentHeight) setContentHeight(h);
+        }} style={[
+        styles.contentContainer,
+        {
+          // Posicionamos el contenido absolutamente respecto al headerContainer
+          // para que quede dentro del área del SVG. Usamos contentTopState cuando esté
+          // disponible y fallback a una posición razonable.
+          position: 'absolute',
+          top: (contentTopState != null) ? contentTopState : (svgLayout.height ? Math.round(contentTop - svgLayout.height) : Math.round(-BUTTON_HEIGHT / 2)),
+          left: 0,
+          right: 0,
+          paddingHorizontal: Math.max(20, insets.left + 8, insets.right + 8),
+          zIndex: 2,
         }
       ]}>
         {/* Avatar circular: mostrar imagen si existe, sino iniciales */}
+        {/* Avatar: ahora responsivo para pantallas pequeñas/grandes */}
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={() => {
@@ -172,13 +295,21 @@ export default function ProfileHeader({
 
             AppAlert.alert('Avatar', '¿Qué quieres hacer con tu foto de perfil?', buttons);
           }}
-          style={[styles.avatarContainer, { backgroundColor: avatarBg }]}
+          style={[
+            styles.avatarContainer,
+            {
+              backgroundColor: avatarBg,
+              width: AVATAR_SIZE,
+              height: AVATAR_SIZE,
+              borderRadius: Math.round(AVATAR_SIZE / 2),
+            }
+          ]}
         >
-          {avatarUrl ? (
-            <RNImage source={{ uri: avatarUrl }} style={styles.avatarImage} />
-          ) : (
-            <Text style={[styles.avatarText, { fontSize: getFontSizeValue(fontSize, 44) }]}>{userInitials}</Text>
-          )}
+            {avatarUrl ? (
+              <RNImage source={{ uri: avatarUrl }} style={[styles.avatarImage, { width: '100%', height: '100%', borderRadius: Math.round(Math.min(120, Math.round(width * 0.28)) / 2) }]} />
+            ) : (
+              <Text style={[styles.avatarText, { fontSize: getFontSizeValue(fontSize, Math.max(28, Math.round(Math.min(120, Math.round(width * 0.28)) * 0.36))) }]}>{userInitials}</Text>
+            )}
           {/* pequeño icono superpuesto */}
           <View style={styles.avatarOverlayBtn} pointerEvents="none">
             <IconSymbol name="camera" size={18} color="#fff" />
@@ -196,8 +327,8 @@ export default function ProfileHeader({
           </Text>
         )}
 
-        {/* Información de contacto - con padding bottom para no llegar al botón */}
-        <View style={[styles.infoContainer, { paddingBottom: Math.round(BUTTON_HEIGHT * 0.7) + 8 }]}>
+    {/* Información de contacto - separamos del avatar/botón para evitar solapamientos */}
+  <View style={[styles.infoContainer, { paddingBottom: 8, marginTop: 8 }]}>
           {userPhone && (
             <View style={styles.infoRow}>
               <IconSymbol name="phone" size={20} color="#FFFFFF" />
@@ -224,31 +355,9 @@ export default function ProfileHeader({
             </View>
           )}
         </View>
-      </View>
+        </View>
 
-      {/* Botón Editar en el centro inferior (mitad dentro, mitad fuera) */}
-      <TouchableOpacity 
-            style={[
-          styles.editButton, 
-          { 
-            backgroundColor: buttonBg,
-            borderWidth: 2,
-            borderColor: buttonBorderColor, // Borde azul
-            // Alinear el centro del botón Editar aproximadamente sobre la panza,
-            // pero usar la posición calculada y limitada para evitar que caiga en mitad de la pantalla
-            top: editButtonTop,
-            left: Math.max((width - BUTTON_WIDTH) / 2, insets.left + 8), // Centrado horizontalmente con área segura
-            width: BUTTON_WIDTH,
-            height: BUTTON_HEIGHT,
-            borderRadius: Math.round(BUTTON_HEIGHT / 2),
-          }
-        ]}
-        onPress={onEditPress}
-        activeOpacity={0.7}
-      >
-        <IconSymbol name="edit" size={20} color={buttonContentColor} />
-        <Text style={[styles.editButtonText, { color: buttonContentColor, fontSize: getFontSizeValue(fontSize, 16) }]}>Editar</Text>
-      </TouchableOpacity>
+
     </View>
   );
 }
@@ -276,16 +385,14 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   topSection: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+    // Keep the SVG in normal flow so wrapper onLayout measures its height
+    width: '100%',
     zIndex: 1,
   },
   contentContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
+    // Usamos posicionamiento en flujo y un marginTop negativo para solapar
+    // el contenido con la curva del SVG de forma consistente entre dispositivos.
+    position: 'relative',
     alignItems: 'center',
     zIndex: 2,
     paddingHorizontal: 20, // Será sobreescrito dinámicamente
@@ -357,8 +464,7 @@ const styles = StyleSheet.create({
     flexShrink: 1, // Permite que el texto se reduzca si es necesario
   },
   editButton: {
-    position: 'absolute',
-    left: width / 2 - 60, // Centrado (120px de ancho / 2) - será ajustado dinámicamente
+    // usamos posicionamiento en flujo + marginTop negativo para solapar la curva
     width: 120,
     height: 50,
     borderRadius: 25,

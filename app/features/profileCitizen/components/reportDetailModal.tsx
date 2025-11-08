@@ -305,8 +305,7 @@ export default function ReportDetailModal({
     }
   };
 
-  // Intentar cargar expo-av de forma dinámica para evitar crash cuando el módulo nativo
-  // no está disponible en el entorno (Expo Go vs Dev Client). Si falla, dejamos fallback.
+
   useEffect(() => {
     let mounted = true;
     (async () => {

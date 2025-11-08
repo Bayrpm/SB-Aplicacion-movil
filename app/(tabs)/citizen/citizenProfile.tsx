@@ -53,6 +53,7 @@ export default function HomeScreen() {
   // Estados para manejar el modal de detalle desde notificaciones
   const [selectedReport, setSelectedReport] = React.useState<CitizenReport | null>(null);
   const [showDetailModal, setShowDetailModal] = React.useState(false);
+  const [headerMeasuredHeight, setHeaderMeasuredHeight] = React.useState<number | null>(null);
 
   // Detectar si viene desde una notificación y cargar el reporte
   React.useEffect(() => {
@@ -182,67 +183,80 @@ export default function HomeScreen() {
     );
   }
 
+  // Use an estimated header height slightly reduced now that header content
+  // is rendered inside the SVG. Esto evita un espacio demasiado grande bajo el header.
+  // El header ahora notifica su altura real (hasta el borde inferior del botón Editar)
+  const BUTTON_HEIGHT = 50; // Debe coincidir con ProfileHeader
+  const HEADER_EST = 360;
+  
+
   return (
-    <View style={[styles.container, { backgroundColor: containerBg }]}>
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 90 } // Tab bar height + margen
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ProfileHeader ahora es parte del scroll con botones */}
-        <View style={styles.headerWrapper}>
-          <ProfileHeader 
-            userName={getFullName()}
-            userEmail={profile?.email || user?.email || 'correo@ejemplo.com'}
-            userPhone={profile?.telefono || 'Sin teléfono'}
-            userInitials={getUserInitials()}
-            avatarUrl={profile?.avatar_url ?? null}
-            onAvatarUpdated={handleProfileUpdated}
-            onEditPress={handleEditProfile}
-          />
-          
-          {/* Botón de cerrar sesión en la esquina superior izquierda */}
-          <TouchableOpacity 
+    <View style={[styles.container, { backgroundColor: containerBg, paddingTop: insets.top }]}> 
+    <ScrollView 
+      style={styles.scrollView}
+      contentContainerStyle={[
+        styles.scrollContent,
+        { paddingBottom: insets.bottom + 90 } // Tab bar height + margen
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header (dentro del ScrollView): ahora el header forma parte del scroll
+          Usamos headerMeasuredHeight como altura del wrapper cuando esté disponible
+          para evitar que los elementos absolutos del header (ej. botón Editar)
+          solapen la lista. Además añadimos un espaciador extra bajo el header
+          para aumentar la separación entre el header y la lista de denuncias. */}
+      <View style={[styles.headerWrapper, { height: headerMeasuredHeight ?? HEADER_EST, minHeight: headerMeasuredHeight ?? HEADER_EST }]}> 
+        <ProfileHeader 
+          userName={getFullName()}
+          userEmail={profile?.email || user?.email || 'correo@ejemplo.com'}
+          userPhone={profile?.telefono || 'Sin teléfono'}
+          userInitials={getUserInitials()}
+          avatarUrl={profile?.avatar_url ?? null}
+          onAvatarUpdated={handleProfileUpdated}
+          onEditPress={handleEditProfile}
+          onHeightChange={(h: number) => setHeaderMeasuredHeight(h)}
+        />
+
+        {/* Botón de cerrar sesión en la esquina superior izquierda (se desplazará con el scroll) */}
+        <TouchableOpacity 
             style={[
               styles.signOutButton, 
               { 
                 backgroundColor: actionButtonBg,
-                top: insets.top + 14,
+                top: 14,
                 left: Math.max(16, insets.left + 8),
               }
             ]}
-            onPress={handleSignOut}
-            activeOpacity={0.7}
-          >
-            <IconSymbol name="exit-to-app" size={28} color={logoutIconColor} />
-          </TouchableOpacity>
+          onPress={handleSignOut}
+          activeOpacity={0.7}
+        >
+          <IconSymbol name="exit-to-app" size={28} color={logoutIconColor} />
+        </TouchableOpacity>
 
-          {/* Botón de configuración en la esquina superior derecha */}
-          <TouchableOpacity 
-            style={[
-              styles.settingsButton, 
-              { 
-                  backgroundColor: actionButtonBg,
-                  top: insets.top + 14,
-                right: Math.max(16, insets.right + 8),
-              }
-            ]}
-            onPress={handleSettings}
-            activeOpacity={0.7}
-          >
-            <IconSymbol name="settings" size={28} color={settingsIconColor} />
-          </TouchableOpacity>
-        </View>
-        
-        {/* Espaciador para compensar el ProfileHeader */}
-        <View style={styles.headerSpacer} />
-        
-        {/* Lista de denuncias del usuario */}
-        <ReportsList />
-      </ScrollView>
+        {/* Botón de configuración en la esquina superior derecha (se desplazará con el scroll) */}
+        <TouchableOpacity 
+          style={[
+            styles.settingsButton, 
+            { 
+              backgroundColor: actionButtonBg,
+              top: 14,
+              right: Math.max(16, insets.right + 8),
+            }
+          ]}
+          onPress={handleSettings}
+          activeOpacity={0.7}
+        >
+          <IconSymbol name="settings" size={28} color={settingsIconColor} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Espaciador mayor entre el header y la lista de denuncias */}
+      {/* Usamos un espacio fijo derivado de la mitad del botón + extra para mayor separación */}
+      <View style={[styles.headerSpacer, { height: Math.round((BUTTON_HEIGHT / 2) + 60) }]} />
+
+      {/* Lista de denuncias del usuario */}
+      <ReportsList />
+    </ScrollView>
 
       {/* Modal de edición de perfil */}
       <EditProfileModal
@@ -321,4 +335,5 @@ const styles = StyleSheet.create({
   headerSpacer: {
     height: 20, // Espacio entre el header y la lista
   },
+
 });

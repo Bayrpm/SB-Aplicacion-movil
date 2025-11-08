@@ -3,7 +3,7 @@ import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type CommentItem = {
@@ -14,6 +14,11 @@ export type CommentItem = {
   text?: string;
   created_at?: string;
   avatar?: string | null;
+  // Campos alternativos que pueden venir desde distintas APIs/vistas
+  avatar_url?: string | null;
+  autor_avatar?: string | null;
+  foto?: string | null;
+  imagen_url?: string | null;
   likes?: number;
   liked?: boolean;
   parent_id?: number | null;
@@ -71,6 +76,8 @@ export default function CommentsPanel({
   const [selectedComment, setSelectedComment] = useState<CommentItem | null>(null);
   const [optionsModalVisible, setOptionsModalVisible] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState<number>(0);
+  const scrollRef = useRef<ScrollView | null>(null);
 
   useEffect(() => {
     const map: Record<string, { count: number; liked: boolean }> = {};
@@ -99,6 +106,33 @@ export default function CommentsPanel({
       return next;
     });
   }, [comments]);
+
+  // Listen to keyboard events to adjust bottom spacing on standalone builds
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = (e: any) => {
+      // Robust extraction of keyboard height across RN versions / platforms
+      const h = e?.endCoordinates?.height ?? e?.end?.height ?? e?.nativeEvent?.endCoordinates?.height ?? 0;
+      setKeyboardHeight(h);
+
+      // When keyboard opens, ensure the ScrollView scrolls to the end so the input is visible
+      // small timeout to allow layout to settle
+      setTimeout(() => {
+        try { scrollRef.current?.scrollToEnd({ animated: true }); } catch (err) {}
+      }, 50);
+    };
+    const onHide = () => setKeyboardHeight(0);
+
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+
+    return () => {
+      try { showSub.remove(); } catch {}
+      try { hideSub.remove(); } catch {}
+    };
+  }, [insets.bottom]);
 
   const handleLike = async (c: CommentItem) => {
     const prev = localLikes[String(c.id)] ?? { count: c.likes ?? 0, liked: !!c.liked };
@@ -146,7 +180,13 @@ export default function CommentsPanel({
 
   return (
     // Usar 'padding' en ambos OS mejora el comportamiento dentro de modals y vistas anidadas.
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={'padding'} keyboardVerticalOffset={insets.bottom + 80}>
+    // Use KeyboardAvoidingView only on iOS (Android behaves better with adjustResize/windowSoftInputMode).
+    // For Android we rely on keyboard listeners + scrollToEnd fallback.
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.bottom + 80 : 0}
+    >
       {loading ? (
         <View style={{ padding: 20, alignItems: 'center' }}>
           <ActivityIndicator size="small" color={accentColor} />
@@ -158,10 +198,16 @@ export default function CommentsPanel({
         </View>
       ) : null}
 
-  <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
+  <ScrollView
+        ref={(r) => { scrollRef.current = r; }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: Math.max(12, insets.bottom) }}
+        keyboardShouldPersistTaps="handled"
+      >
         {tops.map((c) => {
           const likesState = localLikes[String(c.id)] ?? { count: c.likes ?? 0, liked: !!c.liked };
-          const avatarUri = c.avatar ?? (c.usuario_id && currentUserId && c.usuario_id === currentUserId ? currentUserAvatar : null);
+          // Support multiple possible avatar fields returned by different endpoints/views
+          const avatarUri = c.avatar ?? c.avatar_url ?? c.autor_avatar ?? c.foto ?? c.imagen_url ?? (c.usuario_id && currentUserId && String(c.usuario_id) === String(currentUserId) ? currentUserAvatar : null);
 
           const childrenFlat: CommentItem[] = [];
           collectDescendants(String(c.id), childrenFlat);
@@ -224,7 +270,7 @@ export default function CommentsPanel({
 
                   {!collapsed && childrenFlat.map((r) => {
                     const rLikes = localLikes[String(r.id)] ?? { count: r.likes ?? 0, liked: !!r.liked };
-                    const rAvatar = r.avatar ?? null;
+                    const rAvatar = r.avatar ?? r.avatar_url ?? r.autor_avatar ?? r.foto ?? r.imagen_url ?? null;
                     const isReplySelected = selectedComment?.id === String(r.id);
                     return (
                       <View key={r.id} style={optionsModalVisible && !isReplySelected ? { opacity: 0.2 } : undefined}>
@@ -323,8 +369,16 @@ export default function CommentsPanel({
         </View>
       </Modal>
 
-      {/* Input */}
-      <View style={{ paddingHorizontal: 12, paddingVertical: 8 }}>
+  {/* Input */}
+  {/* Ajustar marginBottom dinámicamente según la altura del teclado para builds standalone */}
+  {/* Ajustar marginBottom dinámicamente según la altura del teclado para builds standalone */}
+  <View
+        style={{
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          marginBottom: (keyboardHeight ? Math.max(0, keyboardHeight - insets.bottom) : insets.bottom),
+        }}
+      >
         {editingCommentId ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
             <View style={{ backgroundColor: itemBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, flex: 1 }}>

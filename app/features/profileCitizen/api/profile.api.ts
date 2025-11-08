@@ -52,7 +52,7 @@ export interface CitizenProfile {
   created_at: string;
   avatar_url?: string | null;
 }
-
+        // Si la vista no tiene parent_id, Postgres/Supabase regresará error con código 42703
 export interface CitizenReport {
   id: string;
   folio?: string | number;
@@ -571,6 +571,21 @@ export async function fetchReportComments(reportId: string) {
       // Merge comment reaction stats (if view exists) to supply likes/liked per comment
       try {
         const rows = (data ?? []) as any[];
+
+        // Enriquecer filas con avatar_url desde perfiles_ciudadanos para mostrar avatars en UI
+        try {
+          const userIds = Array.from(new Set(rows.map((r: any) => r.usuario_id).filter(Boolean)));
+          if (userIds.length > 0) {
+            const { data: profiles } = await supabase.from('perfiles_ciudadanos').select('usuario_id, avatar_url').in('usuario_id', userIds as any[]);
+            const avatarMap: Record<string, string> = {};
+            (profiles || []).forEach((p: any) => { if (p && p.usuario_id) avatarMap[String(p.usuario_id)] = p.avatar_url ?? null; });
+            rows.forEach((r: any) => {
+              if (!r.avatar_url && r.usuario_id && avatarMap[String(r.usuario_id)]) r.avatar_url = avatarMap[String(r.usuario_id)];
+            });
+          }
+        } catch (e) {
+          // ignore avatar enrichment errors
+        }
 
         // Try view first
         try {

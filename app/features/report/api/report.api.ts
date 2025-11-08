@@ -369,6 +369,22 @@ export async function fetchReportComments(reportId: string) {
       try {
         const rows = (data ?? []) as any[];
 
+        // Fetch avatar_url for any known usuario_id from perfiles_ciudadanos so UI can show avatars
+        try {
+          const userIds = Array.from(new Set(rows.map((r: any) => r.usuario_id).filter(Boolean)));
+          if (userIds.length > 0) {
+            const { data: profiles } = await supabase.from('perfiles_ciudadanos').select('usuario_id, avatar_url').in('usuario_id', userIds as any[]);
+            const avatarMap: Record<string, string> = {};
+            (profiles || []).forEach((p: any) => { if (p && p.usuario_id) avatarMap[String(p.usuario_id)] = p.avatar_url ?? null; });
+            // attach avatar_url to rows if not present
+            rows.forEach((r: any) => {
+              if (!r.avatar_url && r.usuario_id && avatarMap[String(r.usuario_id)]) r.avatar_url = avatarMap[String(r.usuario_id)];
+            });
+          }
+        } catch (e) {
+          // ignore avatar enrichment errors
+        }
+
         // Try view first
         try {
           const { data: statsData, error: statsErr } = await supabase
