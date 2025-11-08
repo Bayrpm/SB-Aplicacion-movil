@@ -12,10 +12,12 @@ import {
   Animated,
   Dimensions,
   Image,
+  Linking,
   Modal,
   PanResponder,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -109,6 +111,7 @@ export default function ReportDetailModal({
   const [evidences, setEvidences] = useState<Array<{ tipo: 'FOTO'|'VIDEO'; url: string; storage_path: string }>>([]);
   const [loadingEvidences, setLoadingEvidences] = useState<boolean>(false);
   const [VideoModule, setVideoModule] = useState<any>(null);
+  const [videoImportError, setVideoImportError] = useState<string | null>(null);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
   // Stats and comments UI (per-report)
   const [reportStats, setReportStats] = useState<Record<string, {
@@ -310,15 +313,30 @@ export default function ReportDetailModal({
     let mounted = true;
     (async () => {
       try {
-        // Importar el nuevo paquete `expo-video` (reemplazo de expo-av)
         const mod = await import('expo-video');
-        // Normalizar la API para que el resto del componente pueda usar VideoModule.Video y VideoModule.ResizeMode
-  const m: any = mod;
-  const VideoComp = (m && (m.Video || m.default)) ?? null;
-  const ResizeMode = m?.ResizeMode ?? (m?.Video?.ResizeMode) ?? null;
-  if (mounted) setVideoModule({ Video: VideoComp, ResizeMode });
-      } catch (e) {
-        // No disponible: no hacemos nada, usaremos fallback (abrir URL externa)
+        const m: any = mod;
+        const VideoComp = (m && (m.Video || m.default)) ?? null;
+        const ResizeMode = m?.ResizeMode ?? (m?.Video?.ResizeMode) ?? null;
+        if (mounted) {
+          setVideoModule({ Video: VideoComp, ResizeMode });
+          setVideoImportError(null);
+        }
+        return;
+      } catch (e1: any) {
+        try {
+          const mod2 = await import('expo-av');
+          const m2: any = mod2;
+          const VideoComp2 = (m2 && (m2.Video || m2.default)) ?? null;
+          const ResizeMode2 = m2?.ResizeMode ?? (m2?.Video?.ResizeMode) ?? null;
+          if (mounted) {
+            setVideoModule({ Video: VideoComp2, ResizeMode: ResizeMode2 });
+            setVideoImportError(null);
+          }
+          return;
+        } catch (e2: any) {
+          const msg = (e2 && e2.message) ? `${e2.message}` : String(e2 ?? e1);
+          if (mounted) setVideoImportError(msg);
+        }
       }
     })();
     return () => { mounted = false; };
@@ -740,9 +758,27 @@ export default function ReportDetailModal({
               <View style={{ padding: 20, alignItems: 'center' }}>
                 <Text style={{ color: textColor, marginBottom: 12 }}>El reproductor nativo no está disponible en esta build.</Text>
                 <Text style={{ color: mutedColor, marginBottom: 20, textAlign: 'center' }}>Para reproducir videos dentro de la app necesitas instalar un Dev Client o generar una build que incluya el módulo nativo.</Text>
-                <TouchableOpacity onPress={() => setSelectedVideoUrl(null)} style={[styles.backButton, { width: 160, alignSelf: 'center' }]}> 
-                  <Text style={[styles.backButtonText, { color: buttonText }]}>Cerrar</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity onPress={async () => {
+                    try {
+                      if (!selectedVideoUrl) return;
+                      const can = await Linking.canOpenURL(selectedVideoUrl);
+                      if (can) await Linking.openURL(selectedVideoUrl);
+                      else await Share.share({ url: selectedVideoUrl, message: selectedVideoUrl });
+                    } catch (e) {
+                      try { await Share.share({ url: selectedVideoUrl || '', message: selectedVideoUrl || '' }); } catch (ee) {}
+                    }
+                  }} style={[styles.backButton, { width: 160, alignSelf: 'center' }]}> 
+                    <Text style={[styles.backButtonText, { color: buttonText }]}>Abrir en reproductor</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => setSelectedVideoUrl(null)} style={[styles.backButton, { width: 120, alignSelf: 'center' }]}> 
+                    <Text style={[styles.backButtonText, { color: buttonText }]}>Cerrar</Text>
+                  </TouchableOpacity>
+                </View>
+                {videoImportError ? (
+                  <Text style={{ color: '#FFBABA', backgroundColor: '#3B0A0A', padding: 8, borderRadius: 8, marginTop: 8 }}>{videoImportError}</Text>
+                ) : null}
               </View>
             )}
           </View>
