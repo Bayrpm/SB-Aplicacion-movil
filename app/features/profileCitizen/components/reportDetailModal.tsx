@@ -405,11 +405,15 @@ export default function ReportDetailModal({
   // Tries in order: Video (expo-av compatible), VideoView (expo-video), otherwise null.
   const InAppVideoRenderer = ({ uri }: { uri: string }) => {
     try {
+      // Build a VideoSource object when possible to help the native player
+      const isMp4 = typeof uri === 'string' && /\.mp4(\?|$)/i.test(uri);
+      const sourceObj: any = isMp4 ? { uri, contentType: 'video/mp4', overrideFileExtensionAndroid: 'mp4', useCaching: true } : { uri };
+
       // Prefer the hook API if available (expo-video exposes useVideoPlayer)
       if (VideoModule?.useVideoPlayer && VideoModule?.VideoView) {
         try { console.log('reportDetailModal: using useVideoPlayer + VideoView'); } catch (e) {}
         try {
-          const player = VideoModule.useVideoPlayer({ source: { uri }, shouldPlay: true });
+          const player = VideoModule.useVideoPlayer(sourceObj, (p: any) => { try { p.play(); } catch {} });
           // Try common prop names: 'player' and 'video'
           return (
             // @ts-ignore dynamic API
@@ -422,7 +426,7 @@ export default function ReportDetailModal({
                 setVideoLoading(false);
                 try { console.error('reportDetailModal: VideoView(onError) via useVideoPlayer', e); setVideoPlaybackError(e?.message ?? String(e)); } catch (ex) { setVideoPlaybackError(String(e)); }
               }}
-              onReadyForDisplay={() => setVideoLoading(false)}
+              onFirstFrameRender={() => setVideoLoading(false)}
               onLoadStart={() => { setVideoLoading(true); setVideoPlaybackError(null); }}
             />
           );
@@ -436,7 +440,7 @@ export default function ReportDetailModal({
         try { console.log('reportDetailModal: using Video export'); } catch (e) {}
         return (
           <VideoModule.Video
-            source={{ uri }}
+            source={sourceObj}
             style={styles.videoPlayer}
             useNativeControls
             resizeMode={VideoModule?.ResizeMode?.CONTAIN}
@@ -457,14 +461,14 @@ export default function ReportDetailModal({
         try { console.log('reportDetailModal: using VideoView export (no hook)'); } catch (e) {}
         return (
           <VideoModule.VideoView
-            source={{ uri }}
+            source={sourceObj}
             style={styles.videoPlayer}
             useNativeControls={true}
             onError={(e: any) => {
               setVideoLoading(false);
               try { console.error('reportDetailModal: VideoView onError', e); setVideoPlaybackError(e?.message ?? String(e)); } catch (ex) { setVideoPlaybackError(String(e)); }
             }}
-            onReadyForDisplay={() => setVideoLoading(false)}
+            onFirstFrameRender={() => setVideoLoading(false)}
             onLoadStart={() => { setVideoLoading(true); setVideoPlaybackError(null); }}
           />
         );
@@ -474,7 +478,7 @@ export default function ReportDetailModal({
       if (VideoModule?.createVideoPlayer) {
         try { console.log('reportDetailModal: using createVideoPlayer export'); } catch (e) {}
         try {
-          const Player = VideoModule.createVideoPlayer({ source: { uri }, style: styles.videoPlayer });
+          const Player = VideoModule.createVideoPlayer({ source: sourceObj, style: styles.videoPlayer });
           return <Player />;
         } catch (e) {
           try { console.error('reportDetailModal: createVideoPlayer failed', e); } catch (ex) {}
