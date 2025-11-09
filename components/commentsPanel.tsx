@@ -5,25 +5,22 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 export type CommentItem = {
-  id: string;
-  denuncia_id?: string;
-  usuario_id?: string | null;
-  author?: string;
-  text?: string;
-  created_at?: string;
+  id: string | number;
+  usuario_id?: string | number | null;
+  author?: string | null;
+  autor?: string | null;
+  text?: string | null;
+  contenido?: string | null;
+  created_at?: string | null;
   avatar?: string | null;
-  // Campos alternativos que pueden venir desde distintas APIs/vistas
   avatar_url?: string | null;
   autor_avatar?: string | null;
   foto?: string | null;
   imagen_url?: string | null;
+  parent_id?: number | null;
   likes?: number;
   liked?: boolean;
-  parent_id?: number | null;
-  contenido?: string;
-  autor?: string;
 };
 
 type Props = {
@@ -36,6 +33,7 @@ type Props = {
   onReply?: (comment: CommentItem) => void;
   currentUserId?: string | null;
   currentUserAvatar?: string | null;
+  currentUserName?: string | null;
   onEdit?: (commentId: string, newText: string) => Promise<void> | void;
   onDelete?: (commentId: string) => Promise<void> | void;
 };
@@ -52,6 +50,7 @@ export default function CommentsPanel({
   onDelete,
   currentUserId,
   currentUserAvatar,
+  currentUserName,
 }: Props) {
   const insets = useSafeAreaInsets();
   const textColor = useThemeColor({}, 'text');
@@ -78,6 +77,11 @@ export default function CommentsPanel({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState<number>(0);
   const scrollRef = useRef<ScrollView | null>(null);
+
+  // Estimación de la altura ocupada por el input (incluye padding/margins) —
+  // se usa para reservar espacio en el ScrollView cuando el teclado está cerrado.
+  const ESTIMATED_INPUT_HEIGHT = 88;
+  const [measuredInputHeight, setMeasuredInputHeight] = useState<number | null>(null);
 
   useEffect(() => {
     const map: Record<string, { count: number; liked: boolean }> = {};
@@ -185,7 +189,9 @@ export default function CommentsPanel({
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.bottom + 80 : 0}
+      // Reduce the vertical offset so the input is not pushed too far up on iOS.
+      // Use a small offset + safe-area bottom to keep the input above system bars.
+      keyboardVerticalOffset={Platform.OS === 'ios' ? (insets.bottom ? insets.bottom + 24 : 24) : 0}
     >
       {loading ? (
         <View style={{ padding: 20, alignItems: 'center' }}>
@@ -198,12 +204,23 @@ export default function CommentsPanel({
         </View>
       ) : null}
 
-  <ScrollView
-        ref={(r) => { scrollRef.current = r; }}
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: Math.max(12, insets.bottom) }}
-        keyboardShouldPersistTaps="handled"
-      >
+  {/* Contenedor relativo para permitir posicionar el input absolutado en el fondo */}
+    <View style={{ flex: 1, position: 'relative' }}>
+    <ScrollView
+      ref={(r) => { scrollRef.current = r; }}
+      style={{ flex: 1 }}
+  // Reservar un espacio razonable para el input + safe-area.
+  // Ajustado para que el input quede lo más abajo posible sin ocultar la barra de sistema.
+    contentContainerStyle={{
+          // Reserve space equal to the input height + either the keyboard height (when open)
+          // or the bottom safe-area (when closed). Reduce the extra buffer so the input
+          // visually sits closer to the navigation bar.
+          paddingBottom: (measuredInputHeight ?? ESTIMATED_INPUT_HEIGHT)
+            + (keyboardHeight > 0 ? keyboardHeight : (insets.bottom || 0))
+            + 2,
+        }}
+      keyboardShouldPersistTaps="handled"
+    >
         {tops.map((c) => {
           const likesState = localLikes[String(c.id)] ?? { count: c.likes ?? 0, liked: !!c.liked };
           // Support multiple possible avatar fields returned by different endpoints/views
@@ -220,8 +237,16 @@ export default function CommentsPanel({
               <TouchableOpacity
                 activeOpacity={0.95}
                 onLongPress={() => {
-                  // Allow long-press if this comment belongs to current user
-                  if (currentUserId && c.usuario_id && String(c.usuario_id) === String(currentUserId)) {
+                  // Allow long-press if this comment belongs to current user.
+                  // Some endpoints may omit/normalize usuario_id; as a safe fallback
+                  // also permit opening options when the comment avatar matches current user's avatar.
+                  const authoredById = currentUserId && c.usuario_id && String(c.usuario_id) === String(currentUserId);
+                  const avatarUri = c.avatar ?? c.avatar_url ?? c.autor_avatar ?? c.foto ?? c.imagen_url ?? (c.usuario_id && currentUserId && String(c.usuario_id) === String(currentUserId) ? currentUserAvatar : null);
+                  const authoredByAvatar = currentUserAvatar && avatarUri && String(avatarUri) === String(currentUserAvatar);
+                  // Name-based fallback: allow if comment author matches currentUserName (full or first name)
+                  const commentAuthor = String(c.author ?? c.autor ?? '').trim();
+                  const authoredByName = currentUserName && commentAuthor && (String(commentAuthor).toLowerCase() === String(currentUserName).toLowerCase() || commentAuthor.split(' ')[0].toLowerCase() === String(currentUserName).split(' ')[0].toLowerCase());
+                  if (authoredById || authoredByAvatar || authoredByName) {
                     setSelectedComment(c);
                     setOptionsModalVisible(true);
                   }
@@ -277,7 +302,12 @@ export default function CommentsPanel({
                         <TouchableOpacity
                           activeOpacity={0.95}
                           onLongPress={() => {
-                            if (currentUserId && r.usuario_id && String(r.usuario_id) === String(currentUserId)) {
+                            const rAvatar = r.avatar ?? r.avatar_url ?? r.autor_avatar ?? r.foto ?? r.imagen_url ?? null;
+                            const authoredByIdR = currentUserId && r.usuario_id && String(r.usuario_id) === String(currentUserId);
+                            const authoredByAvatarR = currentUserAvatar && rAvatar && String(rAvatar) === String(currentUserAvatar);
+                            const rAuthor = String(r.author ?? r.autor ?? '').trim();
+                            const authoredByNameR = currentUserName && rAuthor && (String(rAuthor).toLowerCase() === String(currentUserName).toLowerCase() || rAuthor.split(' ')[0].toLowerCase() === String(currentUserName).split(' ')[0].toLowerCase());
+                            if (authoredByIdR || authoredByAvatarR || authoredByNameR) {
                               setSelectedComment(r);
                               setOptionsModalVisible(true);
                             }
@@ -372,13 +402,31 @@ export default function CommentsPanel({
   {/* Input */}
   {/* Ajustar marginBottom dinámicamente según la altura del teclado para builds standalone */}
   {/* Ajustar marginBottom dinámicamente según la altura del teclado para builds standalone */}
-  <View
-        style={{
-          paddingHorizontal: 12,
-          paddingVertical: 8,
-          marginBottom: (keyboardHeight ? Math.max(0, keyboardHeight - insets.bottom) : insets.bottom),
-        }}
-      >
+    {/* Input absolutado para quedarse pegado al borde inferior del contenedor */}
+    <View
+      style={{
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        // Si el teclado está abierto, posicionar sobre el teclado.
+        // Cuando está cerrado, anclamos el contenedor exactamente a bottom: 0
+        // y reducimos el paddingBottom interno para que el input quede más cerca
+        // de la barra de navegación (pero sin overlappear la safe-area).
+        bottom: keyboardHeight > 0 ? Math.max(0, keyboardHeight + 8) : 0,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        // small reduction of safe-area padding to bring input visually closer to nav
+        paddingBottom: Math.max(0, (insets.bottom || 0) - 6),
+        backgroundColor: 'transparent',
+      }}
+      // Medir la altura real del input para ajustar el padding dinámicamente
+      onLayout={(e) => {
+        try {
+          const h = e.nativeEvent.layout.height;
+          if (h && h > 0 && h !== measuredInputHeight) setMeasuredInputHeight(h);
+        } catch (err) {}
+      }}
+    >
         {editingCommentId ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
             <View style={{ backgroundColor: itemBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, flex: 1 }}>
@@ -443,6 +491,7 @@ export default function CommentsPanel({
           </TouchableOpacity>
         </View>
       </View>
+    </View>
     </KeyboardAvoidingView>
   );
 }

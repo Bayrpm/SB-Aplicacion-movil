@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface SettingsModalProps {
   visible: boolean;
@@ -26,6 +27,7 @@ interface SettingsModalProps {
 
 
 export default function SettingsModal({ visible, onClose }: SettingsModalProps) {
+  const insets = useSafeAreaInsets();
   const [, setAppThemeMode] = useAppColorScheme();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background');
   const textColor = useThemeColor({}, 'text');
@@ -196,7 +198,11 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={styles.content}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: (insets.bottom || 0) }}
+          >
             {/* Sección Apariencia */}
             <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>APARIENCIA</Text>
@@ -379,7 +385,10 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
           activeOpacity={1}
           onPress={() => setShowThemeSelector(false)}
         >
-          <View style={[styles.themeSelectorContainer, { backgroundColor: bgColor }]}>
+          <View style={[
+            styles.themeSelectorContainer,
+            { backgroundColor: bgColor, paddingBottom: (insets.bottom || 0) + 20 }
+          ]}>
             <View style={[styles.themeSelectorHeader, { borderBottomColor: borderColor }]}>
             <Text style={[styles.themeSelectorTitle, { color: textColor, fontSize: getFontSizeValue(fontSize, 18) }]}>
                 Seleccionar Tema
@@ -483,7 +492,10 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
           activeOpacity={1}
           onPress={() => setShowFontSizeSelector(false)}
         >
-          <View style={[styles.themeSelectorContainer, { backgroundColor: bgColor }]}>
+          <View style={[
+            styles.themeSelectorContainer,
+            { backgroundColor: bgColor, paddingBottom: (insets.bottom || 0) + 20 }
+          ]}>
             <View style={[styles.themeSelectorHeader, { borderBottomColor: borderColor }]}>
             <Text style={[styles.themeSelectorTitle, { color: textColor, fontSize: getFontSizeValue(fontSize, 18) }]}>
                 Seleccionar Tamaño

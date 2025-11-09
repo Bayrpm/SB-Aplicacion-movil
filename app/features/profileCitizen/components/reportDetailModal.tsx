@@ -6,17 +6,18 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { deleteReportComment, updateReportComment } from '@/app/features/report/api/report.api';
 import CommentsPanel, { CommentItem } from '@/components/commentsPanel';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import VideoModal from '@/components/VideoModal';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
   Image,
+  Linking,
   Modal,
   PanResponder,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -109,6 +110,10 @@ export default function ReportDetailModal({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [evidences, setEvidences] = useState<Array<{ tipo: 'FOTO'|'VIDEO'; url: string; storage_path: string; thumb_url?: string | null }>>([]);
   const [loadingEvidences, setLoadingEvidences] = useState<boolean>(false);
+  const [videoThumbs, setVideoThumbs] = useState<Record<string, string>>({}); // storage_path -> local uri
+  const [videoThumbsLoading, setVideoThumbsLoading] = useState<Record<string, boolean>>({});
+  const [videoThumbsFailed, setVideoThumbsFailed] = useState<Record<string, boolean>>({});
+  const [thumbModuleMissing, setThumbModuleMissing] = useState<boolean>(false);
   const [VideoModule, setVideoModule] = useState<any>(null);
   const [videoImportError, setVideoImportError] = useState<string | null>(null);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
@@ -168,7 +173,92 @@ export default function ReportDetailModal({
       try {
         if (visible && report?.id) {
           const ev = await listEvidencesSigned(report.id);
-          if (active) setEvidences(ev);
+            if (active) {
+            setEvidences(ev);
+          }
+          // After evidences loaded, generate local thumbnails for videos that lack thumb_url
+          (async () => {
+            try {
+              const toGenerate = (ev || []).filter((e: any) => e.tipo === 'VIDEO' && !e.thumb_url);
+              if (toGenerate.length === 0) return;
+              // dynamic import to avoid native require on app startup
+              let ThumbMod: any = null;
+              try {
+                if (thumbModuleMissing) {
+                  // avoid repeated import attempts if we already detected missing module
+                  setVideoThumbsFailed((prev) => {
+                    const copy = { ...(prev || {}) };
+                    for (const it of toGenerate) copy[String(it.storage_path)] = true;
+                    return copy;
+                  });
+                  return;
+                }
+
+                ThumbMod = await import('expo-video-thumbnails');
+              } catch (impErr) {
+                // expo-video-thumbnails not available or failed to load; mark and skip generation
+                setThumbModuleMissing(true);
+                // mark all as failed so UI doesn't spin forever
+                setVideoThumbsFailed((prev) => {
+                  const copy = { ...(prev || {}) };
+                  for (const it of toGenerate) copy[String(it.storage_path)] = true;
+                  return copy;
+                });
+                return;
+              }
+
+              if (!active) return;
+
+              // Normalize possible export shapes. Some package versions export a default object
+              // with createThumbnailAsync, others export the function as default or named.
+              const createFnCandidates: Array<any> = [
+                ThumbMod?.createThumbnailAsync,
+                ThumbMod?.default?.createThumbnailAsync,
+                ThumbMod?.createThumbnail,
+                ThumbMod?.default,
+                ThumbMod?.getThumbnailAsync,
+                ThumbMod?.getThumbnail,
+              ];
+              const createFn = createFnCandidates.find((f) => typeof f === 'function') || null;
+              if (!createFn) {
+                // No thumbnail creation function found in the loaded module
+                setThumbModuleMissing(true);
+                setVideoThumbsFailed((prev) => {
+                  const copy = { ...(prev || {}) };
+                  for (const it of toGenerate) copy[String(it.storage_path)] = true;
+                  return copy;
+                });
+                return;
+              }
+
+              for (const item of toGenerate) {
+                const key = String(item.storage_path);
+                // mark loading
+                setVideoThumbsLoading((prev) => ({ ...prev, [key]: true }));
+                try {
+                  // call the discovered function in a few shapes
+                  let result: any = null;
+                  if (createFn === ThumbMod || createFn === ThumbMod?.default) {
+                    // default export is the function itself
+                    result = await createFn(item.url, { time: 1000 });
+                  } else {
+                    result = await createFn(item.url, { time: 1000 });
+                  }
+                  const uri = result?.uri ?? result?.path ?? null;
+                  if (!uri) throw new Error('thumbnail result missing uri');
+                  if (!active) break;
+                  setVideoThumbs((prev) => ({ ...prev, [key]: uri }));
+                } catch (thumbErr) {
+                  // Failed to generate thumbnail for this video
+                  setVideoThumbsFailed((prev) => ({ ...prev, [key]: true }));
+                } finally {
+                  setVideoThumbsLoading((prev) => ({ ...prev, [key]: false }));
+                }
+              }
+            } catch (e) {
+              // ignore if expo-video-thumbnails not available or fails
+            }
+          })();
         } else {
           setEvidences([]);
         }
@@ -310,6 +400,8 @@ export default function ReportDetailModal({
     }
   };
 
+  
+
 
   useEffect(() => {
     // reset playing state when changing video
@@ -326,9 +418,6 @@ export default function ReportDetailModal({
           // renderer can access either expo-video or expo-av shapes (VideoView, useVideoPlayer, createVideoPlayer or Video)
           setVideoModule({ ...(m || {}), Video: VideoComp, ResizeMode });
           setVideoImportError(null);
-          // Diagnostic log: confirmar que el módulo dinámico se cargó
-          try { console.log('reportDetailModal: loaded expo-video module', { VideoCompPresent: !!VideoComp, ResizeMode }); } catch (e) {}
-          try { console.log('reportDetailModal: expo-video module keys', Object.keys(m || {})); } catch (e) {}
         }
         return;
       } catch (e1: any) {
@@ -341,14 +430,11 @@ export default function ReportDetailModal({
               // store full module for parity with expo-video case
               setVideoModule({ ...(m2 || {}), Video: VideoComp2, ResizeMode: ResizeMode2 });
               setVideoImportError(null);
-              try { console.log('reportDetailModal: loaded expo-av module', { VideoCompPresent: !!VideoComp2, ResizeMode: ResizeMode2 }); } catch (e) {}
-              try { console.log('reportDetailModal: expo-av module keys', Object.keys(m2 || {})); } catch (e) {}
             }
           return;
         } catch (e2: any) {
           const msg = (e2 && e2.message) ? `${e2.message}` : String(e2 ?? e1);
           if (mounted) setVideoImportError(msg);
-          try { console.error('reportDetailModal: dynamic import failed', e1, e2); } catch (ee) {}
         }
       }
     })();
@@ -419,7 +505,6 @@ export default function ReportDetailModal({
 
       // Prefer the hook API if available (expo-video exposes useVideoPlayer)
       if (VideoModule?.useVideoPlayer && VideoModule?.VideoView) {
-        try { console.log('reportDetailModal: using useVideoPlayer + VideoView'); } catch (e) {}
           try {
           // create player but don't auto-play; wait for user tap so preview (first frame) can show
           const player = VideoModule.useVideoPlayer ? VideoModule.useVideoPlayer(sourceObj) : null;
@@ -433,14 +518,14 @@ export default function ReportDetailModal({
               useNativeControls={true}
               onError={(e: any) => {
                 setVideoLoading(false);
-                try { console.error('reportDetailModal: VideoView(onError) via useVideoPlayer', e); setVideoPlaybackError(e?.message ?? String(e)); } catch (ex) { setVideoPlaybackError(String(e)); }
+                setVideoPlaybackError(e?.message ?? String(e));
               }}
               onFirstFrameRender={() => setVideoLoading(false)}
               onLoadStart={() => { setVideoLoading(true); setVideoPlaybackError(null); }}
             />
           );
         } catch (e) {
-          try { console.error('reportDetailModal: useVideoPlayer path failed', e); } catch (ex) {}
+          // useVideoPlayer path failed; keep silent and fall through to other render options
         }
       }
 
@@ -450,7 +535,6 @@ export default function ReportDetailModal({
 
       // If hook not available, but Video exists (expo-av style), use it
       if (VideoModule?.Video) {
-        try { console.log('reportDetailModal: using Video export'); } catch (e) {}
         return (
           <VideoModule.Video
             source={sourceObj}
@@ -463,7 +547,7 @@ export default function ReportDetailModal({
             onReadyForDisplay={() => setVideoLoading(false)}
             onError={(e: any) => {
               setVideoLoading(false);
-              try { console.error('reportDetailModal: Video onError', e); setVideoPlaybackError(e?.message ?? String(e)); } catch (ex) { setVideoPlaybackError(String(e)); }
+              setVideoPlaybackError(e?.message ?? String(e));
             }}
           />
         );
@@ -471,7 +555,6 @@ export default function ReportDetailModal({
 
       // If VideoView exists without the hook, try basic VideoView with source prop
       if (VideoModule?.VideoView) {
-        try { console.log('reportDetailModal: using VideoView export (no hook)'); } catch (e) {}
         return (
           <VideoModule.VideoView
             source={sourceObj}
@@ -479,7 +562,7 @@ export default function ReportDetailModal({
             useNativeControls={true}
             onError={(e: any) => {
               setVideoLoading(false);
-              try { console.error('reportDetailModal: VideoView onError', e); setVideoPlaybackError(e?.message ?? String(e)); } catch (ex) { setVideoPlaybackError(String(e)); }
+              setVideoPlaybackError(e?.message ?? String(e));
             }}
             onFirstFrameRender={() => setVideoLoading(false)}
             onLoadStart={() => { setVideoLoading(true); setVideoPlaybackError(null); }}
@@ -489,18 +572,17 @@ export default function ReportDetailModal({
 
       // Last resort: if createVideoPlayer exists, attempt to create a player element.
       if (VideoModule?.createVideoPlayer) {
-        try { console.log('reportDetailModal: using createVideoPlayer export'); } catch (e) {}
         try {
           const Player = VideoModule.createVideoPlayer({ source: sourceObj, style: styles.videoPlayer });
           return <Player />;
         } catch (e) {
-          try { console.error('reportDetailModal: createVideoPlayer failed', e); } catch (ex) {}
+          // createVideoPlayer failed; fall through
         }
       }
 
       return null;
     } catch (e) {
-      try { console.error('reportDetailModal: InAppVideoRenderer unexpected error', e); } catch (ex) {}
+      // Unexpected renderer error — preserve state but avoid noisy logs
       return null;
     }
   };
@@ -710,22 +792,64 @@ export default function ReportDetailModal({
                           return (
                             <TouchableOpacity
                               key={ev.storage_path}
-                              onPress={() => { console.log('reportDetailModal: open in-app video', ev.url); setSelectedVideoUrl(ev.url); }}
+                              onPress={() => {
+                                setSelectedVideoUrl(ev.url);
+                              }}
                               activeOpacity={0.8}
                               style={{ marginRight: 10 }}
                             >
-                              {ev.thumb_url ? (
-                                <View style={styles.thumbnail}>
-                                  <Image source={{ uri: ev.thumb_url }} style={[styles.thumbnail, { position: 'relative' }]} resizeMode="cover" />
-                                  <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}>
-                                    <IconSymbol name="play-circle" size={28} color={accentColor} />
-                                  </View>
-                                </View>
-                              ) : (
-                                <View style={[styles.thumbnail, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#00000010' }]}>
-                                  <IconSymbol name="play-circle" size={28} color={accentColor} />
-                                </View>
-                              )}
+                                  {(() => {
+                                    const key = ev.storage_path;
+                                    const local = videoThumbs[key];
+                                    const loading = !!videoThumbsLoading[key];
+                                    const failed = !!videoThumbsFailed[key];
+                                    const remote = ev.thumb_url;
+
+                                    if (loading) {
+                                      return (
+                                        <View style={[styles.thumbnail, { justifyContent: 'center', alignItems: 'center' }]}>
+                                          <ActivityIndicator color={accentColor} />
+                                        </View>
+                                      );
+                                    }
+
+                                    if (remote || local) {
+                                      const uri = remote ?? local;
+                                      return (
+                                        <View style={styles.thumbnail}>
+                                          <Image
+                                            source={{ uri }}
+                                            style={[styles.thumbnail, { position: 'relative' }]}
+                                            resizeMode="cover"
+                                            onError={(e) => {
+                                              // thumbnail image failed to load; silently ignore
+                                              setVideoThumbsFailed((prev) => ({ ...prev, [key]: true }));
+                                            }}
+                                          />
+                                          <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}>
+                                            <IconSymbol name="play-circle" size={28} color={accentColor} />
+                                          </View>
+                                        </View>
+                                      );
+                                    }
+
+                                    if (failed) {
+                                      return (
+                                        <View style={[styles.thumbnail, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#111' }]}>
+                                          <Text style={{ color: '#fff', fontSize: 12 }}>Miniatura no disponible</Text>
+                                          <View style={{ position: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
+                                            <IconSymbol name="play-circle" size={28} color={accentColor} />
+                                          </View>
+                                        </View>
+                                      );
+                                    }
+
+                                    return (
+                                      <View style={[styles.thumbnail, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#00000010' }]}>
+                                        <IconSymbol name="play-circle" size={28} color={accentColor} />
+                                      </View>
+                                    );
+                                  })()}
                             </TouchableOpacity>
                           );
                         });
@@ -810,7 +934,7 @@ export default function ReportDetailModal({
             </ScrollView>
 
             {/* Footer con botón Volver (estilo igual que en report/components) */}
-            <View style={[styles.footer, { borderTopColor: borderColor }]}> 
+            <View style={[styles.footer, { borderTopColor: borderColor, paddingBottom: insets.bottom ? insets.bottom + 4 : 6 }]}>
               <TouchableOpacity
                 onPress={onClose}
                 activeOpacity={0.8}
@@ -831,7 +955,7 @@ export default function ReportDetailModal({
           transparent
           onRequestClose={() => setSelectedImageIndex(null)}
         >
-          <View style={styles.galleryOverlay}>
+    <View style={styles.galleryOverlay}>
             <TouchableOpacity
               style={styles.galleryClose}
               onPress={() => setSelectedImageIndex(null)}
@@ -853,16 +977,68 @@ export default function ReportDetailModal({
       )}
 
       {/* Modal de reproducción de video (in-app) */}
-      <VideoModal
-        visible={!!selectedVideoUrl}
-        videoUrl={selectedVideoUrl}
-        onClose={() => setSelectedVideoUrl(null)}
-        videoModule={VideoModule}
-        videoImportError={videoImportError}
-        accentColor={accentColor}
-        textColor="#002fffff"
-        mutedColor={mutedColor}
-      />
+      {(selectedVideoUrl) && (
+        <Modal
+          visible
+          animationType="slide"
+          transparent={false}
+          hardwareAccelerated={true}
+          onRequestClose={() => setSelectedVideoUrl(null)}
+        >
+          <View style={[styles.galleryOverlay, { backgroundColor: '#000' }]}>
+            <TouchableOpacity
+              style={styles.galleryClose}
+              onPress={() => setSelectedVideoUrl(null)}
+            >
+              <IconSymbol name="close" size={32} color="#fff" />
+            </TouchableOpacity>
+            {(VideoModule?.Video || VideoModule?.VideoView || VideoModule?.createVideoPlayer) ? (
+              <>
+                <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                  {/* Poster/thumbnail behind the native video to avoid showing underlying UI while the native surface is not rendering frames */}
+                  <InAppVideoRenderer uri={selectedVideoUrl} />
+                </View>
+                {videoLoading ? (
+                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color={accentColor} />
+                  </View>
+                ) : null}
+                {videoPlaybackError ? (
+                  <View style={{ padding: 12, alignItems: 'center' }}>
+                    <Text style={{ color: '#FFBABA', backgroundColor: '#3B0A0A', padding: 8, borderRadius: 8 }}>{videoPlaybackError}</Text>
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <Text style={{ color: textColor, marginBottom: 12 }}>El reproductor nativo no está disponible en esta build.</Text>
+                <Text style={{ color: mutedColor, marginBottom: 20, textAlign: 'center' }}>Para reproducir videos dentro de la app necesitas instalar un Dev Client o generar una build que incluya el módulo nativo.</Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <TouchableOpacity onPress={async () => {
+                    try {
+                      if (!selectedVideoUrl) return;
+                      const can = await Linking.canOpenURL(selectedVideoUrl);
+                      if (can) await Linking.openURL(selectedVideoUrl);
+                      else await Share.share({ url: selectedVideoUrl, message: selectedVideoUrl });
+                    } catch (e) {
+                      try { await Share.share({ url: selectedVideoUrl || '', message: selectedVideoUrl || '' }); } catch (ee) {}
+                    }
+                  }} style={[styles.backButton, { width: 160, alignSelf: 'center' }]}> 
+                    <Text style={[styles.backButtonText, { color: buttonText }]}>Abrir en reproductor</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => setSelectedVideoUrl(null)} style={[styles.backButton, { width: 120, alignSelf: 'center' }]}> 
+                    <Text style={[styles.backButtonText, { color: buttonText }]}>Cerrar</Text>
+                  </TouchableOpacity>
+                </View>
+                {videoImportError ? (
+                  <Text style={{ color: '#FFBABA', backgroundColor: '#3B0A0A', padding: 8, borderRadius: 8, marginTop: 8 }}>{videoImportError}</Text>
+                ) : null}
+              </View>
+            )}
+          </View>
+        </Modal>
+      )}
 
       {/* Modal de comentarios (estilo deslizable similar a report/components) */}
       <Modal
@@ -895,6 +1071,7 @@ export default function ReportDetailModal({
               </TouchableOpacity>
             </View>
 
+            {/* Allow CommentsPanel to handle its own safe-area/positioning; avoid adding extra padding here */}
             <View style={{ flex: 1 }}>
               <CommentsPanel
                 comments={comments}
@@ -927,7 +1104,7 @@ export default function ReportDetailModal({
                   try {
                     const res = await updateReportComment(Number(commentId), newText);
                     if (res?.error) {
-                      console.error('updateReportComment error:', res.error);
+                      // error returned from updateReportComment; handled via AppAlert
                       AppAlert.alert('Error', typeof res.error === 'string' ? res.error : String((res.error as any)?.message ?? res.error));
                       setComments(prev);
                       return;
@@ -946,7 +1123,7 @@ export default function ReportDetailModal({
                       }
                     }));
                   } catch (e) {
-                    console.error('updateReportComment exception', e);
+                    // exception in updateReportComment; handled via AppAlert
                     AppAlert.alert('Error', 'No se pudo modificar el comentario');
                     setComments(prev);
                   }
@@ -956,7 +1133,7 @@ export default function ReportDetailModal({
                   try {
                     const res = await deleteReportComment(Number(commentId));
                     if (res?.error) {
-                      console.error('deleteReportComment error:', res.error);
+                      // error returned from deleteReportComment; handled via AppAlert
                       AppAlert.alert('Error', typeof res.error === 'string' ? res.error : String((res.error as any)?.message ?? res.error));
                       return;
                     }
@@ -973,12 +1150,19 @@ export default function ReportDetailModal({
                       }
                     }));
                   } catch (e) {
-                    console.error('deleteReportComment exception', e);
+                    // exception in deleteReportComment; handled via AppAlert
                     AppAlert.alert('Error', 'No se pudo eliminar el comentario');
                   }
                 }}
                 currentUserId={currentUserId}
                 currentUserAvatar={resolvedCitizenAvatar}
+                // Pass a best-effort currentUserName: prefer resolvedCitizen (fetched profile),
+                // otherwise fall back to the report.ciudadano payload when available.
+                currentUserName={(
+                  ((resolvedCitizen?.nombre || (report?.ciudadano as any)?.nombre || '') + ' ' +
+                    (resolvedCitizen?.apellido || (report?.ciudadano as any)?.apellido || '') )
+                  .trim() || null
+                )}
               />
             </View>
           </Animated.View>
@@ -1026,8 +1210,9 @@ const styles = StyleSheet.create({
   container: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '90%',
-    height: '90%',
+    // Reducir ligeramente la altura para dejar menos espacio en la parte inferior
+    maxHeight: '88%',
+    height: '88%',
     display: 'flex',
     flexDirection: 'column',
     ...Platform.select({
@@ -1109,7 +1294,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingVertical: 20,
-    paddingBottom: 32,
+    // Reducido para disminuir margen inferior visible
+    paddingBottom: 12,
     flexGrow: 1,
   },
   title: {
@@ -1216,7 +1402,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    // Menos padding vertical para acercar controles al borde
+    paddingVertical: 8,
     borderTopWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1237,7 +1424,8 @@ const styles = StyleSheet.create({
   // Footer bottom button (igual que en report/components)
   backButtonBottom: {
     borderRadius: 12,
-    paddingVertical: 12,
+    // Reducir padding para que el botón quede más cerca del borde inferior
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
@@ -1302,7 +1490,7 @@ const styles = StyleSheet.create({
   },
   galleryOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.95)',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1334,7 +1522,19 @@ const styles = StyleSheet.create({
     width: SCREEN_WIDTH,
     height: '60%',
     backgroundColor: '#000',
-    borderRadius: 12,
+    // Avoid borderRadius on native video surface to prevent flicker/compositing issues on Android
+    overflow: 'hidden',
+    elevation: 20,
+    zIndex: 9999,
+  },
+  videoPoster: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: SCREEN_WIDTH,
+    height: '60%',
+    backgroundColor: '#000',
+    zIndex: 1,
   },
   commentsOverlay: {
     flex: 1,
@@ -1342,7 +1542,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   commentsContainer: {
-    height: '75%',
+    height: '90%',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
   },
@@ -1389,7 +1589,8 @@ const styles = StyleSheet.create({
   commentsInputContainer: {
     borderTopWidth: 1,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    // Reducir padding para disminuir espacio total ocupado
+    paddingVertical: 8,
   },
   commentsInput: {
     flexDirection: 'row',
@@ -1404,7 +1605,7 @@ const styles = StyleSheet.create({
   },
   commentsModalContainer: {
     width: '100%',
-    height: '70%',
+    height: '90%',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: 'hidden',

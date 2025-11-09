@@ -443,19 +443,16 @@ export default function PublicReportsFeed() {
         <View style={styles.headerRow}>
           <Text style={[styles.sectionTitle, { color: textColor, fontSize: getFontSizeValue(fontSize, 22) }]}>Denuncias</Text>
           <TouchableOpacity
-            style={styles.refreshButton}
+            style={[
+              styles.refreshButton,
+              { backgroundColor: buttonBg, borderColor: accentColor, opacity: (loading || refreshing) ? 0.6 : 1 },
+            ]}
             onPress={() => loadInitial(true)}
             activeOpacity={0.7}
             disabled={loading || refreshing}
           >
-            {(loading || refreshing) ? (
-              <ActivityIndicator size="small" color={accentColor} />
-            ) : (
-              <>
-                <IconSymbol name="refresh" size={18} color={accentColor} />
-                <Text style={[styles.refreshText, { color: accentColor, fontSize: getFontSizeValue(fontSize, 13) }]}>Actualizar</Text>
-              </>
-            )}
+            <IconSymbol name="refresh" size={18} color={buttonText} />
+            <Text style={[styles.refreshText, { color: buttonText, fontSize: getFontSizeValue(fontSize, 13) }]}>Actualizar</Text>
           </TouchableOpacity>
         </View>
 
@@ -671,9 +668,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    borderWidth: 1,
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,

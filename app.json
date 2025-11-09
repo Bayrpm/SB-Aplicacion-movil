@@ -23,9 +23,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/images/logotipo_vertical.png",
-        "backgroundImage": "./assets/images/logotipo_vertical.png",
-        "monochromeImage": "./assets/images/logotipo_vertical.png"
+        "foregroundImage": "./assets/images/logotipo_vertical.png"
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -85,7 +83,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#ffffff"
           }
         }
       ],
