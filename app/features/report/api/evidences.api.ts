@@ -88,6 +88,15 @@ export async function listEvidencesSigned(denunciaId: string): Promise<Array<{
   storage_path: string;
 }>> {
   try {
+    // Debug: comprobar que existe sesión activa (si no hay sesión las policies de storage pueden bloquear access)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session) {
+        console.warn('listEvidencesSigned: no existe sesión Supabase activa. Las políticas RLS/storage pueden impedir generar signed URLs para objetos privados.');
+      }
+    } catch (e) {
+      console.warn('listEvidencesSigned: error al verificar sesión Supabase', e);
+    }
     const { data, error } = await supabase
       .from('denuncia_evidencias')
       .select('tipo, storage_path, orden')
@@ -100,8 +109,13 @@ export async function listEvidencesSigned(denunciaId: string): Promise<Array<{
     const out: Array<{ tipo: EvidenceKind; url: string; storage_path: string; }> = [];
     for (const row of data) {
       const sp = String(row.storage_path);
-      const { data: signed, error: sErr } = await supabase.storage.from('evidencias').createSignedUrl(sp, 60 * 60);
-      if (sErr || !signed?.signedUrl) continue;
+      // Generar URL firmada con validez más larga (24 horas) para evitar expiraciones
+      // durante la reproducción en dispositivos o cuando el usuario abre el video más tarde.
+      const { data: signed, error: sErr } = await supabase.storage.from('evidencias').createSignedUrl(sp, 24 * 60 * 60);
+      if (sErr || !signed?.signedUrl) {
+        console.warn('listEvidencesSigned: createSignedUrl falló para', sp, 'error:', sErr?.message ?? sErr, 'signed:', signed);
+        continue;
+      }
       out.push({ tipo: (row.tipo as EvidenceKind) || 'FOTO', url: signed.signedUrl, storage_path: sp });
     }
     return out;
