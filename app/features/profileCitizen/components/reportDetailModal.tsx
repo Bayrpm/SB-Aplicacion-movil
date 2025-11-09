@@ -405,6 +405,33 @@ export default function ReportDetailModal({
   // Tries in order: Video (expo-av compatible), VideoView (expo-video), otherwise null.
   const InAppVideoRenderer = ({ uri }: { uri: string }) => {
     try {
+      // Prefer the hook API if available (expo-video exposes useVideoPlayer)
+      if (VideoModule?.useVideoPlayer && VideoModule?.VideoView) {
+        try { console.log('reportDetailModal: using useVideoPlayer + VideoView'); } catch (e) {}
+        try {
+          const player = VideoModule.useVideoPlayer({ source: { uri }, shouldPlay: true });
+          // Try common prop names: 'player' and 'video'
+          return (
+            // @ts-ignore dynamic API
+            <VideoModule.VideoView
+              player={player}
+              video={player}
+              style={styles.videoPlayer}
+              useNativeControls={true}
+              onError={(e: any) => {
+                setVideoLoading(false);
+                try { console.error('reportDetailModal: VideoView(onError) via useVideoPlayer', e); setVideoPlaybackError(e?.message ?? String(e)); } catch (ex) { setVideoPlaybackError(String(e)); }
+              }}
+              onReadyForDisplay={() => setVideoLoading(false)}
+              onLoadStart={() => { setVideoLoading(true); setVideoPlaybackError(null); }}
+            />
+          );
+        } catch (e) {
+          try { console.error('reportDetailModal: useVideoPlayer path failed', e); } catch (ex) {}
+        }
+      }
+
+      // If hook not available, but Video exists (expo-av style), use it
       if (VideoModule?.Video) {
         try { console.log('reportDetailModal: using Video export'); } catch (e) {}
         return (
@@ -425,15 +452,13 @@ export default function ReportDetailModal({
         );
       }
 
-      // expo-video newer API: VideoView + hooks. Try a simple VideoView usage.
+      // If VideoView exists without the hook, try basic VideoView with source prop
       if (VideoModule?.VideoView) {
-        try { console.log('reportDetailModal: using VideoView export'); } catch (e) {}
-        // Many implementations accept `source` similarly; if props differ, onError will capture it.
+        try { console.log('reportDetailModal: using VideoView export (no hook)'); } catch (e) {}
         return (
           <VideoModule.VideoView
             source={{ uri }}
             style={styles.videoPlayer}
-            // If the native view supports controls via a prop name other than 'useNativeControls', it will be ignored.
             useNativeControls={true}
             onError={(e: any) => {
               setVideoLoading(false);
