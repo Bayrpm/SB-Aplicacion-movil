@@ -11,7 +11,6 @@ import {
   Animated,
   Dimensions,
   Image,
-  Linking,
   Modal,
   PanResponder,
   ScrollView,
@@ -917,72 +916,20 @@ export default function ReportDetailModal({
 
           {/* Modal de reproducción de video (in-app) */}
           {selectedVideoUrl && (
-            <Modal
-              visible
-              animationType="slide"
-              transparent
-              onRequestClose={() => setSelectedVideoUrl(null)}
-            >
-              <View style={styles.galleryOverlay}>
-                <TouchableOpacity
-                  style={styles.galleryClose}
-                  onPress={() => setSelectedVideoUrl(null)}
-                >
-                  <IconSymbol name="close" size={32} color="#fff" />
-                </TouchableOpacity>
-                {VideoModule?.Video ? (
-                  <>
-                    <VideoModule.Video
-                      source={{ uri: selectedVideoUrl }}
-                      style={styles.videoPlayer}
-                      useNativeControls
-                      resizeMode={VideoModule?.ResizeMode?.CONTAIN}
-                      shouldPlay={true}
-                      onLoadStart={() => { setVideoLoading(true); setVideoPlaybackError(null); }}
-                      onLoad={() => setVideoLoading(false)}
-                      onReadyForDisplay={() => setVideoLoading(false)}
-                      onError={(e: any) => { setVideoLoading(false); try { setVideoPlaybackError(e?.message ?? String(e)); } catch { setVideoPlaybackError(String(e)); } }}
-                    />
-                    {videoLoading ? (
-                      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
-                        <ActivityIndicator size="large" color={accentColor} />
-                      </View>
-                    ) : null}
-                    {videoPlaybackError ? (
-                      <View style={{ padding: 12, alignItems: 'center' }}>
-                        <Text style={{ color: '#FFBABA', backgroundColor: '#3B0A0A', padding: 8, borderRadius: 8 }}>{videoPlaybackError}</Text>
-                      </View>
-                    ) : null}
-                  </>
-                ) : (
-                  <View style={{ padding: 20, alignItems: 'center' }}>
-                    <Text style={{ color: textColor, marginBottom: 12 }}>El reproductor nativo no está disponible en esta build.</Text>
-                    <Text style={{ color: mutedColor, marginBottom: 8, textAlign: 'center' }}>Para reproducir videos dentro de la app necesitas una build que incluya el módulo nativo (Dev Client o EAS build).</Text>
-                    {videoImportError ? (
-                      <Text style={{ color: '#FFBABA', backgroundColor: '#3B0A0A', padding: 8, borderRadius: 8, marginTop: 8 }}>{videoImportError}</Text>
-                    ) : null}
-                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
-                      <TouchableOpacity onPress={async () => {
-                        try {
-                          if (!selectedVideoUrl) return;
-                          const can = await Linking.canOpenURL(selectedVideoUrl);
-                          if (can) await Linking.openURL(selectedVideoUrl);
-                          else await Share.share({ url: selectedVideoUrl, message: selectedVideoUrl });
-                        } catch (e) {
-                          try { await Share.share({ url: selectedVideoUrl || '', message: selectedVideoUrl || '' }); } catch (ee) {}
-                        }
-                      }} style={[styles.backButton, { width: 160, alignSelf: 'center' }]}> 
-                        <Text style={[styles.backButtonBottomText, { color: '#fff' }]}>Abrir en reproductor</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity onPress={() => setSelectedVideoUrl(null)} style={[styles.backButton, { width: 120, alignSelf: 'center' }]}> 
-                        <Text style={[styles.backButtonBottomText, { color: '#fff' }]}>Cerrar</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </View>
-            </Modal>
+            <>
+              {/* Reusable VideoModal component */}
+              {/* @ts-ignore dynamic import of component */}
+              <VideoModal
+                visible={!!selectedVideoUrl}
+                videoUrl={selectedVideoUrl}
+                onClose={() => setSelectedVideoUrl(null)}
+                videoModule={VideoModule}
+                videoImportError={videoImportError}
+                accentColor={accentColor}
+                textColor={textColor}
+                mutedColor={mutedColor}
+              />
+            </>
           )}
       </View>
     </Modal>

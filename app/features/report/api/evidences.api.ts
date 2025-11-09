@@ -86,6 +86,7 @@ export async function listEvidencesSigned(denunciaId: string): Promise<Array<{
   tipo: EvidenceKind;
   url: string;
   storage_path: string;
+  thumb_url?: string | null;
 }>> {
   try {
     // Debug: comprobar que existe sesión activa (si no hay sesión las policies de storage pueden bloquear access)
@@ -106,7 +107,7 @@ export async function listEvidencesSigned(denunciaId: string): Promise<Array<{
 
     if (error || !data) return [];
 
-    const out: Array<{ tipo: EvidenceKind; url: string; storage_path: string; }> = [];
+  const out: Array<{ tipo: EvidenceKind; url: string; storage_path: string; thumb_url?: string | null; }> = [];
     for (const row of data) {
       const sp = String(row.storage_path);
       // Generar URL firmada con validez más larga (24 horas) para evitar expiraciones
@@ -116,7 +117,18 @@ export async function listEvidencesSigned(denunciaId: string): Promise<Array<{
         console.warn('listEvidencesSigned: createSignedUrl falló para', sp, 'error:', sErr?.message ?? sErr, 'signed:', signed);
         continue;
       }
-      out.push({ tipo: (row.tipo as EvidenceKind) || 'FOTO', url: signed.signedUrl, storage_path: sp });
+
+      // Intentar también devolver una miniatura si existe. Se asume convención: thumbnail = storage_path + '.jpg'
+      let thumbUrl: string | null = null;
+      try {
+        const thumbPath = `${sp}.jpg`;
+        const { data: tdata, error: tErr } = await supabase.storage.from('evidencias').createSignedUrl(thumbPath, 24 * 60 * 60);
+        if (!tErr && tdata?.signedUrl) thumbUrl = tdata.signedUrl;
+      } catch (thumbErr) {
+        // ignorar
+      }
+
+      out.push({ tipo: (row.tipo as EvidenceKind) || 'FOTO', url: signed.signedUrl, storage_path: sp, thumb_url: thumbUrl });
     }
     return out;
   } catch {

@@ -6,18 +6,17 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 import { deleteReportComment, updateReportComment } from '@/app/features/report/api/report.api';
 import CommentsPanel, { CommentItem } from '@/components/commentsPanel';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
+import VideoModal from '@/components/VideoModal';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Dimensions,
   Image,
-  Linking,
   Modal,
   PanResponder,
   Platform,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -108,13 +107,14 @@ export default function ReportDetailModal({
   } | null>(null);
   const [resolvedCitizenAvatar, setResolvedCitizenAvatar] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [evidences, setEvidences] = useState<Array<{ tipo: 'FOTO'|'VIDEO'; url: string; storage_path: string }>>([]);
+  const [evidences, setEvidences] = useState<Array<{ tipo: 'FOTO'|'VIDEO'; url: string; storage_path: string; thumb_url?: string | null }>>([]);
   const [loadingEvidences, setLoadingEvidences] = useState<boolean>(false);
   const [VideoModule, setVideoModule] = useState<any>(null);
   const [videoImportError, setVideoImportError] = useState<string | null>(null);
   const [selectedVideoUrl, setSelectedVideoUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState<boolean>(false);
   const [videoPlaybackError, setVideoPlaybackError] = useState<string | null>(null);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
   // Stats and comments UI (per-report)
   const [reportStats, setReportStats] = useState<Record<string, {
     likes: number;
@@ -312,6 +312,8 @@ export default function ReportDetailModal({
 
 
   useEffect(() => {
+    // reset playing state when changing video
+    setIsPlaying(false);
     let mounted = true;
     (async () => {
       try {
@@ -320,7 +322,9 @@ export default function ReportDetailModal({
         const VideoComp = (m && (m.Video || m.default)) ?? null;
         const ResizeMode = m?.ResizeMode ?? (m?.Video?.ResizeMode) ?? null;
         if (mounted) {
-          setVideoModule({ Video: VideoComp, ResizeMode });
+          // Store the full module plus normalized Video/ResizeMode so downstream
+          // renderer can access either expo-video or expo-av shapes (VideoView, useVideoPlayer, createVideoPlayer or Video)
+          setVideoModule({ ...(m || {}), Video: VideoComp, ResizeMode });
           setVideoImportError(null);
           // Diagnostic log: confirmar que el módulo dinámico se cargó
           try { console.log('reportDetailModal: loaded expo-video module', { VideoCompPresent: !!VideoComp, ResizeMode }); } catch (e) {}
@@ -333,12 +337,13 @@ export default function ReportDetailModal({
           const m2: any = mod2;
           const VideoComp2 = (m2 && (m2.Video || m2.default)) ?? null;
           const ResizeMode2 = m2?.ResizeMode ?? (m2?.Video?.ResizeMode) ?? null;
-          if (mounted) {
-            setVideoModule({ Video: VideoComp2, ResizeMode: ResizeMode2 });
-            setVideoImportError(null);
-            try { console.log('reportDetailModal: loaded expo-av module', { VideoCompPresent: !!VideoComp2, ResizeMode: ResizeMode2 }); } catch (e) {}
-            try { console.log('reportDetailModal: expo-av module keys', Object.keys(m2 || {})); } catch (e) {}
-          }
+            if (mounted) {
+              // store full module for parity with expo-video case
+              setVideoModule({ ...(m2 || {}), Video: VideoComp2, ResizeMode: ResizeMode2 });
+              setVideoImportError(null);
+              try { console.log('reportDetailModal: loaded expo-av module', { VideoCompPresent: !!VideoComp2, ResizeMode: ResizeMode2 }); } catch (e) {}
+              try { console.log('reportDetailModal: expo-av module keys', Object.keys(m2 || {})); } catch (e) {}
+            }
           return;
         } catch (e2: any) {
           const msg = (e2 && e2.message) ? `${e2.message}` : String(e2 ?? e1);
@@ -405,15 +410,19 @@ export default function ReportDetailModal({
   // Tries in order: Video (expo-av compatible), VideoView (expo-video), otherwise null.
   const InAppVideoRenderer = ({ uri }: { uri: string }) => {
     try {
-      // Build a VideoSource object when possible to help the native player
-      const isMp4 = typeof uri === 'string' && /\.mp4(\?|$)/i.test(uri);
-      const sourceObj: any = isMp4 ? { uri, contentType: 'video/mp4', overrideFileExtensionAndroid: 'mp4', useCaching: true } : { uri };
+  // Build a VideoSource object when possible to help the native player.
+  // NOTE: expo-video native API expects specific types for some fields (eg. enums),
+  // passing a plain string for `contentType` causes native cast errors on Android.
+  // Keep the source minimal and avoid `contentType` to prevent bridge casting errors.
+  const isMp4 = typeof uri === 'string' && /\.mp4(\?|$)/i.test(uri);
+  const sourceObj: any = isMp4 ? { uri, overrideFileExtensionAndroid: 'mp4', useCaching: true } : { uri };
 
       // Prefer the hook API if available (expo-video exposes useVideoPlayer)
       if (VideoModule?.useVideoPlayer && VideoModule?.VideoView) {
         try { console.log('reportDetailModal: using useVideoPlayer + VideoView'); } catch (e) {}
-        try {
-          const player = VideoModule.useVideoPlayer(sourceObj, (p: any) => { try { p.play(); } catch {} });
+          try {
+          // create player but don't auto-play; wait for user tap so preview (first frame) can show
+          const player = VideoModule.useVideoPlayer ? VideoModule.useVideoPlayer(sourceObj) : null;
           // Try common prop names: 'player' and 'video'
           return (
             // @ts-ignore dynamic API
@@ -434,6 +443,10 @@ export default function ReportDetailModal({
           try { console.error('reportDetailModal: useVideoPlayer path failed', e); } catch (ex) {}
         }
       }
+
+      // Show a play overlay when we have a player and are not yet playing.
+      // The overlay is rendered by the parent modal (see below) because in some
+      // implementations the VideoView is controlled via the player object.
 
       // If hook not available, but Video exists (expo-av style), use it
       if (VideoModule?.Video) {
@@ -701,9 +714,18 @@ export default function ReportDetailModal({
                               activeOpacity={0.8}
                               style={{ marginRight: 10 }}
                             >
-                              <View style={[styles.thumbnail, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#00000010' }]}>
-                                <IconSymbol name="play-circle" size={28} color={accentColor} />
-                              </View>
+                              {ev.thumb_url ? (
+                                <View style={styles.thumbnail}>
+                                  <Image source={{ uri: ev.thumb_url }} style={[styles.thumbnail, { position: 'relative' }]} resizeMode="cover" />
+                                  <View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}>
+                                    <IconSymbol name="play-circle" size={28} color={accentColor} />
+                                  </View>
+                                </View>
+                              ) : (
+                                <View style={[styles.thumbnail, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#00000010' }]}>
+                                  <IconSymbol name="play-circle" size={28} color={accentColor} />
+                                </View>
+                              )}
                             </TouchableOpacity>
                           );
                         });
@@ -831,64 +853,16 @@ export default function ReportDetailModal({
       )}
 
       {/* Modal de reproducción de video (in-app) */}
-      {selectedVideoUrl && (
-        <Modal
-          visible
-          animationType="slide"
-          transparent
-          onRequestClose={() => setSelectedVideoUrl(null)}
-        >
-          <View style={styles.galleryOverlay}>
-            <TouchableOpacity
-              style={styles.galleryClose}
-              onPress={() => setSelectedVideoUrl(null)}
-            >
-              <IconSymbol name="close" size={32} color="#fff" />
-            </TouchableOpacity>
-            {(VideoModule?.Video || VideoModule?.VideoView || VideoModule?.createVideoPlayer) ? (
-              <>
-                <InAppVideoRenderer uri={selectedVideoUrl} />
-                {videoLoading ? (
-                  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
-                    <ActivityIndicator size="large" color={accentColor} />
-                  </View>
-                ) : null}
-                {videoPlaybackError ? (
-                  <View style={{ padding: 12, alignItems: 'center' }}>
-                    <Text style={{ color: '#FFBABA', backgroundColor: '#3B0A0A', padding: 8, borderRadius: 8 }}>{videoPlaybackError}</Text>
-                  </View>
-                ) : null}
-              </>
-            ) : (
-              <View style={{ padding: 20, alignItems: 'center' }}>
-                <Text style={{ color: textColor, marginBottom: 12 }}>El reproductor nativo no está disponible en esta build.</Text>
-                <Text style={{ color: mutedColor, marginBottom: 20, textAlign: 'center' }}>Para reproducir videos dentro de la app necesitas instalar un Dev Client o generar una build que incluya el módulo nativo.</Text>
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <TouchableOpacity onPress={async () => {
-                    try {
-                      if (!selectedVideoUrl) return;
-                      const can = await Linking.canOpenURL(selectedVideoUrl);
-                      if (can) await Linking.openURL(selectedVideoUrl);
-                      else await Share.share({ url: selectedVideoUrl, message: selectedVideoUrl });
-                    } catch (e) {
-                      try { await Share.share({ url: selectedVideoUrl || '', message: selectedVideoUrl || '' }); } catch (ee) {}
-                    }
-                  }} style={[styles.backButton, { width: 160, alignSelf: 'center' }]}> 
-                    <Text style={[styles.backButtonText, { color: buttonText }]}>Abrir en reproductor</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity onPress={() => setSelectedVideoUrl(null)} style={[styles.backButton, { width: 120, alignSelf: 'center' }]}> 
-                    <Text style={[styles.backButtonText, { color: buttonText }]}>Cerrar</Text>
-                  </TouchableOpacity>
-                </View>
-                {videoImportError ? (
-                  <Text style={{ color: '#FFBABA', backgroundColor: '#3B0A0A', padding: 8, borderRadius: 8, marginTop: 8 }}>{videoImportError}</Text>
-                ) : null}
-              </View>
-            )}
-          </View>
-        </Modal>
-      )}
+      <VideoModal
+        visible={!!selectedVideoUrl}
+        videoUrl={selectedVideoUrl}
+        onClose={() => setSelectedVideoUrl(null)}
+        videoModule={VideoModule}
+        videoImportError={videoImportError}
+        accentColor={accentColor}
+        textColor="#002fffff"
+        mutedColor={mutedColor}
+      />
 
       {/* Modal de comentarios (estilo deslizable similar a report/components) */}
       <Modal
