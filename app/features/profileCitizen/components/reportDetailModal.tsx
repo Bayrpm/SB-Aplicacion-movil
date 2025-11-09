@@ -322,6 +322,9 @@ export default function ReportDetailModal({
         if (mounted) {
           setVideoModule({ Video: VideoComp, ResizeMode });
           setVideoImportError(null);
+          // Diagnostic log: confirmar que el módulo dinámico se cargó
+          try { console.log('reportDetailModal: loaded expo-video module', { VideoCompPresent: !!VideoComp, ResizeMode }); } catch (e) {}
+          try { console.log('reportDetailModal: expo-video module keys', Object.keys(m || {})); } catch (e) {}
         }
         return;
       } catch (e1: any) {
@@ -333,11 +336,14 @@ export default function ReportDetailModal({
           if (mounted) {
             setVideoModule({ Video: VideoComp2, ResizeMode: ResizeMode2 });
             setVideoImportError(null);
+            try { console.log('reportDetailModal: loaded expo-av module', { VideoCompPresent: !!VideoComp2, ResizeMode: ResizeMode2 }); } catch (e) {}
+            try { console.log('reportDetailModal: expo-av module keys', Object.keys(m2 || {})); } catch (e) {}
           }
           return;
         } catch (e2: any) {
           const msg = (e2 && e2.message) ? `${e2.message}` : String(e2 ?? e1);
           if (mounted) setVideoImportError(msg);
+          try { console.error('reportDetailModal: dynamic import failed', e1, e2); } catch (ee) {}
         }
       }
     })();
@@ -394,6 +400,68 @@ export default function ReportDetailModal({
       mounted = false;
     };
   }, [report?.anonimo, report?.ciudadano]);
+
+  // Small renderer that adapts to different exports from expo-video / expo-av.
+  // Tries in order: Video (expo-av compatible), VideoView (expo-video), otherwise null.
+  const InAppVideoRenderer = ({ uri }: { uri: string }) => {
+    try {
+      if (VideoModule?.Video) {
+        try { console.log('reportDetailModal: using Video export'); } catch (e) {}
+        return (
+          <VideoModule.Video
+            source={{ uri }}
+            style={styles.videoPlayer}
+            useNativeControls
+            resizeMode={VideoModule?.ResizeMode?.CONTAIN}
+            shouldPlay={true}
+            onLoadStart={() => { setVideoLoading(true); setVideoPlaybackError(null); }}
+            onLoad={() => setVideoLoading(false)}
+            onReadyForDisplay={() => setVideoLoading(false)}
+            onError={(e: any) => {
+              setVideoLoading(false);
+              try { console.error('reportDetailModal: Video onError', e); setVideoPlaybackError(e?.message ?? String(e)); } catch (ex) { setVideoPlaybackError(String(e)); }
+            }}
+          />
+        );
+      }
+
+      // expo-video newer API: VideoView + hooks. Try a simple VideoView usage.
+      if (VideoModule?.VideoView) {
+        try { console.log('reportDetailModal: using VideoView export'); } catch (e) {}
+        // Many implementations accept `source` similarly; if props differ, onError will capture it.
+        return (
+          <VideoModule.VideoView
+            source={{ uri }}
+            style={styles.videoPlayer}
+            // If the native view supports controls via a prop name other than 'useNativeControls', it will be ignored.
+            useNativeControls={true}
+            onError={(e: any) => {
+              setVideoLoading(false);
+              try { console.error('reportDetailModal: VideoView onError', e); setVideoPlaybackError(e?.message ?? String(e)); } catch (ex) { setVideoPlaybackError(String(e)); }
+            }}
+            onReadyForDisplay={() => setVideoLoading(false)}
+            onLoadStart={() => { setVideoLoading(true); setVideoPlaybackError(null); }}
+          />
+        );
+      }
+
+      // Last resort: if createVideoPlayer exists, attempt to create a player element.
+      if (VideoModule?.createVideoPlayer) {
+        try { console.log('reportDetailModal: using createVideoPlayer export'); } catch (e) {}
+        try {
+          const Player = VideoModule.createVideoPlayer({ source: { uri }, style: styles.videoPlayer });
+          return <Player />;
+        } catch (e) {
+          try { console.error('reportDetailModal: createVideoPlayer failed', e); } catch (ex) {}
+        }
+      }
+
+      return null;
+    } catch (e) {
+      try { console.error('reportDetailModal: InAppVideoRenderer unexpected error', e); } catch (ex) {}
+      return null;
+    }
+  };
 
   // Si el modal debe mostrarse pero el `report` todavía no está cargado,
   // mostramos un Modal minimal con spinner para evitar no-render cuando
@@ -600,7 +668,7 @@ export default function ReportDetailModal({
                           return (
                             <TouchableOpacity
                               key={ev.storage_path}
-                              onPress={() => setSelectedVideoUrl(ev.url)}
+                              onPress={() => { console.log('reportDetailModal: open in-app video', ev.url); setSelectedVideoUrl(ev.url); }}
                               activeOpacity={0.8}
                               style={{ marginRight: 10 }}
                             >
@@ -748,19 +816,9 @@ export default function ReportDetailModal({
             >
               <IconSymbol name="close" size={32} color="#fff" />
             </TouchableOpacity>
-            {VideoModule?.Video ? (
+            {(VideoModule?.Video || VideoModule?.VideoView || VideoModule?.createVideoPlayer) ? (
               <>
-                <VideoModule.Video
-                  source={{ uri: selectedVideoUrl }}
-                  style={styles.videoPlayer}
-                  useNativeControls
-                  resizeMode={VideoModule?.ResizeMode?.CONTAIN}
-                  shouldPlay={true}
-                  onLoadStart={() => { setVideoLoading(true); setVideoPlaybackError(null); }}
-                  onLoad={() => setVideoLoading(false)}
-                  onReadyForDisplay={() => setVideoLoading(false)}
-                  onError={(e: any) => { setVideoLoading(false); try { setVideoPlaybackError(e?.message ?? String(e)); } catch { setVideoPlaybackError(String(e)); } }}
-                />
+                <InAppVideoRenderer uri={selectedVideoUrl} />
                 {videoLoading ? (
                   <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
                     <ActivityIndicator size="large" color={accentColor} />
