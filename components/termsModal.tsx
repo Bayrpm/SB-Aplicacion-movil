@@ -2,6 +2,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import React from 'react';
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface TermsModalProps {
   visible: boolean;
@@ -9,6 +10,7 @@ interface TermsModalProps {
 }
 
 export default function TermsModal({ visible, onClose }: TermsModalProps) {
+  const insets = useSafeAreaInsets();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background');
   const textColor = useThemeColor({}, 'text');
   const mutedColor = useThemeColor({ light: '#6B7280', dark: '#9CA3AF' }, 'icon');
@@ -34,7 +36,7 @@ export default function TermsModal({ visible, onClose }: TermsModalProps) {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.content} showsVerticalScrollIndicator={true}>
+          <ScrollView style={styles.content} showsVerticalScrollIndicator={true} contentContainerStyle={{ paddingBottom: (insets.bottom || 0) + 24 }}>
             {/* Introducción */}
             <View style={styles.section}>
               <Text style={[styles.paragraph, { color: textColor }]}>
@@ -301,7 +303,7 @@ export default function TermsModal({ visible, onClose }: TermsModalProps) {
           </ScrollView>
 
           {/* Footer Button */}
-          <View style={[styles.footer, { borderTopColor: borderColor }]}>
+          <View style={[styles.footer, { borderTopColor: borderColor, paddingBottom: (insets.bottom || 0) + 12 }]}>
             <TouchableOpacity
               style={[styles.acceptButton, { backgroundColor: accentColor }]}
               onPress={onClose}
