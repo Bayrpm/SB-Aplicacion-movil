@@ -106,6 +106,31 @@ export default function CommentsPanel({
   // se usa para reservar espacio en el ScrollView cuando el teclado está cerrado.
   const ESTIMATED_INPUT_HEIGHT = 88;
   const [measuredInputHeight, setMeasuredInputHeight] = useState<number | null>(null);
+  // Timers para manejo manual de long-press (útil en builds donde onLongPress nativo falla)
+  const longPressTimers = useRef<Record<string, number>>({});
+  const LONG_PRESS_MS = 450; // tiempo para considerar long-press
+
+  useEffect(() => {
+    return () => {
+      // limpiar timers al desmontar
+      Object.values(longPressTimers.current || {}).forEach((id) => { try { clearTimeout(id as unknown as number); } catch {} });
+      longPressTimers.current = {};
+    };
+  }, []);
+
+  const startLongPress = (key: string, cb: () => void) => {
+    // limpiar si ya existe
+    try { if (longPressTimers.current[key]) { clearTimeout(longPressTimers.current[key] as unknown as number); } } catch {}
+    const t = (setTimeout(() => {
+      delete longPressTimers.current[key];
+      cb();
+    }, LONG_PRESS_MS) as unknown) as number;
+    longPressTimers.current[key] = t;
+  };
+
+  const cancelLongPress = (key: string) => {
+    try { if (longPressTimers.current[key]) { clearTimeout(longPressTimers.current[key] as unknown as number); delete longPressTimers.current[key]; } } catch {}
+  };
 
   useEffect(() => {
     const map: Record<string, { count: number; liked: boolean }> = {};
@@ -261,10 +286,7 @@ export default function CommentsPanel({
               <TouchableOpacity
                 activeOpacity={0.95}
                 delayLongPress={400}
-                onLongPress={() => {
-                  // Allow long-press if this comment belongs to current user.
-                  // Prefer reliable usuario_id match. Then fallback to avatar equality and
-                  // finally to a tolerant name comparison that normalizes diacritics.
+                onPressIn={() => startLongPress(String(c.id), () => {
                   const authoredById = !!(currentUserId && c.usuario_id && String(c.usuario_id) === String(currentUserId));
                   const avatarUriLocal = c.avatar ?? c.avatar_url ?? c.autor_avatar ?? c.foto ?? c.imagen_url ?? (c.usuario_id && currentUserId && String(c.usuario_id) === String(currentUserId) ? currentUserAvatar : null);
                   const authoredByAvatar = !!(currentUserAvatar && avatarUriLocal && String(avatarUriLocal) === String(currentUserAvatar));
@@ -274,7 +296,8 @@ export default function CommentsPanel({
                     setSelectedComment(c);
                     setOptionsModalVisible(true);
                   }
-                }}
+                })}
+                onPressOut={() => cancelLongPress(String(c.id))}
                 style={styles.commentRow}
               >
                 {avatarUri ? (
@@ -326,7 +349,7 @@ export default function CommentsPanel({
                         <TouchableOpacity
                           activeOpacity={0.95}
                           delayLongPress={400}
-                          onLongPress={() => {
+                          onPressIn={() => startLongPress(String(r.id), () => {
                             const rAvatar = r.avatar ?? r.avatar_url ?? r.autor_avatar ?? r.foto ?? r.imagen_url ?? null;
                             const authoredByIdR = !!(currentUserId && r.usuario_id && String(r.usuario_id) === String(currentUserId));
                             const authoredByAvatarR = !!(currentUserAvatar && rAvatar && String(rAvatar) === String(currentUserAvatar));
@@ -336,7 +359,8 @@ export default function CommentsPanel({
                               setSelectedComment(r);
                               setOptionsModalVisible(true);
                             }
-                          }}
+                          })}
+                          onPressOut={() => cancelLongPress(String(r.id))}
                           style={[styles.replyRow]}
                         >
                           {rAvatar ? (

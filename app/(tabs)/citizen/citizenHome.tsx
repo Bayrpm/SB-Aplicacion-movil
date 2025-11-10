@@ -59,7 +59,7 @@ export default function CitizenHome() {
           styles.container,
           {
             backgroundColor: scheme === "dark" ? "#000000ff" : "#fff",
-            paddingBottom: insets.bottom + 20,
+            paddingBottom: insets.bottom + 26,
           },
         ]}
       >
