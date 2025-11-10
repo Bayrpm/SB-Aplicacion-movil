@@ -130,15 +130,36 @@ export async function unregisterPushNotifications(): Promise<void> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     const deviceId = Constants.sessionId || Device.modelName || 'unknown-device';
-    
+
+    // Try to obtain the current Expo token for this device (preferred) and delete by token.
+    try {
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      const tokenResult = await Notifications.getExpoPushTokenAsync(
+        projectId ? { projectId } : undefined
+      );
+      const expoToken = tokenResult?.data ?? null;
+
+      if (user && expoToken) {
+        // Delete any rows that match this exact expo_token for this user
+        await supabase.from('tokens_push').delete().eq('usuario_id', user.id).eq('expo_token', expoToken);
+        if (__DEV__) console.log('✅ Token eliminado de Supabase por expo_token');
+        return;
+      }
+    } catch (tokErr) {
+      // Ignore token retrieval errors and fall back to deviceId-based deletion below
+      if (__DEV__) console.debug('No se pudo obtener expo token en unregister:', tokErr);
+    }
+
+    // Fallback: delete by usuario_id + device_id (older behavior). This may fail
+    // if the stored device_id was different at registration time; keep both checks.
     if (user) {
       await supabase
         .from('tokens_push')
         .delete()
         .eq('usuario_id', user.id)
         .eq('device_id', deviceId);
-      
-  if (__DEV__) console.log('✅ Token eliminado de Supabase');
+
+      if (__DEV__) console.log('✅ Token eliminado de Supabase por device_id (fallback)');
     }
   } catch (error) {
     console.error('❌ Error al eliminar token:', error);

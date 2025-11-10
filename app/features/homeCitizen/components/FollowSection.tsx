@@ -1,6 +1,7 @@
 import { Alert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import * as WebBrowser from 'expo-web-browser';
 import React from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import HomeCard from './homeCard';
@@ -29,11 +30,18 @@ export default function FollowSection() {
           url = '';
       }
       if (url) {
-        const supported = await Linking.canOpenURL(url);
-        if (supported) {
+        // Intentar abrir directamente; algunos dispositivos/dev builds fallan en canOpenURL
+        // así que preferimos intentar openURL y usar WebBrowser como fallback.
+        try {
           await Linking.openURL(url);
-        } else {
-          Alert.alert('Error', 'No se puede abrir este enlace en tu dispositivo');
+          return;
+        } catch (linkErr) {
+          try {
+            await WebBrowser.openBrowserAsync(url);
+            return;
+          } catch (webErr) {
+            Alert.alert('Error', 'No se puede abrir este enlace en tu dispositivo');
+          }
         }
       }
     } catch (e) {

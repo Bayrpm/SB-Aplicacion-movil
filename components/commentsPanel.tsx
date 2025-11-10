@@ -52,6 +52,30 @@ export default function CommentsPanel({
   currentUserAvatar,
   currentUserName,
 }: Props) {
+  // Normaliza nombres para comparación (quita diacríticos y pasa a minúsculas)
+  const normalize = (s?: string | null) => {
+    if (!s) return '';
+    try {
+      // eliminar acentos/diacríticos y convertir a minúsculas
+      return s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+    } catch (e) {
+      return String(s).toLowerCase().trim();
+    }
+  };
+
+  const nameMatches = (commentAuthor?: string | null, currentName?: string | null) => {
+    const a = normalize(commentAuthor);
+    const b = normalize(currentName);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    // Compare by first name presence (e.g., "Juan" matches "Juan Pérez")
+    const aFirst = a.split(/\s+/)[0];
+    const bFirst = b.split(/\s+/)[0];
+    if (aFirst && bFirst && aFirst === bFirst) return true;
+    // Also allow if comment author contains current user full first+last (includes)
+    if (a.includes(b) || b.includes(a)) return true;
+    return false;
+  };
   const insets = useSafeAreaInsets();
   const textColor = useThemeColor({}, 'text');
   const mutedColor = useThemeColor({}, 'icon');
@@ -236,16 +260,16 @@ export default function CommentsPanel({
             <View key={c.id} style={optionsModalVisible && !isSelected ? { opacity: 0.2 } : undefined}>
               <TouchableOpacity
                 activeOpacity={0.95}
+                delayLongPress={400}
                 onLongPress={() => {
                   // Allow long-press if this comment belongs to current user.
-                  // Some endpoints may omit/normalize usuario_id; as a safe fallback
-                  // also permit opening options when the comment avatar matches current user's avatar.
-                  const authoredById = currentUserId && c.usuario_id && String(c.usuario_id) === String(currentUserId);
-                  const avatarUri = c.avatar ?? c.avatar_url ?? c.autor_avatar ?? c.foto ?? c.imagen_url ?? (c.usuario_id && currentUserId && String(c.usuario_id) === String(currentUserId) ? currentUserAvatar : null);
-                  const authoredByAvatar = currentUserAvatar && avatarUri && String(avatarUri) === String(currentUserAvatar);
-                  // Name-based fallback: allow if comment author matches currentUserName (full or first name)
+                  // Prefer reliable usuario_id match. Then fallback to avatar equality and
+                  // finally to a tolerant name comparison that normalizes diacritics.
+                  const authoredById = !!(currentUserId && c.usuario_id && String(c.usuario_id) === String(currentUserId));
+                  const avatarUriLocal = c.avatar ?? c.avatar_url ?? c.autor_avatar ?? c.foto ?? c.imagen_url ?? (c.usuario_id && currentUserId && String(c.usuario_id) === String(currentUserId) ? currentUserAvatar : null);
+                  const authoredByAvatar = !!(currentUserAvatar && avatarUriLocal && String(avatarUriLocal) === String(currentUserAvatar));
                   const commentAuthor = String(c.author ?? c.autor ?? '').trim();
-                  const authoredByName = currentUserName && commentAuthor && (String(commentAuthor).toLowerCase() === String(currentUserName).toLowerCase() || commentAuthor.split(' ')[0].toLowerCase() === String(currentUserName).split(' ')[0].toLowerCase());
+                  const authoredByName = !!(currentUserName && nameMatches(commentAuthor, currentUserName));
                   if (authoredById || authoredByAvatar || authoredByName) {
                     setSelectedComment(c);
                     setOptionsModalVisible(true);
@@ -301,12 +325,13 @@ export default function CommentsPanel({
                       <View key={r.id} style={optionsModalVisible && !isReplySelected ? { opacity: 0.2 } : undefined}>
                         <TouchableOpacity
                           activeOpacity={0.95}
+                          delayLongPress={400}
                           onLongPress={() => {
                             const rAvatar = r.avatar ?? r.avatar_url ?? r.autor_avatar ?? r.foto ?? r.imagen_url ?? null;
-                            const authoredByIdR = currentUserId && r.usuario_id && String(r.usuario_id) === String(currentUserId);
-                            const authoredByAvatarR = currentUserAvatar && rAvatar && String(rAvatar) === String(currentUserAvatar);
+                            const authoredByIdR = !!(currentUserId && r.usuario_id && String(r.usuario_id) === String(currentUserId));
+                            const authoredByAvatarR = !!(currentUserAvatar && rAvatar && String(rAvatar) === String(currentUserAvatar));
                             const rAuthor = String(r.author ?? r.autor ?? '').trim();
-                            const authoredByNameR = currentUserName && rAuthor && (String(rAuthor).toLowerCase() === String(currentUserName).toLowerCase() || rAuthor.split(' ')[0].toLowerCase() === String(currentUserName).split(' ')[0].toLowerCase());
+                            const authoredByNameR = !!(currentUserName && nameMatches(rAuthor, currentUserName));
                             if (authoredByIdR || authoredByAvatarR || authoredByNameR) {
                               setSelectedComment(r);
                               setOptionsModalVisible(true);

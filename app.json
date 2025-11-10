@@ -4,7 +4,7 @@
     "slug": "SB-Aplicacion-movil",
     "version": "1.0.0",
     "orientation": "portrait",
-  "icon": "./assets/images/logotipo_vertical.png",
+  "icon": "./assets/images/icono_app.png",
     "scheme": "sbaplicacionmovil",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -22,7 +22,6 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/logotipo_vertical.png"
       },
       "permissions": [
