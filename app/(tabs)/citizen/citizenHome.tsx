@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import EmergencyCarousel from "@/app/features/homeCitizen/components/EmergencyCarousel";
+import EmergencyCarousel from "@/app/features/homeCitizen/components/emergencyCarousel";
 import FollowSection from "@/app/features/homeCitizen/components/followSection";
 import HomeCard from "@/app/features/homeCitizen/components/homeCard";
 import MoreInfo from "@/app/features/homeCitizen/components/moreInfo";

@@ -1,6 +1,8 @@
 import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { Image } from 'expo-image';
+import { Image } from "expo-image";
+import React from "react";
+
 import { useRouter } from 'expo-router';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 
@@ -14,6 +16,8 @@ export default function HomeScreen() {
   const router = useRouter();
 
   const handleSignOut = async () => {
+
+  // no borrar model del cristobal
     AppAlert.alert(
       'Cerrar sesión',
       '¿Estás seguro que deseas cerrar sesión?',
@@ -38,13 +42,15 @@ export default function HomeScreen() {
 
   return (
     <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
+      // imagen de ReactNative
+      headerBackgroundColor={{ light: '#b35f35ff', dark: '#1D3D47' }}
       headerImage={
         <Image
           source={require('@/assets/images/partial-react-logo.png')}
           style={styles.reactLogo}
         />
       }>
+      
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="defaultSemiBold">¡Bienvenido!</ThemedText>
         {inspectorLoading || typeof isInspector === 'undefined' ? null : (
@@ -90,3 +96,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
