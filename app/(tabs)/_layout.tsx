@@ -144,6 +144,8 @@ export default function TabLayout() {
     regardless of extraBottom/platform differences. */}
   <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: tabBarHeight, backgroundColor: '#222', zIndex: 998 }} />
 
+        
+        {/* barra navegacion inspector */}
     <TabsAny
       initialRouteName={isInspector ? 'inspector/inspectorHome' : 'citizen/citizenHome'}
       sceneContainerStyle={{ paddingBottom: tabBarHeight }}
