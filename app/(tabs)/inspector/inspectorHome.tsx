@@ -1,10 +1,11 @@
 import { Image } from "expo-image";
 import React from "react";
-import { StyleSheet, TouchableOpacity, useColorScheme, View } from 'react-native'; // import { View } from 'react-native-reanimated/lib/typescript/Animated';
+import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native'; // import { View } from 'react-native-reanimated/lib/typescript/Animated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/app/features/auth';
 import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
+import MyCases from '@/app/features/homeInspector/myCasesComponent';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -12,6 +13,8 @@ import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { useRouter } from 'expo-router';
 
 export default function HomeScreen() {
+
+
   const { user, isInspector, inspectorLoading, signOut } = useAuth();
   const router = useRouter();
 
@@ -40,6 +43,8 @@ export default function HomeScreen() {
     );
 
   };
+
+
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme() ?? "light";
   const logoSource =
@@ -52,6 +57,7 @@ export default function HomeScreen() {
     LOGO_HEIGHT + Math.max(24, Math.round(insets.top * 0.8)) + 24;
 
   return ( //return de HomeScreen()
+
     <ParallaxScrollView
       // fondo pantalla principal
       headerBackgroundColor={{ light: '#ffffff', dark: '#000000ff' }}
@@ -72,14 +78,22 @@ export default function HomeScreen() {
             contentFit="contain"
           />
         </View>
-
       } //cierre de header image
+
     > {/*cierre de  ParallaxScrollView */}
+      <View style={styles.contenedor}>
+        <Text style = {styles.titulo} > Mis casos</Text>        
+      </View>
       
-
-
-      
-
+        {/* Mis Casos */}
+      <View style={styles.container}>
+        <MyCases 
+          title='Auto'
+          description='dbabdbjaksbdkadcbkasbcjkasbcjkacskjbcasjkbcjkab10'
+          timeAgo='hace media hora'
+          address = "calle color sur"        
+        />
+      </View>
 
       {/* BIENVENIDA E INICIO DE SESION */}
       <ThemedView style={styles.stepContainer}>
@@ -101,6 +115,17 @@ export default function HomeScreen() {
 
 
 const styles = StyleSheet.create({
+  contenedor: {
+    width: '100%',
+    marginTop: 20,
+  },
+
+  titulo: {
+    fontSize: 24,
+    textAlign: 'center',
+    fontWeight:'bold',
+  },
+
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
