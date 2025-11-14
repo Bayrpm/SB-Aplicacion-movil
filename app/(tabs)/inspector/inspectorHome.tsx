@@ -1,15 +1,15 @@
-import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { Image } from "expo-image";
 import React from "react";
-
-import { useRouter } from 'expo-router';
-import { StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity, useColorScheme, View } from 'react-native'; // import { View } from 'react-native-reanimated/lib/typescript/Animated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/app/features/auth';
+import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
+import { useRouter } from 'expo-router';
 
 export default function HomeScreen() {
   const { user, isInspector, inspectorLoading, signOut } = useAuth();
@@ -38,19 +38,50 @@ export default function HomeScreen() {
         },
       ]
     );
-  };
 
-  return (
+  };
+  const insets = useSafeAreaInsets();
+  const scheme = useColorScheme() ?? "light";
+  const logoSource =
+    scheme === "dark"
+      ? require("@/assets/images/img_logo_blanco.png")
+      : require("@/assets/images/img_logo.png");
+
+  const LOGO_HEIGHT = 120; 
+  const headerWrapperHeight =
+    LOGO_HEIGHT + Math.max(24, Math.round(insets.top * 0.8)) + 24;
+
+  return ( //return de HomeScreen()
     <ParallaxScrollView
-      // imagen de ReactNative
-      headerBackgroundColor={{ light: '#b35f35ff', dark: '#1D3D47' }}
+      // fondo pantalla principal
+      headerBackgroundColor={{ light: '#ffffff', dark: '#000000ff' }}
+      headerHeight={headerWrapperHeight}
       headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
+        <View
+          style={{
+            height: headerWrapperHeight,
+            justifyContent: "flex-start",
+            alignItems: "center",
+            paddingTop: Math.max(48, Math.round(insets.top * 1.2)),
+            paddingBottom: 24,
+          }}
+        >
+          <Image
+            source={logoSource}
+            style={[styles.logo, { height: LOGO_HEIGHT, marginTop: 12 }]}
+            contentFit="contain"
+          />
+        </View>
+
+      } //cierre de header image
+    > {/*cierre de  ParallaxScrollView */}
       
+
+
+      
+
+
+      {/* BIENVENIDA E INICIO DE SESION */}
       <ThemedView style={styles.stepContainer}>
         <ThemedText type="defaultSemiBold">¡Bienvenido!</ThemedText>
         {inspectorLoading || typeof isInspector === 'undefined' ? null : (
@@ -58,6 +89,8 @@ export default function HomeScreen() {
             {isInspector ? 'Usuario Inspector autenticado' : 'Usuario Ciudadano autenticado'}: {user?.email}
           </ThemedText>
         )}
+
+        
         <TouchableOpacity style={styles.button} onPress={handleSignOut}>
           <ThemedText style={styles.buttonText}>Cerrar sesión</ThemedText>
         </TouchableOpacity>
@@ -65,6 +98,7 @@ export default function HomeScreen() {
     </ParallaxScrollView>
   );
 }
+
 
 const styles = StyleSheet.create({
   titleContainer: {
@@ -94,6 +128,26 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+
+    // propio
+logo: {
+    width: 260,
+    height: 120,
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 12,
+  },
+
+container: {
+    gap: 8,
+    marginBottom: 8,
+  },
+
+  sectionTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    marginBottom: 12,
   },
 });
 
