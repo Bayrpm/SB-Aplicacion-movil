@@ -45,7 +45,12 @@ export default function HomeScreen() {
   // Usar colorScheme directamente para el icono de settings
   const settingsIconColor = colorScheme === 'dark' ? '#FFFFFF' : '#4B5563';
   
+  
+  // Aca hacemos el llamado a la API para obtener el perfil del ciudadano, y lo guardamos en el la interfaz CitizenProfile la cual definimos en profile.api.ts, en getCitizenProfile().
+
   const [profile, setProfile] = React.useState<CitizenProfile | null>(null);
+
+  //////////////---------------------------------------------------------------//////////////
   const [loading, setLoading] = React.useState(true);
   const [editModalVisible, setEditModalVisible] = React.useState(false);
   const [settingsModalVisible, setSettingsModalVisible] = React.useState(false);
