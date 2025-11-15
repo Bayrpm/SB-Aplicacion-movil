@@ -1,4 +1,5 @@
 import { supabase } from '@/app/shared/lib/supabase';
+import { validateAndNormalizeCoordinates } from '../lib/coordinatesUtils';
 import type { ReportCategory } from '../types';
 
 /**
@@ -61,8 +62,9 @@ export default function _ReportApiRoute(): null {
 /**
  * Obtiene denuncias públicas recientes (últimas 24h).
  * Usa RPC 'get_denuncias_publicas_recientes' (server-side time).
+ * Las coordenadas se normalizan automáticamente para Google Maps API.
  */
-export async function fetchPublicReports(): Promise<Array<{
+export async function fetchPublicReports(): Promise<{
   id: string;
   titulo: string;
   descripcion: string;
@@ -73,7 +75,7 @@ export async function fetchPublicReports(): Promise<Array<{
   ubicacion_texto: string | null;
   anonimo: boolean;
   ciudadano?: { nombre?: string; apellido?: string } | null;
-}>> {
+}[]> {
   try {
     const { data, error } = await supabase.rpc('get_denuncias_publicas_recientes');
     if (error) {
@@ -82,18 +84,42 @@ export async function fetchPublicReports(): Promise<Array<{
     }
     if (!Array.isArray(data)) return [];
 
-    return data.map((row: any) => ({
-      id: String(row.id),
-      titulo: String(row.titulo ?? ''),
-      descripcion: String(row.descripcion ?? ''),
-      coords_x: Number(row.coords_x),
-      coords_y: Number(row.coords_y),
-      categoria_publica_id: row.categoria_publica_id != null ? Number(row.categoria_publica_id) : null,
-      fecha_creacion: String(row.fecha_creacion ?? ''),
-      ubicacion_texto: row.ubicacion_texto ? String(row.ubicacion_texto) : null,
-      anonimo: Boolean(row.anonimo),
-      ciudadano: row.ciudadano ?? null,
-    }));
+    return data.map((row: any) => {
+      // Normalizar coordenadas para Google Maps API
+      const validation = validateAndNormalizeCoordinates(
+        Number(row.coords_x),
+        Number(row.coords_y)
+      );
+
+      // Si las coordenadas fueron convertidas o son inválidas, loguear para debugging
+      if (validation.wasConverted) {
+        console.log(
+          `[Coordenadas] Reporte ${row.id}: Coordenadas invertidas corregidas ` +
+          `(${row.coords_x}, ${row.coords_y}) -> ` +
+          `(${validation.coordinates.latitude}, ${validation.coordinates.longitude})`
+        );
+      }
+      if (!validation.isValid) {
+        console.warn(
+          `[Coordenadas] Reporte ${row.id}: Coordenadas inválidas ` +
+          `(${row.coords_x}, ${row.coords_y}), usando coordenadas por defecto de San Bernardo`
+        );
+      }
+
+      return {
+        id: String(row.id),
+        titulo: String(row.titulo ?? ''),
+        descripcion: String(row.descripcion ?? ''),
+        // Usar coordenadas normalizadas
+        coords_x: validation.coordinates.latitude,
+        coords_y: validation.coordinates.longitude,
+        categoria_publica_id: row.categoria_publica_id != null ? Number(row.categoria_publica_id) : null,
+        fecha_creacion: String(row.fecha_creacion ?? ''),
+        ubicacion_texto: row.ubicacion_texto ? String(row.ubicacion_texto) : null,
+        anonimo: Boolean(row.anonimo),
+        ciudadano: row.ciudadano ?? null,
+      };
+    });
   } catch (e) {
     console.warn('fetchPublicReports exception', e);
     return [];
@@ -158,6 +184,7 @@ export async function checkRecentReportByCategory(
 /**
  * Detalle de denuncia pública por id (respeta anonimato).
  * Usa RPC 'get_denuncia_publica_detalle'.
+ * Las coordenadas se normalizan automáticamente para Google Maps API.
  */
 export async function fetchPublicReportDetail(id: string): Promise<{
   id: string;
@@ -186,13 +213,34 @@ export async function fetchPublicReportDetail(id: string): Promise<{
   const row = data as any;
   const ciudadano = row.ciudadano ?? undefined;
 
+  // Normalizar coordenadas para Google Maps API
+  const validation = validateAndNormalizeCoordinates(
+    Number(row.coords_x),
+    Number(row.coords_y)
+  );
+
+  if (validation.wasConverted) {
+    console.log(
+      `[Coordenadas] Detalle reporte ${id}: Coordenadas invertidas corregidas ` +
+      `(${row.coords_x}, ${row.coords_y}) -> ` +
+      `(${validation.coordinates.latitude}, ${validation.coordinates.longitude})`
+    );
+  }
+  if (!validation.isValid) {
+    console.warn(
+      `[Coordenadas] Detalle reporte ${id}: Coordenadas inválidas ` +
+      `(${row.coords_x}, ${row.coords_y}), usando coordenadas por defecto de San Bernardo`
+    );
+  }
+
   return {
     id: String(row.id),
     folio: row.folio ? String(row.folio) : null,
     titulo: String(row.titulo ?? ''),
     descripcion: String(row.descripcion ?? ''),
-    coords_x: Number(row.coords_x),
-    coords_y: Number(row.coords_y),
+    // Usar coordenadas normalizadas
+    coords_x: validation.coordinates.latitude,
+    coords_y: validation.coordinates.longitude,
     categoria_publica_id: row.categoria_publica_id != null ? Number(row.categoria_publica_id) : null,
     fecha_creacion: String(row.fecha_creacion ?? ''),
     ubicacion_texto: row.ubicacion_texto ? String(row.ubicacion_texto) : null,
@@ -307,7 +355,7 @@ export async function fetchReportStats(reportId: string): Promise<{
 
     const likes = statsData?.likes ?? 0;
     const dislikes = statsData?.dislikes ?? 0;
-  const commentsCount = Array.isArray(comments) ? comments.length : 0;
+    const commentsCount = Array.isArray(comments) ? comments.length : 0;
 
     return { likes, dislikes, userReaction, commentsCount };
   } catch (e) {
@@ -327,9 +375,9 @@ export async function reactToReport(reportId: string, tipo: 'LIKE' | 'DISLIKE') 
       return { data: null, error };
     }
     return { data, error: null };
-  } catch (e) {
-    console.warn('reactToReport exception', e);
-    return { data: null, error: e };
+  } catch (err) {
+    console.warn('reactToComment exception', err);
+    return { data: null, error: err };
   }
 }
 
@@ -381,7 +429,7 @@ export async function fetchReportComments(reportId: string) {
               if (!r.avatar_url && r.usuario_id && avatarMap[String(r.usuario_id)]) r.avatar_url = avatarMap[String(r.usuario_id)];
             });
           }
-        } catch (e) {
+        } catch {
           // ignore avatar enrichment errors
         }
 
@@ -396,7 +444,7 @@ export async function fetchReportComments(reportId: string) {
             statsData.forEach((s: any) => { statsMap[String(s.comentario_id)] = s; });
             return rows.map((r: any) => ({ ...r, likes: statsMap[String(r.id)]?.likes ?? r.likes, liked: (statsMap[String(r.id)]?.user_reaction ?? '').toUpperCase() === 'LIKE' || !!r.liked }));
           }
-        } catch (e) {
+        } catch {
           // fall through to table aggregation
         }
 
@@ -438,10 +486,10 @@ export async function fetchReportComments(reportId: string) {
             likes: likesMap[String(r.id)] ?? r.likes ?? 0,
             liked: (userReactionMap[String(r.id)] ?? '').toUpperCase() === 'LIKE' || !!r.liked,
           }));
-        } catch (e) {
+        } catch {
           return rows;
         }
-      } catch (e) {
+      } catch {
         return (data ?? []) as any[];
       }
     } catch (inner) {
@@ -498,7 +546,7 @@ export async function createReportComment(reportId: string, contenido: string, a
 }
 
 /** Llama a la RPC fn_comentario_reaccionar(p_comentario_id, p_tipo) para crear/actualizar reacción sobre un comentario */
-export async function reactToComment(commentId: number, tipo: 'LIKE'|'DISLIKE') {
+export async function reactToComment(commentId: number, tipo: 'LIKE' | 'DISLIKE') {
   try {
     const { data, error } = await supabase.rpc('fn_comentario_reaccionar', { p_comentario_id: commentId, p_tipo: tipo });
     if (error) {
@@ -506,9 +554,9 @@ export async function reactToComment(commentId: number, tipo: 'LIKE'|'DISLIKE') 
       return { data: null, error };
     }
     return { data, error: null };
-  } catch (e) {
-    console.warn('reactToComment exception', e);
-    return { data: null, error: e };
+  } catch (err) {
+    console.warn('reactToComment exception', err);
+    return { data: null, error: err };
   }
 }
 
@@ -535,7 +583,7 @@ export async function updateReportComment(commentId: number | string, newConteni
         return { data: null, error: rpcErr };
       }
       // Si es fallbackable, continuamos al flujo directo
-    } catch (e) {
+    } catch {
       // ignore and fallback to direct update
     }
 
@@ -570,7 +618,7 @@ export async function updateReportComment(commentId: number | string, newConteni
       if (diffMs > ONE_HOUR_MS) {
         return { data: null, error: new Error('La ventana de edición de 1 hora expiró') };
       }
-    } catch (e) {
+    } catch {
       // Si no podemos parsear la fecha, bloquear la edición por seguridad
       return { data: null, error: new Error('No se pudo verificar la fecha de creación del comentario') };
     }
@@ -592,9 +640,9 @@ export async function updateReportComment(commentId: number | string, newConteni
       return { data: null, error: updateErr };
     }
     return { data: updated, error: null };
-  } catch (e) {
-    console.warn('updateReportComment exception', e);
-    return { data: null, error: e };
+  } catch (err) {
+    console.warn('updateReportComment exception', err);
+    return { data: null, error: err };
   }
 }
 
@@ -615,7 +663,7 @@ export async function deleteReportComment(commentId: number | string) {
         return { data: null, error: rpcErr };
       }
       // Si no existe la RPC, continuar con flujo directo
-    } catch (e) {
+    } catch {
       // ignore and fallback
     }
 
@@ -657,8 +705,8 @@ export async function deleteReportComment(commentId: number | string) {
       return { data: null, error: delErr };
     }
     return { data: deleted, error: null };
-  } catch (e) {
-    console.warn('deleteReportComment exception', e);
-    return { data: null, error: e };
+  } catch (err) {
+    console.warn('deleteReportComment exception', err);
+    return { data: null, error: err };
   }
 }

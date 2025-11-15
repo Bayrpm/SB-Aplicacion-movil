@@ -1,8 +1,8 @@
+import ReportForm from "@/app/features/report/components/reportForm";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CurrentLocationMap from "../../features/report/components/currentLocationMap";
-import ReportForm from "../../features/report/components/reportForm";
 import ReportPickerModal from "../../features/report/components/reportPickerModal";
 import {
   clearReportFormSnapshot,

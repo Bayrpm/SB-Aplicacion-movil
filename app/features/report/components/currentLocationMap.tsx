@@ -1,24 +1,40 @@
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getMapStyle } from '../lib/mapStyles';
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { getMapStyle } from "../lib/mapStyles";
 // usamos IconSymbol centralizado en lugar de importar familias directamente
-import { useFocusEffect } from '@react-navigation/native';
-import * as Location from 'expo-location';
-import * as Network from 'expo-network';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Dimensions, Easing, PixelRatio, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import MapView, { Circle, Marker, PROVIDER_GOOGLE, Region } from 'react-native-maps';
+import { useFocusEffect } from "@react-navigation/native";
+import * as Location from "expo-location";
+import * as Network from "expo-network";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
+  PixelRatio,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import MapView, {
+  Circle,
+  Marker,
+  PROVIDER_GOOGLE,
+  Region,
+} from "react-native-maps";
 // view-shot para capturar la vista del CategoryPin como imagen nativa
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { captureRef } from 'react-native-view-shot';
-import { Button } from '../../../../components/Button';
-import { IconSymbol } from '../../../../components/ui/icon-symbol';
-import { fetchPublicReports } from '../api/report.api';
-import { useReportModal } from '../context';
-import CategoryPin from './CategoryPin';
-import ReportDetailModal from './reportDetailModal';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { captureRef } from "react-native-view-shot";
+import { Button } from "../../../../components/Button";
+import { IconSymbol } from "../../../../components/ui/icon-symbol";
+import { fetchPublicReports } from "../api/report.api";
+import { useReportModal } from "../context";
+import CategoryPin from "./categoryPin";
+import ReportDetailModal from "./reportDetailModal";
 // ======== UI scale ========
 const DPR = PixelRatio.get();
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 const SCALE = Math.min(Math.max(SCREEN_W / 360, 0.85), 1.25);
 const COMPASS_SIZE = Math.round(64 * SCALE);
 const COMPASS_ICON_SIZE = Math.round(28 * SCALE);
@@ -31,43 +47,48 @@ const EO_ARROW_SIZE = NS_ARROW_SIZE;
 const DIAG_HEIGHT = Math.max(4, Math.round(COMPASS_SIZE * 0.09));
 const DIAG_OFFSET = Math.max(4, Math.round(COMPASS_SIZE * 0.125));
 // Dimensiones del pin y su wrapper para evitar recortes
-const PIN_SIZE = 56;        // diámetro del círculo
-const PIN_TIP_H = 12;       // altura de la punta
+const PIN_SIZE = 56; // diámetro del círculo
+const PIN_TIP_H = 12; // altura de la punta
 const MARKER_WRAPPER_W = 112; // wrapper amplio para que no recorte
 const MARKER_WRAPPER_H = 140;
 // Separador seguro para componer claves de snapshot (iconName y count)
-const SNAP_KEY_SEP = '__COUNT__';
+const SNAP_KEY_SEP = "__COUNT__";
 
 // ======== Map behavior tunables (clave) ========
 // Umbral de píxeles para considerar "centrado"
 const CENTER_PX_THRESHOLD = Math.max(3, Math.round(4 * SCALE));
 const ROT_EPS_DEG = 0.5;
 // Aumentamos zoom objetivo para mostrar el mapa más cerca (menos área visible)
-const TARGET_ZOOM = 18; 
+const TARGET_ZOOM = 18;
 // Reducimos los deltas usados cuando no hay cámara con zoom disponible (regions)
 const TARGET_LAT_DELTA = 0.0009; // antes 0.0015
 const TARGET_LON_DELTA = 0.0009; // antes 0.0015
 // Zoom a partir del cual cambiamos de agrupado -> individual
 const ZOOM_CLUSTER_BREAK = 18.5;
 
-
 const styles = StyleSheet.create({
-  container: { flex: 1, borderRadius: 16, overflow: 'hidden' },
+  container: { flex: 1, borderRadius: 16, overflow: "hidden" },
   map: { flex: 1 },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  fabContainer: { position: 'absolute', right: 24, bottom: 32, alignItems: 'center', zIndex: 10 },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  fabContainer: {
+    position: "absolute",
+    right: 24,
+    bottom: 32,
+    alignItems: "center",
+    zIndex: 10,
+  },
   networkErrorContainer: {
-    position: 'absolute',
-    top: '35%',
+    position: "absolute",
+    top: "35%",
     left: 20,
     right: 20,
     padding: 24,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     gap: 12,
     zIndex: 100,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -75,88 +96,263 @@ const styles = StyleSheet.create({
   },
   networkErrorTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     marginTop: 8,
-    textAlign: 'center',
+    textAlign: "center",
   },
   networkErrorText: {
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 20,
   },
   retryButton: {
     marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
-    backgroundColor: '#0A4A90',
+    backgroundColor: "#0A4A90",
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 12,
     minWidth: 140,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
   },
   retryButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   compassFab: {
     marginBottom: Math.round(12 * SCALE),
-    width: COMPASS_SIZE, height: COMPASS_SIZE, borderRadius: Math.round(COMPASS_SIZE / 2),
-    backgroundColor: '#0A4A90', alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5, overflow: 'visible',
+    width: COMPASS_SIZE,
+    height: COMPASS_SIZE,
+    borderRadius: Math.round(COMPASS_SIZE / 2),
+    backgroundColor: "#0A4A90",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    overflow: "visible",
   },
-  fab: { width: FAB_SIZE, height: FAB_SIZE, borderRadius: Math.round(FAB_SIZE / 2), backgroundColor: '#0A4A90', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 4 },
-  compassContent: { alignItems: 'center', justifyContent: 'center', width: COMPASS_SIZE, height: COMPASS_SIZE, overflow: 'visible' },
-  compassLabels: { position: 'absolute', left: 0, top: 0, width: COMPASS_SIZE, height: COMPASS_SIZE, alignItems: 'center', justifyContent: 'center', zIndex: 80 },
-  labelWrapper: { position: 'absolute', width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
+  fab: {
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: Math.round(FAB_SIZE / 2),
+    backgroundColor: "#0A4A90",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 4,
+  },
+  compassContent: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: COMPASS_SIZE,
+    height: COMPASS_SIZE,
+    overflow: "visible",
+  },
+  compassLabels: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    width: COMPASS_SIZE,
+    height: COMPASS_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 80,
+  },
+  labelWrapper: {
+    position: "absolute",
+    width: 64,
+    height: 64,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   arrow: { zIndex: 90, margin: 0 },
   line: { zIndex: 85 },
-  diag: { width: Math.max(2, Math.round(COMPASS_SIZE * 0.03)), height: DIAG_HEIGHT, backgroundColor: '#fff', position: 'absolute', zIndex: 85, borderRadius: 2 },
-  diagNE: { right: DIAG_OFFSET, top: Math.round(COMPASS_SIZE * 0.09), transform: [{ rotate: '45deg' }] },
-  diagSE: { right: DIAG_OFFSET, bottom: Math.round(COMPASS_SIZE * 0.09), transform: [{ rotate: '135deg' }] },
-  diagSO: { left: DIAG_OFFSET, bottom: Math.round(COMPASS_SIZE * 0.09), transform: [{ rotate: '-135deg' }] },
-  diagNO: { left: DIAG_OFFSET, top: Math.round(COMPASS_SIZE * 0.09), transform: [{ rotate: '-45deg' }] },
-  compassLabel: { color: '#fff', fontWeight: 'bold', fontSize: Math.max(10, Math.round(COMPASS_SIZE * 0.17)), textShadowColor: '#000', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
-  north: { top: 10, left: 28 }, south: { bottom: 10, left: 28 }, east: { top: 28, right: 10 }, west: { top: 28, left: 10 },
-  northWrapper: { position: 'absolute', top: Math.round(COMPASS_SIZE * 0.06), left: 0, right: 0, alignItems: 'center' },
-  neWrapper: { position: 'absolute', top: Math.round(COMPASS_SIZE * 0.16), right: WRAP_OFFSET, alignItems: 'center' },
-  eastWrapper: { position: 'absolute', right: Math.round(COMPASS_SIZE * 0.12), top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
-  seWrapper: { position: 'absolute', bottom: Math.round(COMPASS_SIZE * 0.16), right: WRAP_OFFSET, alignItems: 'center' },
-  southWrapper: { position: 'absolute', bottom: Math.round(COMPASS_SIZE * 0.06), left: 0, right: 0, alignItems: 'center' },
-  soWrapper: { position: 'absolute', bottom: Math.round(COMPASS_SIZE * 0.16), left: WRAP_OFFSET, alignItems: 'center' },
-  westWrapper: { position: 'absolute', left: Math.round(COMPASS_SIZE * 0.12), top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
-  noWrapper: { position: 'absolute', top: Math.round(COMPASS_SIZE * 0.16), left: WRAP_OFFSET, alignItems: 'center' },
-  vertCenter: { flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
-  horzCenter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  horzCenterReverse: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center' },
-  northLabel: {}, eastLabel: {}, southLabel: {}, westLabel: {},
+  diag: {
+    width: Math.max(2, Math.round(COMPASS_SIZE * 0.03)),
+    height: DIAG_HEIGHT,
+    backgroundColor: "#fff",
+    position: "absolute",
+    zIndex: 85,
+    borderRadius: 2,
+  },
+  diagNE: {
+    right: DIAG_OFFSET,
+    top: Math.round(COMPASS_SIZE * 0.09),
+    transform: [{ rotate: "45deg" }],
+  },
+  diagSE: {
+    right: DIAG_OFFSET,
+    bottom: Math.round(COMPASS_SIZE * 0.09),
+    transform: [{ rotate: "135deg" }],
+  },
+  diagSO: {
+    left: DIAG_OFFSET,
+    bottom: Math.round(COMPASS_SIZE * 0.09),
+    transform: [{ rotate: "-135deg" }],
+  },
+  diagNO: {
+    left: DIAG_OFFSET,
+    top: Math.round(COMPASS_SIZE * 0.09),
+    transform: [{ rotate: "-45deg" }],
+  },
+  compassLabel: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: Math.max(10, Math.round(COMPASS_SIZE * 0.17)),
+    textShadowColor: "#000",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  north: { top: 10, left: 28 },
+  south: { bottom: 10, left: 28 },
+  east: { top: 28, right: 10 },
+  west: { top: 28, left: 10 },
+  northWrapper: {
+    position: "absolute",
+    top: Math.round(COMPASS_SIZE * 0.06),
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  neWrapper: {
+    position: "absolute",
+    top: Math.round(COMPASS_SIZE * 0.16),
+    right: WRAP_OFFSET,
+    alignItems: "center",
+  },
+  eastWrapper: {
+    position: "absolute",
+    right: Math.round(COMPASS_SIZE * 0.12),
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  seWrapper: {
+    position: "absolute",
+    bottom: Math.round(COMPASS_SIZE * 0.16),
+    right: WRAP_OFFSET,
+    alignItems: "center",
+  },
+  southWrapper: {
+    position: "absolute",
+    bottom: Math.round(COMPASS_SIZE * 0.06),
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  soWrapper: {
+    position: "absolute",
+    bottom: Math.round(COMPASS_SIZE * 0.16),
+    left: WRAP_OFFSET,
+    alignItems: "center",
+  },
+  westWrapper: {
+    position: "absolute",
+    left: Math.round(COMPASS_SIZE * 0.12),
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  noWrapper: {
+    position: "absolute",
+    top: Math.round(COMPASS_SIZE * 0.16),
+    left: WRAP_OFFSET,
+    alignItems: "center",
+  },
+  vertCenter: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  horzCenter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  horzCenterReverse: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  northLabel: {},
+  eastLabel: {},
+  southLabel: {},
+  westLabel: {},
   northLabelNudge: { transform: [{ translateY: 1 }] },
   southLabelNudge: { transform: [{ translateY: -1 }] },
-  arrowNorth: { marginBottom: 0, transform: [{ rotate: '0deg' }] },
-  arrowSouth: { marginTop: 0, transform: [{ rotate: '180deg' }] },
-  arrowEast: { marginLeft: 4, transform: [{ rotate: '90deg' }] },
-  arrowWest: { marginRight: 4, transform: [{ rotate: '-90deg' }] },
-  arrowAbsolute: { position: 'absolute', zIndex: 110, elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.4, shadowRadius: 1 },
-  arrowNorthAbs: { top: Math.round(-COMPASS_SIZE * 0.09), alignSelf: 'center' },
-  arrowSouthAbs: { bottom: Math.round(-COMPASS_SIZE * 0.09), alignSelf: 'center', transform: [{ rotate: '180deg' }] },
-  arrowEastAbs: { right: EO_OFFSET, alignSelf: 'center', transform: [{ rotate: '90deg' }], zIndex: 95 },
-  arrowWestAbs: { left: EO_OFFSET, alignSelf: 'center', transform: [{ rotate: '-90deg' }], zIndex: 95 },
-  arrowEOContainer: { position: 'absolute', top: 0, width: COMPASS_SIZE, height: COMPASS_SIZE, alignItems: 'center', justifyContent: 'center', zIndex: 120, overflow: 'visible' },
-  arrowEO: { position: 'absolute', zIndex: 121, elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.4, shadowRadius: 1 },
-  arrowEastEO: { right: EO_OFFSET, transform: [{ rotate: '90deg' }] },
-  arrowWestEO: { left: EO_OFFSET, transform: [{ rotate: '-90deg' }] },
+  arrowNorth: { marginBottom: 0, transform: [{ rotate: "0deg" }] },
+  arrowSouth: { marginTop: 0, transform: [{ rotate: "180deg" }] },
+  arrowEast: { marginLeft: 4, transform: [{ rotate: "90deg" }] },
+  arrowWest: { marginRight: 4, transform: [{ rotate: "-90deg" }] },
+  arrowAbsolute: {
+    position: "absolute",
+    zIndex: 110,
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.4,
+    shadowRadius: 1,
+  },
+  arrowNorthAbs: { top: Math.round(-COMPASS_SIZE * 0.09), alignSelf: "center" },
+  arrowSouthAbs: {
+    bottom: Math.round(-COMPASS_SIZE * 0.09),
+    alignSelf: "center",
+    transform: [{ rotate: "180deg" }],
+  },
+  arrowEastAbs: {
+    right: EO_OFFSET,
+    alignSelf: "center",
+    transform: [{ rotate: "90deg" }],
+    zIndex: 95,
+  },
+  arrowWestAbs: {
+    left: EO_OFFSET,
+    alignSelf: "center",
+    transform: [{ rotate: "-90deg" }],
+    zIndex: 95,
+  },
+  arrowEOContainer: {
+    position: "absolute",
+    top: 0,
+    width: COMPASS_SIZE,
+    height: COMPASS_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 120,
+    overflow: "visible",
+  },
+  arrowEO: {
+    position: "absolute",
+    zIndex: 121,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.4,
+    shadowRadius: 1,
+  },
+  arrowEastEO: { right: EO_OFFSET, transform: [{ rotate: "90deg" }] },
+  arrowWestEO: { left: EO_OFFSET, transform: [{ rotate: "-90deg" }] },
   markerWrapper: {
     height: MARKER_WRAPPER_H,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    overflow: 'visible',
+    alignItems: "center",
+    justifyContent: "flex-end",
+    overflow: "visible",
   },
   pinContainer: {
     width: PIN_SIZE,
@@ -165,11 +361,11 @@ const styles = StyleSheet.create({
     width: PIN_SIZE,
     height: PIN_SIZE,
     borderRadius: PIN_SIZE / 2,
-    backgroundColor: '#FF3B30',
+    backgroundColor: "#FF3B30",
     borderWidth: 3,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
   },
   pinTip: {
     width: 0,
@@ -177,27 +373,26 @@ const styles = StyleSheet.create({
     borderLeftWidth: Math.max(8, Math.round(PIN_SIZE * 0.18)),
     borderRightWidth: Math.max(8, Math.round(PIN_SIZE * 0.18)),
     borderTopWidth: PIN_TIP_H,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#FF3B30',
+    borderLeftColor: "transparent",
+    borderRightColor: "transparent",
+    borderTopColor: "#FF3B30",
     marginTop: -2,
   },
 });
-
-
 
 export default function CurrentLocationMap() {
   const insets = useSafeAreaInsets();
   const scheme = useColorScheme();
   const { reportDetailId, setReportDetailId } = useReportModal();
-  
+
   const mapStyle = React.useMemo(() => getMapStyle(scheme), [scheme]);
-  
+
   const TAB_BAR_BASE = 72;
   const tabBarHeightLocal = TAB_BAR_BASE + (insets.bottom || 0);
 
   // ======== Estado de denuncias públicas ========
-    const [publicReports, setPublicReports] = useState<Array<{
+  const [publicReports, setPublicReports] = useState<
+    {
       id: string;
       titulo: string;
       descripcion: string;
@@ -206,19 +401,22 @@ export default function CurrentLocationMap() {
       categoria_publica_id: number | null;
       fecha_creacion: string;
       ubicacion_texto: string | null;
-    }>>([]);
+    }[]
+  >([]);
   const [freezeMarkers, setFreezeMarkers] = useState(false);
   const markersLoadedRef = useRef(false);
   const [networkError, setNetworkError] = useState(false);
   const [loadingReports, setLoadingReports] = useState(false);
-  
+
   // ======== Modal de detalle de denuncia ========
   const [selectedReportIds, setSelectedReportIds] = useState<string[]>([]);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
   // ======== Estado brújula/rotación (tu lógica original) ========
   const [mapRotation, setMapRotation] = useState(0);
-  const [cardinal, setCardinal] = useState<'N' | 'NE' | 'E' | 'SE' | 'S' | 'SO' | 'O' | 'NO'>('N');
+  const [cardinal, setCardinal] = useState<
+    "N" | "NE" | "E" | "SE" | "S" | "SO" | "O" | "NO"
+  >("N");
   const animatedRotationRef = useRef<Animated.Value>(new Animated.Value(0));
   const animatedAnimRef = useRef<Animated.CompositeAnimation | null>(null);
   const angleRef = useRef<number>(0);
@@ -232,12 +430,18 @@ export default function CurrentLocationMap() {
   const [isFollowing, setIsFollowing] = useState(true);
   const isFollowingRef = useRef(true);
 
-  const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [location, setLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const mapRef = useRef<MapView | null>(null);
   const mapReadyRef = useRef(false);
-  const mapLayoutRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 });
+  const mapLayoutRef = useRef<{ width: number; height: number }>({
+    width: 0,
+    height: 0,
+  });
   const [mapZoom, setMapZoom] = useState<number | null>(null);
 
   const initialCenteredRef = useRef(false);
@@ -265,7 +469,7 @@ export default function CurrentLocationMap() {
   const computeCardinal = (heading: number) => {
     const h = ((heading % 360) + 360) % 360;
     const sector = Math.round(h / 45) % 8;
-    return (['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'] as const)[sector];
+    return (["N", "NE", "E", "SE", "S", "SO", "O", "NO"] as const)[sector];
   };
 
   const readCameraHeading = async () => {
@@ -281,13 +485,28 @@ export default function CurrentLocationMap() {
         const next = prev + delta * 0.28;
         angleRef.current = next;
 
-        if (animatedAnimRef.current) { try { animatedAnimRef.current.stop(); } catch {} animatedAnimRef.current = null; }
-        const anim = Animated.timing(animatedRotationRef.current, { toValue: next, duration: 120, easing: Easing.linear, useNativeDriver: true });
+        if (animatedAnimRef.current) {
+          try {
+            animatedAnimRef.current.stop();
+          } catch {}
+          animatedAnimRef.current = null;
+        }
+        const anim = Animated.timing(animatedRotationRef.current, {
+          toValue: next,
+          duration: 120,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        });
         animatedAnimRef.current = anim;
-        anim.start(() => { if (animatedAnimRef.current === anim) animatedAnimRef.current = null; });
+        anim.start(() => {
+          if (animatedAnimRef.current === anim) animatedAnimRef.current = null;
+        });
 
         const now = Date.now();
-        if (now - (lastRenderRef.current || 0) > 80 || Math.abs(next - (mapRotation || 0)) > 2) {
+        if (
+          now - (lastRenderRef.current || 0) > 80 ||
+          Math.abs(next - (mapRotation || 0)) > 2
+        ) {
           lastRenderRef.current = now;
           setMapRotation(next);
         }
@@ -295,8 +514,12 @@ export default function CurrentLocationMap() {
     } catch {}
   };
 
-  useEffect(() => { setCardinal(computeCardinal(((mapRotation % 360) + 360) % 360)); }, [mapRotation]);
-  useEffect(() => { setCardinal(computeCardinal(0)); }, []);
+  useEffect(() => {
+    setCardinal(computeCardinal(((mapRotation % 360) + 360) % 360));
+  }, [mapRotation]);
+  useEffect(() => {
+    setCardinal(computeCardinal(0));
+  }, []);
 
   const rafLoop = () => {
     if (!isPanningRef.current) return;
@@ -307,20 +530,50 @@ export default function CurrentLocationMap() {
     }
     rafRef.current = requestAnimationFrame(rafLoop);
   };
-  const startRaf = () => { if (isPanningRef.current) return; isPanningRef.current = true; if (rafRef.current == null) rafRef.current = requestAnimationFrame(rafLoop); };
-  const stopRaf  = () => { isPanningRef.current = false; if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; } };
+  const startRaf = () => {
+    if (isPanningRef.current) return;
+    isPanningRef.current = true;
+    if (rafRef.current == null) rafRef.current = requestAnimationFrame(rafLoop);
+  };
+  const stopRaf = () => {
+    isPanningRef.current = false;
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  };
 
   const resetCompass = () => {
     stopRaf();
-    if (animatedAnimRef.current) { try { animatedAnimRef.current.stop(); } catch {} animatedAnimRef.current = null; }
+    if (animatedAnimRef.current) {
+      try {
+        animatedAnimRef.current.stop();
+      } catch {}
+      animatedAnimRef.current = null;
+    }
     const current = angleRef.current || 0;
     const currentMod = ((current % 360) + 360) % 360;
-    let delta = -currentMod; if (delta > 180) delta -= 360; if (delta < -180) delta += 360;
+    let delta = -currentMod;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
     const target = current + delta;
     angleRef.current = target;
-    const anim = Animated.timing(animatedRotationRef.current, { toValue: target, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    const anim = Animated.timing(animatedRotationRef.current, {
+      toValue: target,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
     animatedAnimRef.current = anim;
-    anim.start(() => { angleRef.current = 0; try { animatedRotationRef.current.setValue(0); } catch {} setMapRotation(0); setCardinal('N'); animatedAnimRef.current = null; });
+    anim.start(() => {
+      angleRef.current = 0;
+      try {
+        animatedRotationRef.current.setValue(0);
+      } catch {}
+      setMapRotation(0);
+      setCardinal("N");
+      animatedAnimRef.current = null;
+    });
   };
 
   // ======== Core: centrado por PÍXELES ========
@@ -332,7 +585,10 @@ export default function CurrentLocationMap() {
       const cy = mapLayoutRef.current.height / 2;
       if (cx <= 0 || cy <= 0) return;
 
-      const pt = await anyMap.pointForCoordinate({ latitude: location.latitude, longitude: location.longitude });
+      const pt = await anyMap.pointForCoordinate({
+        latitude: location.latitude,
+        longitude: location.longitude,
+      });
       const dx = (pt?.x ?? 0) - cx;
       const dy = (pt?.y ?? 0) - cy;
       const dist = Math.hypot(dx, dy);
@@ -370,8 +626,8 @@ export default function CurrentLocationMap() {
       try {
         const perm = await Location.requestForegroundPermissionsAsync();
         const status = perm?.status ?? (perm as any);
-        if (status !== 'granted') {
-          setErrorMsg('Permiso de ubicación denegado');
+        if (status !== "granted") {
+          setErrorMsg("Permiso de ubicación denegado");
           setLoading(false);
           return;
         }
@@ -391,7 +647,11 @@ export default function CurrentLocationMap() {
 
         try {
           locationSubRef.current = await Location.watchPositionAsync(
-            { accuracy: Location.Accuracy.Balanced, timeInterval: 1000, distanceInterval: 1 },
+            {
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: 1000,
+              distanceInterval: 1,
+            },
             async (loc) => {
               try {
                 const { latitude, longitude } = loc.coords;
@@ -402,30 +662,42 @@ export default function CurrentLocationMap() {
                   try {
                     const cam = await anyMap.getCamera?.();
                     if (cam?.zoom != null && anyMap.animateCamera) {
-                      await anyMap.animateCamera({ center: { latitude, longitude } }, { duration: 200 });
+                      await anyMap.animateCamera(
+                        { center: { latitude, longitude } },
+                        { duration: 200 }
+                      );
                     } else if (anyMap.animateToRegion) {
-                      anyMap.animateToRegion({ latitude, longitude, latitudeDelta: TARGET_LAT_DELTA, longitudeDelta: TARGET_LON_DELTA });
+                      anyMap.animateToRegion({
+                        latitude,
+                        longitude,
+                        latitudeDelta: TARGET_LAT_DELTA,
+                        longitudeDelta: TARGET_LON_DELTA,
+                      });
                     } else {
-                      anyMap.setRegion?.({ latitude, longitude, latitudeDelta: TARGET_LAT_DELTA, longitudeDelta: TARGET_LON_DELTA });
+                      anyMap.setRegion?.({
+                        latitude,
+                        longitude,
+                        latitudeDelta: TARGET_LAT_DELTA,
+                        longitudeDelta: TARGET_LON_DELTA,
+                      });
                     }
                     setIsCentered(true);
-                  } catch (innerErr) {
-                  }
+                  } catch (innerErr) {}
                 }
-              } catch (cbErr) {
-              }
+              } catch (cbErr) {}
             }
           );
-        } catch (watchErr) {
-        }
+        } catch (watchErr) {}
       } catch (err) {
-        setErrorMsg('No se pudo activar la ubicación');
+        setErrorMsg("No se pudo activar la ubicación");
         setLoading(false);
       }
     })();
 
     return () => {
-      try { locationSubRef.current?.remove(); } catch (e) { }
+      try {
+        locationSubRef.current?.remove();
+      } catch (e) {}
     };
   }, []);
 
@@ -471,16 +743,43 @@ export default function CurrentLocationMap() {
 
   // ======== Asegurar zoom/cámara inicial ========
   const ensureInitialCenter = async () => {
-    if (!mapRef.current || !location || initialCenteredRef.current === true || !mapReadyRef.current) return;
+    if (
+      !mapRef.current ||
+      !location ||
+      initialCenteredRef.current === true ||
+      !mapReadyRef.current
+    )
+      return;
     const { latitude, longitude } = location;
     const anyMap: any = mapRef.current;
     try {
       if (anyMap.animateCamera) {
-        await anyMap.animateCamera({ center: { latitude, longitude }, zoom: TARGET_ZOOM, heading: 0, pitch: 0 }, { duration: 0 });
+        await anyMap.animateCamera(
+          {
+            center: { latitude, longitude },
+            zoom: TARGET_ZOOM,
+            heading: 0,
+            pitch: 0,
+          },
+          { duration: 0 }
+        );
       } else if (anyMap.animateToRegion) {
-        anyMap.animateToRegion({ latitude, longitude, latitudeDelta: TARGET_LAT_DELTA, longitudeDelta: TARGET_LON_DELTA }, 0);
+        anyMap.animateToRegion(
+          {
+            latitude,
+            longitude,
+            latitudeDelta: TARGET_LAT_DELTA,
+            longitudeDelta: TARGET_LON_DELTA,
+          },
+          0
+        );
       } else {
-        anyMap.setRegion?.({ latitude, longitude, latitudeDelta: TARGET_LAT_DELTA, longitudeDelta: TARGET_LON_DELTA });
+        anyMap.setRegion?.({
+          latitude,
+          longitude,
+          latitudeDelta: TARGET_LAT_DELTA,
+          longitudeDelta: TARGET_LON_DELTA,
+        });
       }
       initialCenteredRef.current = true;
       isFollowingRef.current = true;
@@ -489,11 +788,15 @@ export default function CurrentLocationMap() {
     } catch {}
   };
 
-  useEffect(() => { void ensureInitialCenter(); }, [location]);
+  useEffect(() => {
+    void ensureInitialCenter();
+  }, [location]);
 
   const handleCompassPress = (skipAnimateCameraHeading: boolean = false) => {
     if (!skipAnimateCameraHeading && mapRef.current) {
-      try { (mapRef.current as any).animateCamera?.({ heading: 0 }); } catch {}
+      try {
+        (mapRef.current as any).animateCamera?.({ heading: 0 });
+      } catch {}
     }
     resetCompass();
   };
@@ -507,17 +810,36 @@ export default function CurrentLocationMap() {
 
       const now = Date.now();
       if (isCenteringRef.current) return;
-      if (LAST_CENTERED_AT.current && now - LAST_CENTERED_AT.current < 500) return;
+      if (LAST_CENTERED_AT.current && now - LAST_CENTERED_AT.current < 500)
+        return;
 
       isCenteringRef.current = true;
 
       try {
         if (anyMap.animateCamera) {
-          await anyMap.animateCamera({ center: { latitude, longitude }, zoom: TARGET_ZOOM, heading: 0, pitch: 0 }, { duration: 220 });
+          await anyMap.animateCamera(
+            {
+              center: { latitude, longitude },
+              zoom: TARGET_ZOOM,
+              heading: 0,
+              pitch: 0,
+            },
+            { duration: 220 }
+          );
         } else if (anyMap.animateToRegion) {
-          anyMap.animateToRegion({ latitude, longitude, latitudeDelta: TARGET_LAT_DELTA, longitudeDelta: TARGET_LON_DELTA });
+          anyMap.animateToRegion({
+            latitude,
+            longitude,
+            latitudeDelta: TARGET_LAT_DELTA,
+            longitudeDelta: TARGET_LON_DELTA,
+          });
         } else {
-          anyMap.setRegion?.({ latitude, longitude, latitudeDelta: TARGET_LAT_DELTA, longitudeDelta: TARGET_LON_DELTA });
+          anyMap.setRegion?.({
+            latitude,
+            longitude,
+            latitudeDelta: TARGET_LAT_DELTA,
+            longitudeDelta: TARGET_LON_DELTA,
+          });
         }
       } catch {}
 
@@ -525,8 +847,11 @@ export default function CurrentLocationMap() {
       setIsFollowing(true);
       setIsCentered(true);
       LAST_CENTERED_AT.current = Date.now();
-    } catch {} finally {
-      setTimeout(() => { isCenteringRef.current = false; }, 300);
+    } catch {
+    } finally {
+      setTimeout(() => {
+        isCenteringRef.current = false;
+      }, 300);
     }
   };
 
@@ -539,7 +864,9 @@ export default function CurrentLocationMap() {
     if (isPanningRef.current) return;
     isPanningRef.current = true;
     if (rafRef.current == null) rafRef.current = requestAnimationFrame(rafLoop);
-    try { setIsCentered(false); } catch {}
+    try {
+      setIsCentered(false);
+    } catch {}
   };
 
   const onRegionChange = (_region: Region) => {
@@ -548,14 +875,18 @@ export default function CurrentLocationMap() {
       const h = region.heading as number;
       const prevN = ((mapRotation % 360) + 360) % 360;
       const targetN = ((h % 360) + 360) % 360;
-      let diff = targetN - prevN; if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
+      let diff = targetN - prevN;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
       setMapRotation(prevN + diff * 0.32);
       setCardinal(computeCardinal(h));
     } else if (region?.rotation !== undefined) {
       const r = region.rotation as number;
       const prevN = ((mapRotation % 360) + 360) % 360;
       const targetN = ((r % 360) + 360) % 360;
-      let diff = targetN - prevN; if (diff > 180) diff -= 360; if (diff < -180) diff += 360;
+      let diff = targetN - prevN;
+      if (diff > 180) diff -= 360;
+      if (diff < -180) diff += 360;
       setMapRotation(prevN + diff * 0.32);
       setCardinal(computeCardinal(r));
     }
@@ -563,11 +894,16 @@ export default function CurrentLocationMap() {
 
   const onRegionChangeComplete = async (region: Region) => {
     isPanningRef.current = false;
-    if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     await readCameraHeading();
     onRegionChange(region);
     // guardar region actual para cálculos de offset en píxeles -> coordenadas
-    try { setMapRegion(region); } catch {}
+    try {
+      setMapRegion(region);
+    } catch {}
     // actualizar zoom actual
     try {
       const anyMap: any = mapRef.current;
@@ -591,17 +927,20 @@ export default function CurrentLocationMap() {
   const GROUP_RADIUS_M = 50; // 50m para agrupar cercanos
   const TIME_WINDOW_MS = 24 * 60 * 60 * 1000; // últimas 24 horas
 
-  type Report = typeof publicReports[number];
-  
+  type Report = (typeof publicReports)[number];
+
   // Filtrar reportes a solo los de las últimas 24h
   const recentReports: Report[] = React.useMemo(() => {
     const now = Date.now();
     return publicReports.filter((r) => {
       const t = new Date(r.fecha_creacion).getTime();
-      return Number.isFinite(t) && (now - t) <= TIME_WINDOW_MS;
+      return Number.isFinite(t) && now - t <= TIME_WINDOW_MS;
     });
   }, [publicReports]);
-  const distanceMeters = (a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) => {
+  const distanceMeters = (
+    a: { latitude: number; longitude: number },
+    b: { latitude: number; longitude: number }
+  ) => {
     const R = 6371000; // radio tierra (m)
     const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
     const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
@@ -609,20 +948,21 @@ export default function CurrentLocationMap() {
     const lat2 = (b.latitude * Math.PI) / 180;
     const sinDLat = Math.sin(dLat / 2);
     const sinDLon = Math.sin(dLon / 2);
-    const h = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
+    const h =
+      sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon;
     const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
     return R * c;
   };
 
   const ICON_MAP: Record<number, string> = {
-    1: 'ambulance',
-    2: 'alert-circle-outline',
-    3: 'shield-alert',
-    4: 'pill',
-    5: 'pistol',
-    6: 'bell-ring-outline',
-    7: 'police-badge',
-    8: 'dots-horizontal',
+    1: "ambulance",
+    2: "alert-circle-outline",
+    3: "shield-alert",
+    4: "pill",
+    5: "pistol",
+    6: "bell-ring-outline",
+    7: "police-badge",
+    8: "dots-horizontal",
   };
 
   type GroupedItem = {
@@ -645,13 +985,16 @@ export default function CurrentLocationMap() {
       assigned.add(anchor.id);
       for (const other of recentReports) {
         if (assigned.has(other.id)) continue;
-        if (other.categoria_publica_id !== anchor.categoria_publica_id) continue;
+        if (other.categoria_publica_id !== anchor.categoria_publica_id)
+          continue;
         // Solo considerar reportes dentro de la ventana de 24h
         const tOther = new Date(other.fecha_creacion).getTime();
-        if (!Number.isFinite(tOther) || (nowMs - tOther) > TIME_WINDOW_MS) continue;
+        if (!Number.isFinite(tOther) || nowMs - tOther > TIME_WINDOW_MS)
+          continue;
         const tAnchor = new Date(anchor.fecha_creacion).getTime();
         // Si el ancla está fuera de 24h, no se agrupa (queda solo)
-        if (!Number.isFinite(tAnchor) || (nowMs - tAnchor) > TIME_WINDOW_MS) continue;
+        if (!Number.isFinite(tAnchor) || nowMs - tAnchor > TIME_WINDOW_MS)
+          continue;
         const d = distanceMeters(
           { latitude: anchor.coords_x, longitude: anchor.coords_y },
           { latitude: other.coords_x, longitude: other.coords_y }
@@ -661,9 +1004,11 @@ export default function CurrentLocationMap() {
           assigned.add(other.id);
         }
       }
-      const iconName = anchor.categoria_publica_id ? (ICON_MAP[anchor.categoria_publica_id] ?? 'map-marker') : 'map-marker';
+      const iconName = anchor.categoria_publica_id
+        ? ICON_MAP[anchor.categoria_publica_id] ?? "map-marker"
+        : "map-marker";
       result.push({
-        id: `grp-${anchor.categoria_publica_id ?? 'x'}-${anchor.id}`,
+        id: `grp-${anchor.categoria_publica_id ?? "x"}-${anchor.id}`,
         latitude: anchor.coords_x,
         longitude: anchor.coords_y,
         categoryId: anchor.categoria_publica_id,
@@ -680,7 +1025,9 @@ export default function CurrentLocationMap() {
   const uniqueIconKeys = React.useMemo(() => {
     const set = new Set<string>();
     for (const r of recentReports) {
-      const icon = r.categoria_publica_id ? (ICON_MAP[r.categoria_publica_id] ?? 'map-marker') : 'map-marker';
+      const icon = r.categoria_publica_id
+        ? ICON_MAP[r.categoria_publica_id] ?? "map-marker"
+        : "map-marker";
       set.add(`${icon}${SNAP_KEY_SEP}1`); // individual
     }
     for (const item of groupedItems) {
@@ -708,9 +1055,15 @@ export default function CurrentLocationMap() {
               // esperar un frame y un pequeño delay para asegurar layout y carga de fuentes
               await new Promise((r) => requestAnimationFrame(() => r(null)));
               // backoff: 40ms, 80ms, 160ms
-              await new Promise((r) => setTimeout(r, 40 * Math.pow(2, attempt)));
-              const uri = await captureRef(ref, { format: 'png', quality: 1, result: 'data-uri' });
-              if (uri && typeof uri === 'string' && uri.length > 100) {
+              await new Promise((r) =>
+                setTimeout(r, 40 * Math.pow(2, attempt))
+              );
+              const uri = await captureRef(ref, {
+                format: "png",
+                quality: 1,
+                result: "data-uri",
+              });
+              if (uri && typeof uri === "string" && uri.length > 100) {
                 setIconUris((s) => ({ ...s, [key]: uri }));
                 captured = true;
               }
@@ -727,7 +1080,12 @@ export default function CurrentLocationMap() {
   // (Obsoleto) offsetCoordinate: dejamos de usar offset en píxeles para evitar drift según zoom
 
   // Offset estable por metros (no depende del zoom)
-  const offsetByMeters = (lat: number, lon: number, radiusMeters: number, angleRad: number) => {
+  const offsetByMeters = (
+    lat: number,
+    lon: number,
+    radiusMeters: number,
+    angleRad: number
+  ) => {
     const metersPerDegLat = 111320; // aproximación
     const metersPerDegLon = 111320 * Math.cos((lat * Math.PI) / 180);
     const dLat = (radiusMeters * Math.sin(angleRad)) / metersPerDegLat;
@@ -756,10 +1114,20 @@ export default function CurrentLocationMap() {
 
   useEffect(() => {
     return () => {
-      if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       isPanningRef.current = false;
-      if (animatedAnimRef.current) { try { animatedAnimRef.current.stop(); } catch {} animatedAnimRef.current = null; }
-      try { locationSubRef.current?.remove(); } catch {}
+      if (animatedAnimRef.current) {
+        try {
+          animatedAnimRef.current.stop();
+        } catch {}
+        animatedAnimRef.current = null;
+      }
+      try {
+        locationSubRef.current?.remove();
+      } catch {}
     };
   }, []);
 
@@ -783,20 +1151,32 @@ export default function CurrentLocationMap() {
   return (
     <View style={[styles.container, { paddingBottom: tabBarHeightLocal }]}>
       {/* Hidden offscreen render for CategoryPin snapshots (individual y agrupado con count real) */}
-      <View style={{ position: 'absolute', left: -2000, top: -2000, opacity: 0 }} pointerEvents="none">
+      <View
+        style={{ position: "absolute", left: -2000, top: -2000, opacity: 0 }}
+        pointerEvents="none"
+      >
         {uniqueIconKeys.map((key) => {
           // key: iconName__COUNT__count (SNAP_KEY_SEP)
           const [iconName, countStr] = key.split(SNAP_KEY_SEP);
-          const count = Number.parseInt(countStr ?? '1', 10) || 1;
+          const count = Number.parseInt(countStr ?? "1", 10) || 1;
           return (
             <View
               key={`hidden-${key}`}
-              ref={(r) => { hiddenRefs.current[key] = r; }}
+              ref={(r) => {
+                hiddenRefs.current[key] = r;
+              }}
               collapsable={false}
-              style={[styles.markerWrapper, { position: 'relative', left: 0, top: 0, opacity: 1 }]}
+              style={[
+                styles.markerWrapper,
+                { position: "relative", left: 0, top: 0, opacity: 1 },
+              ]}
               pointerEvents="none"
             >
-              <CategoryPin iconName={iconName} size={PIN_SIZE} count={count > 1 ? count : undefined} />
+              <CategoryPin
+                iconName={iconName}
+                size={PIN_SIZE}
+                count={count > 1 ? count : undefined}
+              />
             </View>
           );
         })}
@@ -825,7 +1205,12 @@ export default function CurrentLocationMap() {
           // Leer zoom inicial
           try {
             const anyMap: any = mapRef.current;
-            anyMap?.getCamera?.().then((cam: any) => { if (cam?.zoom != null) setMapZoom(cam.zoom as number); }).catch(() => {});
+            anyMap
+              ?.getCamera?.()
+              .then((cam: any) => {
+                if (cam?.zoom != null) setMapZoom(cam.zoom as number);
+              })
+              .catch(() => {});
           } catch {}
         }}
         onLayout={(e) => {
@@ -836,8 +1221,18 @@ export default function CurrentLocationMap() {
         onRegionChange={onRegionChange}
         onRegionChangeComplete={onRegionChangeComplete}
         onPanDrag={onPanDrag}
-        onTouchStart={() => { startRaf(); userGestureRef.current = true; if (isFollowingRef.current) { isFollowingRef.current = false; setIsFollowing(false); } setIsCentered(false); }}
-        onTouchEnd={() => { setTimeout(() => stopRaf(), 80); }}
+        onTouchStart={() => {
+          startRaf();
+          userGestureRef.current = true;
+          if (isFollowingRef.current) {
+            isFollowingRef.current = false;
+            setIsFollowing(false);
+          }
+          setIsCentered(false);
+        }}
+        onTouchEnd={() => {
+          setTimeout(() => stopRaf(), 80);
+        }}
       >
         {/* Cambiar entre vista agrupada e individual según zoom, manteniendo radios */}
         {(() => {
@@ -845,20 +1240,29 @@ export default function CurrentLocationMap() {
           if (showGrouped) {
             // Vista AGRUPADA
             return groupedItems.map((item) => {
-              const coord = { latitude: item.latitude, longitude: item.longitude };
+              const coord = {
+                latitude: item.latitude,
+                longitude: item.longitude,
+              };
               const ov = overlapGroups.get(item.id);
               const coordDisplay = (() => {
                 if (ov && ov.size > 1) {
                   const angle = (2 * Math.PI * ov.index) / ov.size;
-                  return offsetByMeters(coord.latitude, coord.longitude, 2.5 /* m */, angle);
+                  return offsetByMeters(
+                    coord.latitude,
+                    coord.longitude,
+                    2.5 /* m */,
+                    angle
+                  );
                 }
                 return coord;
               })();
 
               const count = item.reports.length;
-              const reportIds = item.reports.map(r => r.id);
+              const reportIds = item.reports.map((r) => r.id);
               const iconKey = `${item.iconName}${SNAP_KEY_SEP}${count}`;
-              const useNativeIcon = Platform.OS === 'android' && iconUris[iconKey];
+              const useNativeIcon =
+                Platform.OS === "android" && iconUris[iconKey];
 
               return (
                 <React.Fragment key={`group-${item.id}`}>
@@ -885,12 +1289,14 @@ export default function CurrentLocationMap() {
                         setShowDetailModal(true);
                       }
                     }}
-                    {...(useNativeIcon ? { icon: { uri: iconUris[iconKey] } as any } : {})}
+                    {...(useNativeIcon
+                      ? { icon: { uri: iconUris[iconKey] } as any }
+                      : {})}
                   >
                     {useNativeIcon ? null : (
-                      <CategoryPin 
-                        iconName={item.iconName} 
-                        pinColor="#FF3B30" 
+                      <CategoryPin
+                        iconName={item.iconName}
+                        pinColor="#FF3B30"
                         size={PIN_SIZE}
                         count={count}
                       />
@@ -902,11 +1308,20 @@ export default function CurrentLocationMap() {
           }
 
           // Vista INDIVIDUAL (zoom alto)
-          type Individual = { id: string; reportId: string; latitude: number; longitude: number; iconName: string; groupSize: number };
+          type Individual = {
+            id: string;
+            reportId: string;
+            latitude: number;
+            longitude: number;
+            iconName: string;
+            groupSize: number;
+          };
           const individuals: Individual[] = [];
           for (const g of groupedItems) {
             for (const r of g.reports) {
-              const iconName = r.categoria_publica_id ? (ICON_MAP[r.categoria_publica_id] ?? 'map-marker') : 'map-marker';
+              const iconName = r.categoria_publica_id
+                ? ICON_MAP[r.categoria_publica_id] ?? "map-marker"
+                : "map-marker";
               individuals.push({
                 id: `ind-${r.id}`,
                 reportId: r.id,
@@ -938,13 +1353,19 @@ export default function CurrentLocationMap() {
             const coordDisplay = (() => {
               if (ov && ov.size > 1) {
                 const angle = (2 * Math.PI * ov.index) / ov.size;
-                return offsetByMeters(coord.latitude, coord.longitude, 2.5 /* m */, angle);
+                return offsetByMeters(
+                  coord.latitude,
+                  coord.longitude,
+                  2.5 /* m */,
+                  angle
+                );
               }
               return coord;
             })();
 
             const iconKey = `${it.iconName}${SNAP_KEY_SEP}1`;
-            const useNativeIcon = Platform.OS === 'android' && iconUris[iconKey];
+            const useNativeIcon =
+              Platform.OS === "android" && iconUris[iconKey];
 
             return (
               <React.Fragment key={`ind-frag-${it.id}`}>
@@ -969,12 +1390,14 @@ export default function CurrentLocationMap() {
                     setSelectedReportIds([it.reportId]);
                     setShowDetailModal(true);
                   }}
-                  {...(useNativeIcon ? { icon: { uri: iconUris[iconKey] } as any } : {})}
+                  {...(useNativeIcon
+                    ? { icon: { uri: iconUris[iconKey] } as any }
+                    : {})}
                 >
                   {useNativeIcon ? null : (
-                    <CategoryPin 
-                      iconName={it.iconName} 
-                      pinColor="#FF3B30" 
+                    <CategoryPin
+                      iconName={it.iconName}
+                      pinColor="#FF3B30"
                       size={PIN_SIZE}
                     />
                   )}
@@ -989,67 +1412,230 @@ export default function CurrentLocationMap() {
 
       {/* Ya no renderizamos relleno inferior adicional; la tab bar maneja el inset */}
 
-      <View style={[styles.fabContainer, { bottom: Math.max(fabBottomAboveTab, fabBottomOffset) }]}>
+      <View
+        style={[
+          styles.fabContainer,
+          { bottom: Math.max(fabBottomAboveTab, fabBottomOffset) },
+        ]}
+      >
         <Button
-          onPress={() => { handleCompassPress(false); }}
+          onPress={() => {
+            handleCompassPress(false);
+          }}
           style={styles.compassFab}
           accessibilityLabel="Brújula"
         >
           <View style={styles.compassContent} pointerEvents="none">
-            <Animated.View style={{ transform: [{ rotate: animatedRotationRef.current.interpolate({ inputRange: [-360, 360], outputRange: ['-360deg', '360deg'] }) }] }}>
-              <IconSymbol name="compass-rose" size={COMPASS_ICON_SIZE} color="#fff" />
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    rotate: animatedRotationRef.current.interpolate({
+                      inputRange: [-360, 360],
+                      outputRange: ["-360deg", "360deg"],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <IconSymbol
+                name="compass-rose"
+                size={COMPASS_ICON_SIZE}
+                color="#fff"
+              />
             </Animated.View>
             <View style={styles.compassLabels} pointerEvents="none">
               <View style={styles.northWrapper} pointerEvents="none">
-                <IconSymbol name="arrow-drop-up" size={NS_ARROW_SIZE} color={cardinal === 'N' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowAbsolute, styles.arrowNorthAbs, { opacity: cardinal === 'N' ? 1 : 0.9 }]} />
-                <Text style={[styles.compassLabel, { color: cardinal === 'N' ? '#fff' : 'rgba(255,255,255,0.6)' }]}>N</Text>
+                <IconSymbol
+                  name="arrow-drop-up"
+                  size={NS_ARROW_SIZE}
+                  color={cardinal === "N" ? "#fff" : "rgba(255,255,255,0.6)"}
+                  style={[
+                    styles.arrowAbsolute,
+                    styles.arrowNorthAbs,
+                    { opacity: cardinal === "N" ? 1 : 0.9 },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.compassLabel,
+                    {
+                      color:
+                        cardinal === "N" ? "#fff" : "rgba(255,255,255,0.6)",
+                    },
+                  ]}
+                >
+                  N
+                </Text>
               </View>
               <View style={styles.neWrapper} pointerEvents="none">
-                <View style={[styles.diag, styles.diagNE, { backgroundColor: cardinal === 'NE' ? '#fff' : 'rgba(255,255,255,0.6)' }]} />
+                <View
+                  style={[
+                    styles.diag,
+                    styles.diagNE,
+                    {
+                      backgroundColor:
+                        cardinal === "NE" ? "#fff" : "rgba(255,255,255,0.6)",
+                    },
+                  ]}
+                />
               </View>
               <View style={styles.eastWrapper} pointerEvents="none">
-                <Text style={[styles.compassLabel, { color: cardinal === 'E' ? '#fff' : 'rgba(255,255,255,0.6)' }]}>E</Text>
+                <Text
+                  style={[
+                    styles.compassLabel,
+                    {
+                      color:
+                        cardinal === "E" ? "#fff" : "rgba(255,255,255,0.6)",
+                    },
+                  ]}
+                >
+                  E
+                </Text>
               </View>
               <View style={styles.seWrapper} pointerEvents="none">
-                <View style={[styles.diag, styles.diagSE, { backgroundColor: cardinal === 'SE' ? '#fff' : 'rgba(255,255,255,0.6)' }]} />
+                <View
+                  style={[
+                    styles.diag,
+                    styles.diagSE,
+                    {
+                      backgroundColor:
+                        cardinal === "SE" ? "#fff" : "rgba(255,255,255,0.6)",
+                    },
+                  ]}
+                />
               </View>
               <View style={styles.southWrapper} pointerEvents="none">
-                <IconSymbol name="arrow-drop-up" size={NS_ARROW_SIZE} color={cardinal === 'S' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowAbsolute, styles.arrowSouthAbs, { opacity: cardinal === 'S' ? 1 : 0.9 }]} />
-                <Text style={[styles.compassLabel, { color: cardinal === 'S' ? '#fff' : 'rgba(255,255,255,0.6)' }]}>S</Text>
+                <IconSymbol
+                  name="arrow-drop-up"
+                  size={NS_ARROW_SIZE}
+                  color={cardinal === "S" ? "#fff" : "rgba(255,255,255,0.6)"}
+                  style={[
+                    styles.arrowAbsolute,
+                    styles.arrowSouthAbs,
+                    { opacity: cardinal === "S" ? 1 : 0.9 },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.compassLabel,
+                    {
+                      color:
+                        cardinal === "S" ? "#fff" : "rgba(255,255,255,0.6)",
+                    },
+                  ]}
+                >
+                  S
+                </Text>
               </View>
               <View style={styles.soWrapper} pointerEvents="none">
-                <View style={[styles.diag, styles.diagSO, { backgroundColor: cardinal === 'SO' ? '#fff' : 'rgba(255,255,255,0.6)' }]} />
+                <View
+                  style={[
+                    styles.diag,
+                    styles.diagSO,
+                    {
+                      backgroundColor:
+                        cardinal === "SO" ? "#fff" : "rgba(255,255,255,0.6)",
+                    },
+                  ]}
+                />
               </View>
               <View style={styles.westWrapper} pointerEvents="none">
-                <Text style={[styles.compassLabel, { color: cardinal === 'O' ? '#fff' : 'rgba(255,255,255,0.6)' }]}>O</Text>
+                <Text
+                  style={[
+                    styles.compassLabel,
+                    {
+                      color:
+                        cardinal === "O" ? "#fff" : "rgba(255,255,255,0.6)",
+                    },
+                  ]}
+                >
+                  O
+                </Text>
               </View>
               <View style={styles.noWrapper} pointerEvents="none">
-                <View style={[styles.diag, styles.diagNO, { backgroundColor: cardinal === 'NO' ? '#fff' : 'rgba(255,255,255,0.6)' }]} />
+                <View
+                  style={[
+                    styles.diag,
+                    styles.diagNO,
+                    {
+                      backgroundColor:
+                        cardinal === "NO" ? "#fff" : "rgba(255,255,255,0.6)",
+                    },
+                  ]}
+                />
               </View>
             </View>
           </View>
         </Button>
 
         <Button
-          onPress={async () => { await centerMap(); handleCompassPress(true); }}
+          onPress={async () => {
+            await centerMap();
+            handleCompassPress(true);
+          }}
           style={styles.fab}
           accessibilityLabel="Centrar ubicación"
         >
-          <IconSymbol name={isCentered ? 'my-location' : 'location-searching'} size={FAB_ICON_SIZE} color="#fff" />
+          <IconSymbol
+            name={isCentered ? "my-location" : "location-searching"}
+            size={FAB_ICON_SIZE}
+            color="#fff"
+          />
         </Button>
 
         <View style={styles.arrowEOContainer} pointerEvents="none">
-      <IconSymbol name="arrow-drop-up" size={EO_ARROW_SIZE} color={cardinal === 'E' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowEO, styles.arrowEastEO, { opacity: cardinal === 'E' ? 1 : 0.9 }]} />
-      <IconSymbol name="arrow-drop-up" size={EO_ARROW_SIZE} color={cardinal === 'O' ? '#fff' : 'rgba(255,255,255,0.6)'} style={[styles.arrowEO, styles.arrowWestEO, { opacity: cardinal === 'O' ? 1 : 0.9 }]} />
+          <IconSymbol
+            name="arrow-drop-up"
+            size={EO_ARROW_SIZE}
+            color={cardinal === "E" ? "#fff" : "rgba(255,255,255,0.6)"}
+            style={[
+              styles.arrowEO,
+              styles.arrowEastEO,
+              { opacity: cardinal === "E" ? 1 : 0.9 },
+            ]}
+          />
+          <IconSymbol
+            name="arrow-drop-up"
+            size={EO_ARROW_SIZE}
+            color={cardinal === "O" ? "#fff" : "rgba(255,255,255,0.6)"}
+            style={[
+              styles.arrowEO,
+              styles.arrowWestEO,
+              { opacity: cardinal === "O" ? 1 : 0.9 },
+            ]}
+          />
         </View>
       </View>
 
       {/* Mensaje de error de conexión */}
       {networkError && (
-        <View style={[styles.networkErrorContainer, { backgroundColor: scheme === 'dark' ? 'rgba(7, 18, 41, 0.95)' : 'rgba(255, 255, 255, 0.95)' }]}>
+        <View
+          style={[
+            styles.networkErrorContainer,
+            {
+              backgroundColor:
+                scheme === "dark"
+                  ? "rgba(7, 18, 41, 0.95)"
+                  : "rgba(255, 255, 255, 0.95)",
+            },
+          ]}
+        >
           <IconSymbol name="wifi-off" size={48} color="#EF4444" />
-          <Text style={[styles.networkErrorTitle, { color: scheme === 'dark' ? '#E6EEF8' : '#0F1724' }]}>Sin conexión a la red</Text>
-          <Text style={[styles.networkErrorText, { color: scheme === 'dark' ? '#9CA3AF' : '#6B7280' }]}>
+          <Text
+            style={[
+              styles.networkErrorTitle,
+              { color: scheme === "dark" ? "#E6EEF8" : "#0F1724" },
+            ]}
+          >
+            Sin conexión a la red
+          </Text>
+          <Text
+            style={[
+              styles.networkErrorText,
+              { color: scheme === "dark" ? "#9CA3AF" : "#6B7280" },
+            ]}
+          >
             No se pudieron cargar las denuncias. Verifica tu conexión.
           </Text>
           <TouchableOpacity
