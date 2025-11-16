@@ -79,7 +79,7 @@ const TurnCard: React.FC<TurnCardProps> = ({
   );
 };
 
-export default TurnCard; 
+export default TurnCard;
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
@@ -89,14 +89,14 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-      marginBottom: 16,
-    
+    marginBottom: 16,
+
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '600',
     marginRight: 8,
-      padding: 10,
+    padding: 10,
     alignContent: 'center',
   },
   headerCheck: {
