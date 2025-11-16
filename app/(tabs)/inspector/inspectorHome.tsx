@@ -1,12 +1,48 @@
 import { Image } from "expo-image";
 import React from "react";
-import { StyleSheet, Text, useColorScheme, View } from 'react-native'; // import { View } from 'react-native-reanimated/lib/typescript/Animated';
+import { StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native'; // import { View } from 'react-native-reanimated/lib/typescript/Animated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import MyCases from '@/app/features/homeInspector/components/myCasesComponent';
+import { useAuth } from '@/app/features/auth';
+import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
+import MyCases from '@/app/features/homeInspector/myCasesComponent';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
+import { useRouter } from 'expo-router';
 
 export default function HomeScreen() {
+
+
+  const { user, isInspector, inspectorLoading, signOut } = useAuth();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+
+  // no borrar model del cristobal
+    AppAlert.alert(
+      'Cerrar sesión',
+      '¿Estás seguro que deseas cerrar sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar sesión',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+              router.replace('/(auth)');
+            } catch (error: any) {
+              const msg = mapSupabaseErrorMessage(error?.message);
+              AppAlert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
+
+  };
 
 
   const insets = useSafeAreaInsets();
@@ -16,7 +52,7 @@ export default function HomeScreen() {
       ? require("@/assets/images/img_logo_blanco.png")
       : require("@/assets/images/img_logo.png");
 
-  const LOGO_HEIGHT = 120;
+  const LOGO_HEIGHT = 120; 
   const headerWrapperHeight =
     LOGO_HEIGHT + Math.max(24, Math.round(insets.top * 0.8)) + 24;
 
@@ -46,19 +82,33 @@ export default function HomeScreen() {
 
     > {/*cierre de  ParallaxScrollView */}
       <View style={styles.contenedor}>
-        <Text style={styles.titulo} > Mis casos</Text>
+        <Text style = {styles.titulo} > Mis casos</Text>        
       </View>
-
-      {/* Mis Casos */}
+      
+        {/* Mis Casos */}
       <View style={styles.container}>
-        <MyCases
+        <MyCases 
           title='Auto'
           description='dbabdbjaksbdkadcbkasbcjkasbcjkacskjbcasjkbcjkab10'
           timeAgo='hace media hora'
-          address="calle color sur"
+          address = "calle color sur"        
         />
       </View>
 
+      {/* BIENVENIDA E INICIO DE SESION */}
+      <ThemedView style={styles.stepContainer}>
+        <ThemedText type="defaultSemiBold">¡Bienvenido!</ThemedText>
+        {inspectorLoading || typeof isInspector === 'undefined' ? null : (
+          <ThemedText>
+            {isInspector ? 'Usuario Inspector autenticado' : 'Usuario Ciudadano autenticado'}: {user?.email}
+          </ThemedText>
+        )}
+
+        
+        <TouchableOpacity style={styles.button} onPress={handleSignOut}>
+          <ThemedText style={styles.buttonText}>Cerrar sesión</ThemedText>
+        </TouchableOpacity>
+      </ThemedView>
     </ParallaxScrollView>
   );
 }
@@ -73,13 +123,17 @@ const styles = StyleSheet.create({
   titulo: {
     fontSize: 24,
     textAlign: 'center',
-    fontWeight: 'bold',
+    fontWeight:'bold',
   },
 
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  stepContainer: {
+    gap: 8,
+    marginBottom: 8,
   },
   reactLogo: {
     height: 178,
@@ -88,9 +142,21 @@ const styles = StyleSheet.create({
     left: 0,
     position: 'absolute',
   },
+  button: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 
-  // propio
-  logo: {
+    // propio
+logo: {
     width: 260,
     height: 120,
     alignSelf: "center",
@@ -98,7 +164,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  container: {
+container: {
     gap: 8,
     marginBottom: 8,
   },
