@@ -1,11 +1,11 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React from 'react';
 import {
-    GestureResponderEvent,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  GestureResponderEvent,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export interface MyCasesProps {
