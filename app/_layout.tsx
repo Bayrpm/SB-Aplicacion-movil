@@ -1,25 +1,81 @@
 import { useThemeColor } from '@/hooks/use-theme-color';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet } from 'react-native';
+import { Animated, Appearance, Easing, Linking, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, SplashScreen, useAuth } from '@/app/features/auth';
-import { ReportModalProvider } from '@/app/features/report/context';
+import { ReportModalProvider, useReportModal } from '@/app/features/report/context';
+import { unregisterPushNotifications } from '@/app/services/notificationService';
 import AlertBox from '@/components/ui/AlertBox';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useNotifications } from '@/hooks/useNotifications';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
+
+// Componente para manejar deep links con acceso al contexto
+function DeepLinkHandler() {
+  const router = useRouter();
+  const { openReportDetail } = useReportModal();
+  const { session } = useAuth();
+
+  useEffect(() => {
+    // Solo manejar deep links si hay sesión activa
+    if (!session) return;
+
+    // Manejar el link inicial si la app se abre desde un deep link
+    const handleInitialURL = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        handleDeepLink(initialUrl);
+      }
+    };
+
+    // Manejar deep links cuando la app ya está abierta
+    const subscription = Linking.addEventListener('url', ({ url }) => {
+      handleDeepLink(url);
+    });
+
+    handleInitialURL();
+
+    return () => {
+      subscription.remove();
+    };
+  }, [session]);
+
+  const handleDeepLink = (url: string) => {
+    // Formato esperado: sbaplicacionmovil://report/{reportId}
+    const match = url.match(/sbaplicacionmovil:\/\/report\/(.+)/);
+    if (match && match[1]) {
+      const reportId = match[1];
+      
+      // Navegar al home del ciudadano
+      router.push('/(tabs)/citizen/citizenHome' as any);
+      
+      // Esperar un momento para que la navegación se complete y luego abrir el modal
+      setTimeout(() => {
+        openReportDetail(reportId);
+      }, 500);
+    }
+  };
+
+  return null; // Este componente no renderiza nada
+}
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const { session, loading, isInspector, inspectorLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  
+  // Inicializar notificaciones push
+  const { notificationToken } = useNotifications();
+  
   // Mantener la Splash visible hasta que la navegación esté alineada con el estado de auth
   const [navReady, setNavReady] = useState(false);
   // Asegurar un mínimo de 5s de Splash visible
@@ -32,6 +88,34 @@ function RootLayoutNav() {
   const appOpacity = useRef(new Animated.Value(0)).current;
   const appTranslateY = useRef(new Animated.Value(8)).current; // leve desplazamiento hacia arriba
   const appScale = useRef(new Animated.Value(0.995)).current;
+
+  // Limpiar token de notificación al cerrar sesión
+  useEffect(() => {
+    if (!session) {
+      unregisterPushNotifications();
+    }
+  }, [session]);
+
+  // Cargar y aplicar tema guardado al iniciar la app
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        const savedTheme = await AsyncStorage.getItem('@theme_mode');
+        if (savedTheme) {
+          if (savedTheme === 'light') {
+            Appearance.setColorScheme('light');
+          } else if (savedTheme === 'dark') {
+            Appearance.setColorScheme('dark');
+          } else {
+            Appearance.setColorScheme(null); // Usar tema del sistema
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando tema:', error);
+      }
+    };
+    loadTheme();
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(() => setMinSplashElapsed(true), 5000);
@@ -143,6 +227,7 @@ function RootLayoutNav() {
             }}
           >
             <ReportModalProvider>
+              <DeepLinkHandler />
               <Slot />
             </ReportModalProvider>
           </Animated.View>

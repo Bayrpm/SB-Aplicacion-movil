@@ -1,5 +1,6 @@
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import React from 'react';
-import { Modal, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type AlertButton = {
   text: string;
@@ -47,29 +48,42 @@ export default function AlertBox() {
 
   const onClose = () => setState({ visible: false, title: '', message: '', buttons: undefined });
 
+  const buttons = state.buttons && state.buttons.length > 0 ? state.buttons : [{ text: 'Aceptar' }];
+  const vertical = buttons.length >= 3;
+
   return (
     <Modal visible={state.visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={[styles.box, { backgroundColor, borderColor: primaryColor }]}> 
           <Text style={[styles.title, { color: titleColor }]} numberOfLines={2}>{state.title}</Text>
           <Text style={[styles.message, { color: messageColor }]}>{state.message}</Text>
-          <View style={styles.buttonsRow}>
-            {(state.buttons && state.buttons.length > 0 ? state.buttons : [{ text: 'Aceptar' }]).map((b, idx) => {
+          <View style={[styles.buttonsRow, vertical ? styles.buttonsColumn : styles.buttonsRowInline]}>
+            {buttons.map((b, idx) => {
               const isDestructive = b.style === 'destructive';
               const isCancel = b.style === 'cancel';
+              const btnStyle = isDestructive ? styles.buttonDestructive : isCancel ? [styles.buttonCancel, { borderColor: primaryColor }] : styles.button;
               return (
                 <TouchableOpacity
                   key={idx}
                   onPress={() => {
-                    try { b.onPress && b.onPress(); } catch (e) { console.error(e); }
-                    onClose();
+                    // Primero cerramos este modal para evitar que un Alert anidado sea
+                    // inmediatamente sobrescrito por el onClose posterior.
+                    try {
+                      onClose();
+                    } catch (e) {
+                      console.error('AlertBox onClose error', e);
+                    }
+                    // Ejecutar el handler en el siguiente tick para permitir que
+                    // el modal se cierre y que un nuevo Alert pueda abrirse.
+                    setTimeout(() => {
+                      try { b.onPress && b.onPress(); } catch (e) { console.error(e); }
+                    }, 0);
                   }}
                   activeOpacity={0.8}
-                  style={isDestructive ? styles.buttonDestructive : isCancel ? [styles.buttonCancel, { borderColor: primaryColor }] : styles.button}
+                  style={[btnStyle, vertical ? styles.buttonFull : styles.buttonInline]}
                 >
                   <Text style={[
                     styles.buttonText,
-                    // cancel/transparent text applied before destructive so destructive can override
                     isCancel ? [styles.buttonTextTransparent, { color: transparentTextColor }] : {},
                     isDestructive ? styles.buttonTextDestructive : {},
                   ]}>{b.text}</Text>
@@ -131,11 +145,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   buttonsRow: {
+    marginTop: 8,
+    width: '100%',
+  },
+  buttonsRowInline: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    marginTop: 8,
+  },
+  buttonsColumn: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    justifyContent: 'center',
+  },
+  buttonInline: {
+    marginHorizontal: 6,
+  },
+  buttonFull: {
+    width: '100%',
+    marginVertical: 6,
+    alignItems: 'center',
   },
   buttonDestructive: {
     backgroundColor: '#FF3B30',

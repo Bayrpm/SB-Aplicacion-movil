@@ -1,112 +1,280 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React from 'react';
+import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
+import ProfileHeader from '@/app/features/profileCitizen/components/profileHeader';
+
+import { useAuth } from '@/app/features/auth';
+import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
+import { getInspectorProfile, type InspectorProfile } from '@/app/features/profileInspector/api/inspectorProfile.api';
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useThemeColor } from '@/hooks/use-theme-color';
 
-export default function TabTwoScreen() {
+import TurnCard from '@/app/features/profileInspector/components/turnCardComponent';
+
+const { height } = Dimensions.get('window');
+
+
+
+export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
+  const router = useRouter();
+  const { user, signOut } = useAuth();
+
+  const containerBg = useThemeColor({ light: '#F5F5F5', dark: '#000000' }, 'background');
+  const actionButtonBg = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background');
+  const logoutIconColor = '#FF5050'; // Rojo siempre
+  const settingsIconColor = colorScheme === 'dark' ? '#FFFFFF' : '#4B5563';
+  const spinnerColor = useThemeColor({ light: '#0A4A90', dark: '#FFFFFF' }, 'tint');
+
+  const [profile, setProfile] = React.useState<InspectorProfile | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+
+      const fetchProfile = async () => {
+        setLoading(true);
+        try {
+          const { data, error } = await getInspectorProfile();
+          if (!isActive) return;
+
+          if (error) {
+            AppAlert.alert('Error', error);
+          }
+
+          setProfile(data);
+        } catch (error) {
+          if (!isActive) return;
+          console.error('Error inesperado al obtener perfil del inspector:', error);
+          AppAlert.alert('Error', 'No se pudo cargar el perfil del inspector');
+        } finally {
+          if (isActive) {
+            setLoading(false);
+          }
+        }
+      };
+
+      fetchProfile();
+
+      return () => {
+        isActive = false;
+      };
+    }, [])
+  );
+
+  const displayName = React.useMemo(() => {
+    const nombre = profile?.perfil?.nombre?.trim() ?? '';
+    const apellido = profile?.perfil?.apellido?.trim() ?? '';
+    const fullName = `${nombre} ${apellido}`.trim();
+
+    if (fullName.length > 0) {
+      return fullName;
+    }
+
+    if (user?.email) {
+      return user.email.split('@')[0];
+    }
+
+    return 'Inspector';
+  }, [profile, user]);
+
+  const displayInitials = React.useMemo(() => {
+    const nombre = profile?.perfil?.nombre?.trim();
+    const apellido = profile?.perfil?.apellido?.trim();
+
+    if (nombre && apellido) {
+      return `${nombre.charAt(0)}${apellido.charAt(0)}`.toUpperCase();
+    }
+
+    if (nombre) {
+      return nombre.substring(0, 2).toUpperCase();
+    }
+
+    const fallback = user?.email?.split('@')[0] ?? 'IN';
+    return fallback.substring(0, 2).toUpperCase();
+  }, [profile, user]);
+
+  const displayEmail = profile?.perfil?.email ?? user?.email ?? 'Sin correo disponible';
+  const displayPhone = profile?.perfil?.telefono ?? 'Sin teléfono registrado';
+  const avatarUrl = profile?.perfil?.avatar_url ?? null;
+
+  const handleSignOut = () => {
+    AppAlert.alert(
+      'Cerrar sesión',
+      '¿Estás seguro que deseas cerrar sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar sesión',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+              router.replace('/(auth)');
+            } catch (error: any) {
+              const msg = mapSupabaseErrorMessage(error?.message);
+              AppAlert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: containerBg,
+            paddingTop: insets.top,
+            justifyContent: 'center',
+            alignItems: 'center',
+          },
+        ]}
+      >
+        <ActivityIndicator size="large" color={spinnerColor} />
+      </View>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <View style={[styles.container, { backgroundColor: containerBg, paddingTop: insets.top }]}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 90 }, // espacio para tab bar u otros elementos
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HEADER */}
+        <View style={styles.headerWrapper}>
+          <ProfileHeader
+            userName={displayName}
+            userEmail={displayEmail}
+            userPhone={displayPhone}
+            userInitials={displayInitials}
+            avatarUrl={avatarUrl}
+          />
+
+          {/* Botón Cerrar sesión */}
+          <TouchableOpacity
+            style={[
+              styles.signOutButton,
+              {
+                backgroundColor: actionButtonBg,
+                top: 14,
+                left: Math.max(16, insets.left + 8),
+              },
+            ]}
+            activeOpacity={0.7}
+            onPress={handleSignOut}
+          >
+            <IconSymbol name="exit-to-app" size={28} color={logoutIconColor} />
+          </TouchableOpacity>
+
+          {/* Botón Configuración (solo visual por ahora) */}
+          <TouchableOpacity
+            style={[
+              styles.settingsButton,
+              {
+                backgroundColor: actionButtonBg,
+                top: 14,
+                right: Math.max(16, insets.right + 8),
+              },
+            ]}
+            activeOpacity={0.7}
+            onPress={() => { }}
+          >
+            <IconSymbol name="settings" size={28} color={settingsIconColor} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Espacio entre header y contenido */}
+        <View style={styles.headerSpacer} />
+
+        {/* Informacion card turnos */}
+        <View style={styles.container}>
+          <TurnCard
+            shiftTitle="Turno mañana"
+            schedule="06:00 am - 13:00 pm"
+            statusText="Estado: Activo."
+            timeAgo="Hace 2 horas."
+            place="Trebol"
+            onPressDetail={() => {
+              console.log('Ver detalle del turno');
+            }}
+            onCloseShift={() => {
+              console.log('Cerrar turno');
+            }}
+          />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
+
+
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
+  container: {
+    flex: 1,
+
+  },
+  signOutButton: {
     position: 'absolute',
+    left: 16,
+    zIndex: 10,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
+  settingsButton: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 10,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  headerWrapper: {
+    height: Math.min(350, height * 0.35), // igual que antes, pero sin lógica extra
+    minHeight: 280,
+    position: 'relative',
+  },
+  headerSpacer: {
+    height: 20,
+  },
+
+
 });

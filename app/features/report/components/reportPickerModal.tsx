@@ -1,16 +1,18 @@
+import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import * as Network from 'expo-network';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
-  Dimensions,
-  Modal,
-  PixelRatio,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Dimensions,
+    Modal,
+    PixelRatio,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReportCategories } from '../hooks/useReportCategories';
@@ -66,6 +68,28 @@ export default function ReportPickerModal({ visible, onClose, onSelect, tabBarHe
   // queden más arriba en la pantalla (ajuste suave). TOP_OFFSET_PUSH nunca será
   // mayor que TOP_OFFSET y tiene un mínimo razonable.
   const TOP_OFFSET_PUSH = Math.max(Math.min(TOP_OFFSET - moderateScale(40), TOP_OFFSET), moderateScale(8));
+
+  // Mostrar aviso de falta de internet al abrir el modal
+  React.useEffect(() => {
+    const checkOnlineAndAlert = async () => {
+      try {
+        const st = await Network.getNetworkStateAsync();
+        const connected = !!st.isConnected && st.isInternetReachable !== false;
+        if (!connected) {
+          AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+            { text: 'Reintentar', onPress: () => checkOnlineAndAlert() },
+            { text: 'Cancelar', style: 'cancel' },
+          ]);
+        }
+      } catch {
+        AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+          { text: 'Reintentar', onPress: () => checkOnlineAndAlert() },
+          { text: 'Cancelar', style: 'cancel' },
+        ]);
+      }
+    };
+    if (visible) checkOnlineAndAlert();
+  }, [visible]);
 
   const handleSelect = (cat: ReportCategory) => {
     onClose();

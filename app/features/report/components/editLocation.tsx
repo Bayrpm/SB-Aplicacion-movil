@@ -1,23 +1,27 @@
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
+import * as Network from 'expo-network';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  FlatList,
-  Keyboard,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    FlatList,
+    Keyboard,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import MapView, { Region } from 'react-native-maps';
+import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { reverseGeocode } from '../lib/googleGeocoding';
+import { getMapStyle } from '../lib/mapStyles';
 import { invokeLocationEdit } from '../types/locationBridge';
 import { getReportFormSnapshot, setReportFormSnapshot } from '../types/reportFormBridge';
 
@@ -27,6 +31,12 @@ export default function EditLocationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams();
+  const scheme = useColorScheme();
+  const textColor = useThemeColor({}, 'text');
+  const iconColor = useThemeColor({}, 'icon');
+  const panelBg = useThemeColor({ light: '#FFFFFF', dark: '#0B1627' }, 'background');
+  const borderBase = useThemeColor({}, 'icon');
+  const borderColor = `${borderBase}26`;
 
   const qLat = Number(params.lat ?? '');
   const qLng = Number(params.lng ?? '');
@@ -44,14 +54,11 @@ export default function EditLocationScreen() {
   const NAV_CONTENT_H = 56;
   const NAV_HEIGHT = (insets.top || 0) + NAV_CONTENT_H;
   const SEARCH_H = 48;
+  // Ajuste: bajar 8% respecto al levantamiento previo (queda +2% neto)
+  const EXTRA_LIFT = Math.round(Dimensions.get('window').height * 0.02);
 
-  // Bottom / tab safe area
-  const navBarHeightAndroid =
-    Platform.OS === 'android'
-      ? Math.max(0, Dimensions.get('screen').height - Dimensions.get('window').height)
-      : 0;
-  const bottomOverlayHeight = Math.max(insets.bottom || 0, Math.min(navBarHeightAndroid || 0, 48));
-  const tabBarHeightLocal = bottomOverlayHeight || 0;
+  // Bottom / tab safe area: confiar en insets.bottom (evita huecos en modo "ocultar cámara")
+  const tabBarHeightLocal = insets.bottom || 0;
 
   // BBOX Región Metropolitana (aprox — minlon,minlat,maxlon,maxlat)
   const STGO_BBOX = { minlon: -71.30, minlat: -33.95, maxlon: -69.90, maxlat: -32.70 };
@@ -75,6 +82,8 @@ export default function EditLocationScreen() {
   const revTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [footerHeight, setFooterHeight] = useState(0);
+
+  const mapStyle = React.useMemo(() => getMapStyle(scheme), [scheme]);
 
   // ===== Helpers =====
   const TYPE_REGEX = /(avenida|av\.?|calle|pasaje|camino|ruta|autopista|alameda|costanera|pje\.?)/i;
@@ -290,9 +299,8 @@ export default function EditLocationScreen() {
         const { latitude, longitude } = pos.coords;
         setCenter({ latitude, longitude });
         try {
-          const places = await Location.reverseGeocodeAsync({ latitude, longitude });
-          const p = places?.[0] ?? null;
-          if (p) setSearchText(formatReverseAddress(p));
+          const g = await reverseGeocode(latitude, longitude);
+          if (g?.formatted) setSearchText(sanitizeShort(g.formatted));
         } catch {}
         if (mapReady && !didInitialCamera.current) {
           didInitialCamera.current = true;
@@ -313,6 +321,24 @@ export default function EditLocationScreen() {
     const q = text.trim();
     if (!q) {
       setSuggestions([]);
+      return;
+    }
+    // Verificar conexión antes de buscar sugerencias
+    try {
+      const st = await Network.getNetworkStateAsync();
+      const connected = !!st.isConnected && st.isInternetReachable !== false;
+      if (!connected) {
+        AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+          { text: 'Reintentar', onPress: () => runAutocomplete(text) },
+          { text: 'Cancelar', style: 'cancel' },
+        ]);
+        return;
+      }
+    } catch {
+      AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+        { text: 'Reintentar', onPress: () => runAutocomplete(text) },
+        { text: 'Cancelar', style: 'cancel' },
+      ]);
       return;
     }
     if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -365,6 +391,24 @@ export default function EditLocationScreen() {
         return;
       }
       if (item.placeId) {
+        // Verificar conexión antes de obtener detalles del lugar
+        try {
+          const st = await Network.getNetworkStateAsync();
+          const connected = !!st.isConnected && st.isInternetReachable !== false;
+          if (!connected) {
+            AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+              { text: 'Reintentar', onPress: () => onSelectSuggestion(item) },
+              { text: 'Cancelar', style: 'cancel' },
+            ]);
+            return;
+          }
+        } catch {
+          AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+            { text: 'Reintentar', onPress: () => onSelectSuggestion(item) },
+            { text: 'Cancelar', style: 'cancel' },
+          ]);
+          return;
+        }
         const coords = await fetchPlaceDetails(item.placeId);
         if (coords) {
           await animateTo(coords.lat, coords.lon, 19);
@@ -379,6 +423,24 @@ export default function EditLocationScreen() {
     const q = text.trim();
     if (!q) return;
     try {
+      // Verificar conexión antes de buscar
+      try {
+        const st = await Network.getNetworkStateAsync();
+        const connected = !!st.isConnected && st.isInternetReachable !== false;
+        if (!connected) {
+          AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+            { text: 'Reintentar', onPress: () => runFreeSearch(text) },
+            { text: 'Cancelar', style: 'cancel' },
+          ]);
+          return;
+        }
+      } catch {
+        AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+          { text: 'Reintentar', onPress: () => runFreeSearch(text) },
+          { text: 'Cancelar', style: 'cancel' },
+        ]);
+        return;
+      }
       setSuggestLoading(true);
       await runAutocomplete(q);
       const items = cacheRef.current.get(`${q}|g`) || suggestions;
@@ -435,6 +497,24 @@ export default function EditLocationScreen() {
 
   const centerToMyLocation = async () => {
     try {
+      // Verificar conexión para geocodificación de dirección (la ubicación GPS puede funcionar offline)
+      try {
+        const st = await Network.getNetworkStateAsync();
+        const connected = !!st.isConnected && st.isInternetReachable !== false;
+        if (!connected) {
+          AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+            { text: 'Reintentar', onPress: () => centerToMyLocation() },
+            { text: 'Cancelar', style: 'cancel' },
+          ]);
+          return;
+        }
+      } catch {
+        AppAlert.alert('Sin conexión a la red', 'Por favor verifica tu conexión a internet.', [
+          { text: 'Reintentar', onPress: () => centerToMyLocation() },
+          { text: 'Cancelar', style: 'cancel' },
+        ]);
+        return;
+      }
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         AppAlert.alert('Ubicación', 'Permiso denegado para acceder a la ubicación.');
@@ -444,9 +524,8 @@ export default function EditLocationScreen() {
       const { latitude, longitude } = pos.coords;
       await animateTo(latitude, longitude, 19);
       try {
-        const places = await Location.reverseGeocodeAsync({ latitude, longitude });
-        const p = places?.[0] ?? null;
-        if (p) setSearchText(formatReverseAddress(p));
+        const g = await reverseGeocode(latitude, longitude);
+        if (g?.formatted) setSearchText(sanitizeShort(g.formatted));
       } catch {}
     } catch {
       AppAlert.alert('Ubicación', 'No se pudo centrar en tu ubicación.');
@@ -457,13 +536,9 @@ export default function EditLocationScreen() {
     setRevLoading(true);
     try {
       // Siempre usa el centro exacto del mapa
-      const places = await Location.reverseGeocodeAsync({
-        latitude: region.latitude,
-        longitude: region.longitude,
-      });
-      const p = places?.[0] ?? null;
+      const g = await reverseGeocode(Number(region.latitude), Number(region.longitude));
       // Solo actualiza el texto si no está cargando
-      if (p && !suggestLoading) setSearchText(formatReverseAddress(p));
+      if (g?.formatted && !suggestLoading) setSearchText(sanitizeShort(g.formatted));
     } catch {
       // ignore
     } finally {
@@ -492,8 +567,8 @@ export default function EditLocationScreen() {
       </View>
 
       {/* Search bar */}
-      <View style={[styles.searchRow, { top: NAV_HEIGHT + 8, height: SEARCH_H }]}>
-        <View style={styles.searchLeft}><IconSymbol name="search" size={20} color="#999" /></View>
+      <View style={[styles.searchRow, { top: NAV_HEIGHT + 8, height: SEARCH_H, backgroundColor: panelBg }] }>
+        <View style={styles.searchLeft}><IconSymbol name="search" size={20} color={iconColor} /></View>
         {/* El loader se muestra, pero no se cierra el teclado */}
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <TextInput
@@ -504,8 +579,8 @@ export default function EditLocationScreen() {
             onChangeText={(t) => { setSearchText(t); setIsTyping(true); }}
             onSubmitEditing={(e) => runFreeSearch(e.nativeEvent.text)}
             placeholder="Buscar dirección…"
-            placeholderTextColor="#999"
-            style={styles.searchInput}
+            placeholderTextColor={iconColor}
+            style={[styles.searchInput, { color: textColor }]}
             returnKeyType="search"
           />
           {(suggestLoading || revLoading) && (
@@ -521,7 +596,7 @@ export default function EditLocationScreen() {
               style={styles.iconBtn}
               accessibilityLabel="Borrar búsqueda"
             >
-              <IconSymbol name="close" size={20} color="#666" />
+              <IconSymbol name="close" size={20} color={iconColor} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -530,7 +605,7 @@ export default function EditLocationScreen() {
 
       {/* Suggestions */}
       {isTyping && suggestions.length > 0 && (
-        <View style={[styles.suggestions, { top: NAV_HEIGHT + 8 + SEARCH_H + 6, zIndex: 9999 }]}>
+        <View style={[styles.suggestions, { top: NAV_HEIGHT + 8 + SEARCH_H + 6, zIndex: 9999, backgroundColor: panelBg }]}>
           <FlatList
             data={suggestions}
             keyboardShouldPersistTaps="handled"
@@ -539,8 +614,8 @@ export default function EditLocationScreen() {
             windowSize={5}
             removeClippedSubviews
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.suggestItem} onPress={() => onSelectSuggestion(item)}>
-                <Text numberOfLines={2}>{item.label}</Text>
+              <TouchableOpacity style={[styles.suggestItem, { borderBottomColor: borderColor, backgroundColor: panelBg }]} onPress={() => onSelectSuggestion(item)}>
+                <Text numberOfLines={2} style={{ color: textColor }}>{item.label}</Text>
               </TouchableOpacity>
             )}
             ListEmptyComponent={suggestLoading ? <ActivityIndicator size="small" color="#0A4A90" style={{ margin: 12 }} /> : null}
@@ -549,11 +624,12 @@ export default function EditLocationScreen() {
       )}
 
       {/* Map */}
-      <View style={[styles.mapWrap, { marginTop: NAV_HEIGHT, marginBottom: tabBarHeightLocal + 4 }]} pointerEvents="box-none">
+  <View style={[styles.mapWrap, { marginTop: NAV_HEIGHT, marginBottom: tabBarHeightLocal + 4 }]} pointerEvents="box-none">
         {center ? (
           <MapView
             ref={mapRef}
             style={styles.map}
+            provider={PROVIDER_GOOGLE}
             initialRegion={{ latitude: center.latitude, longitude: center.longitude, latitudeDelta: 0.0005, longitudeDelta: 0.0005 }}
             onMapReady={async () => {
               setMapReady(true);
@@ -572,6 +648,7 @@ export default function EditLocationScreen() {
             }}
             onRegionChangeComplete={onRegionChangeComplete}
             showsMyLocationButton={false}
+            customMapStyle={mapStyle}
           />
         ) : (
           <View style={styles.mapPlaceholder}><ActivityIndicator size="large" color="#0A4A90" /></View>
@@ -583,13 +660,13 @@ export default function EditLocationScreen() {
         </View>
 
         {/* FAB centrar en mi ubicación */}
-        <TouchableOpacity style={[styles.centerFab, { bottom: tabBarHeightLocal + footerHeight + 12 }]} onPress={centerToMyLocation} accessibilityLabel="Centrar ubicación">
+  <TouchableOpacity style={[styles.centerFab, { bottom: tabBarHeightLocal + footerHeight + 12 + EXTRA_LIFT }]} onPress={centerToMyLocation} accessibilityLabel="Centrar ubicación">
           <IconSymbol name="my-location" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
       {/* Footer */}
-      <View onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)} style={[styles.footer, { bottom: tabBarHeightLocal + 8 }]}>
+  <View onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)} style={[styles.footer, { bottom: tabBarHeightLocal + 8 + EXTRA_LIFT }]}>
         <TouchableOpacity
           style={styles.saveBtn}
           onPress={() => {
@@ -603,40 +680,9 @@ export default function EditLocationScreen() {
                     let full = basePayload.ubicacionTexto ?? '';
                     if (center) {
                       try {
-                        const places = await Location.reverseGeocodeAsync({ latitude: center.latitude, longitude: center.longitude });
-                        const p = places?.[0] ?? null;
-                        if (p) {
-                          const pp: any = p as any;
-                          let streetRaw = (pp.street || pp.name || '').trim();
-                          let number = '';
-                          if (pp.name && /^\d+$/.test(String(pp.name).trim())) {
-                            number = String(pp.name).trim();
-                            streetRaw = (pp.street || '').trim();
-                          } else {
-                            const mNameNum = String(pp.name || '').trim().match(/(\d+)$/);
-                            if (mNameNum && pp.street) {
-                              number = mNameNum[1];
-                              streetRaw = (pp.street || '').trim();
-                            } else {
-                              const mStreetNum = streetRaw.match(/^(.*?)[,\s]+(\d+)\s*$/);
-                              if (mStreetNum) {
-                                streetRaw = (mStreetNum[1] || '').trim();
-                                number = mStreetNum[2] || '';
-                              }
-                            }
-                          }
-                          streetRaw = streetRaw
-                            .replace(/^\s*(Av\.?|Av)\s+/i, 'Avenida ')
-                            .replace(/^\s*(C\.?|Calle|C)\s+/i, 'Calle ')
-                            .replace(/^\s*(Pje\.?|Pje)\s+/i, 'Pasaje ')
-                            .replace(/^\s*(Gral\.?|Gral)\s+/i, 'General ')
-                            .replace(/^\s*(Bv\.?|Bvar\.?|Bulevar|Bulev)\s+/i, 'Bulevar ');
-
-                          const streetAndNumber = [streetRaw, number].filter(Boolean).join(' ').trim();
-                          const postalCity = [pp.postalCode, pp.city || pp.town || pp.village || pp.county || pp.municipality].filter(Boolean).join(' ').trim();
-                          const region = pp.region || '';
-                          const composed = [streetAndNumber, postalCity, region].filter(Boolean).join(', ').trim();
-                          if (composed) full = composed;
+                        const g = await reverseGeocode(center.latitude, center.longitude);
+                        if (g?.formatted) {
+                          full = sanitizeShort(g.formatted);
                         }
                       } catch (e) {}
                     }

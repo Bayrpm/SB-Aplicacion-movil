@@ -41,6 +41,7 @@ const FA_MAPPING: Record<string, string> = {
   'user-secret': 'user-secret',
   // alias corto para X/Twitter
   'x': 'x',
+  'clock': 'clock',
 };
 
 // Mapeo a MaterialCommunityIcons (MC)
@@ -52,6 +53,18 @@ const MC_MAPPING: Record<string, string> = {
   'map-marker': 'map-marker',
   'send': 'send',
   'close': 'close',
+  // estados y selección
+  'heart': 'heart',
+  'heart-outline': 'heart-outline',
+  'heart.fill': 'heart',
+  'circle-outline': 'circle-outline',
+  // Interacciones estilo Instagram
+  'hand.thumbsdown': 'thumb-down-outline',
+  'hand.thumbsdown.fill': 'thumb-down',
+  'bubble.left': 'comment-outline',
+  'message': 'comment-outline',
+  'paperplane': 'send',
+  'xmark.circle.fill': 'close-circle',
   // report category icons (MaterialCommunityIcons)
   'ambulance': 'ambulance',
   'alert-circle-outline': 'alert-circle-outline',
@@ -61,6 +74,9 @@ const MC_MAPPING: Record<string, string> = {
   'bell-ring-outline': 'bell-ring-outline',
   'police-badge': 'police-badge',
   'dots-horizontal': 'dots-horizontal',
+  // alias de compatibilidad (evitar warnings en nombres cortos)
+  'police': 'police-badge',
+  'dots': 'dots-horizontal',
 };
 
 // Mapeo a Ionicons
@@ -81,6 +97,28 @@ const EXTRA_MATERIAL: Record<string, string> = {
   'arrow-drop-up': 'arrow-drop-up',
   'location-searching': 'location-searching',
   'gps-fixed': 'gps-fixed',
+  // alias cómodos
+  'calendar': 'calendar-today',
+  'location-pin': 'place',
+  'filter-list': 'filter-list',
+  'check-circle': 'check-circle',
+  'account': 'account-circle',
+  'edit': 'edit',
+  'email': 'email',
+  'phone': 'phone',
+  'lock': 'lock',
+  'logout': 'logout',
+  'settings': 'settings',
+  'exit-to-app': 'exit-to-app',
+  'text-fields': 'text-fields',
+  'brightness-6': 'brightness-6',
+  'wb-sunny': 'wb-sunny',
+  'nightlight': 'nightlight',
+  'smartphone': 'smartphone',
+  'notifications': 'notifications',
+  'description': 'description',
+  'security': 'security',
+  'check': 'check',
 };
 
 /**
