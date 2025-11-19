@@ -13,7 +13,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
-import TurnCard from '@/app/features/profileInspector/components/turnCardComponent';
+import TurnCardContainer from '@/app/features/profileInspector/components/turnCardComponent';
 
 const { height } = Dimensions.get('window');
 
@@ -203,12 +203,7 @@ export default function HomeScreen() {
 
         {/* Informacion card turnos */}
         <View style={styles.container}>
-          <TurnCard
-            shiftTitle="Turno mañana"
-            schedule="06:00 am - 13:00 pm"
-            statusText="Estado: Activo."
-            timeAgo="Hace 2 horas."
-            place="Trebol"
+          <TurnCardContainer
             onPressDetail={() => {
               console.log('Ver detalle del turno');
             }}
