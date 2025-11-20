@@ -1,9 +1,10 @@
 import { Image } from "expo-image";
 import React from "react";
-import { StyleSheet, Text, useColorScheme, View } from 'react-native'; // import { View } from 'react-native-reanimated/lib/typescript/Animated';
+import { Button, StyleSheet, Text, useColorScheme, View } from 'react-native'; // import { View } from 'react-native-reanimated/lib/typescript/Animated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import MyCases from '@/app/features/homeInspector/components/myCasesComponent';
+
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 
 export default function HomeScreen() {
@@ -45,6 +46,15 @@ export default function HomeScreen() {
       } //cierre de header image
 
     > {/*cierre de  ParallaxScrollView */}
+      
+      {/* Boton Registrar Movil */}
+      <View>
+        <Button  onPress={function (): void { throw new Error("Function not implemented."); }}
+        title="Registrar Movil"/>
+      </View>
+      
+
+      {/* Titulo Mis Casos */}
       <View style={styles.contenedor}>
         <Text style={styles.titulo} > Mis casos</Text>
       </View>
