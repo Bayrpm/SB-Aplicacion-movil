@@ -4,7 +4,7 @@
 // app/features/profileInspector/components/TurnCardContainer.tsx
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { getTurnoInspector, InspectorTurnoResponse } from '../api/turnInspector.api';
+import { getTurnoInspectorCompat as getTurnoInspector, InspectorTurnoResponse } from '../api/inspectorProfile.api';
 
 interface TurnCardProps {
   shiftTitle: string;
