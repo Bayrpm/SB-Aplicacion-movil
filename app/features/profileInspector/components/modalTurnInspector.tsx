@@ -1,15 +1,15 @@
 // app/features/profileInspector/components/modalTurnInspector.tsx
 import React from 'react';
 import {
-    Modal,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
-    registrarIngresoTurnoActual,
-    TurnoIngresoResult,
+  registrarIngresoTurnoActual,
+  TurnoIngresoResult,
 } from '../api/turnInspector.api';
 
 interface ModalTurnInspectorProps {
@@ -28,7 +28,7 @@ export class ModalTurnInspector extends React.Component<
   ModalTurnInspectorProps,
   ModalTurnInspectorState
 > {
-  private intervalId?: NodeJS.Timeout;
+  private intervalId?: number;
 
   constructor(props: ModalTurnInspectorProps) {
     super(props);

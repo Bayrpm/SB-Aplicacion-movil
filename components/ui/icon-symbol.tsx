@@ -119,6 +119,7 @@ const EXTRA_MATERIAL: Record<string, string> = {
   'description': 'description',
   'security': 'security',
   'check': 'check',
+  'car': 'car'
 };
 
 /**
