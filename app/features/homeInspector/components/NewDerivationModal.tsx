@@ -23,7 +23,17 @@ export default function NewDerivationModal({
   onView,
   onDismiss,
 }: NewDerivationModalProps) {
-  if (!derivacion) return null;
+  // Log para debugging
+  React.useEffect(() => {
+    console.log('[NewDerivationModal] 🎭 Render - visible:', visible, 'derivacion:', derivacion?.folio);
+  }, [visible, derivacion]);
+
+  if (!derivacion) {
+    console.log('[NewDerivationModal] ❌ No hay derivación - no renderizar');
+    return null;
+  }
+
+  console.log('[NewDerivationModal] ✅ Renderizando modal con visible:', visible);
 
   const titulo = derivacion.titulo || 'Nueva derivación asignada';
   const folio = derivacion.folio || 'Sin folio';
