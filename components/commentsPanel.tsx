@@ -31,6 +31,8 @@ type Props = {
   onSubmit: (parentId?: number | null) => Promise<void> | void;
   onLike?: (commentId: string, currentlyLiked: boolean) => Promise<void> | void;
   onReply?: (comment: CommentItem) => void;
+  /** Si true, desactiva like/responder/comentar (modo solo lectura) */
+  readOnly?: boolean;
   currentUserId?: string | null;
   currentUserAvatar?: string | null;
   currentUserName?: string | null;
@@ -46,6 +48,7 @@ export default function CommentsPanel({
   onSubmit,
   onLike,
   onReply,
+  readOnly = false,
   onEdit,
   onDelete,
   currentUserId,
@@ -188,6 +191,7 @@ export default function CommentsPanel({
   }, [insets.bottom]);
 
   const handleLike = async (c: CommentItem) => {
+    if (readOnly) return; // no permitir interacciones en modo solo lectura
     const prev = localLikes[String(c.id)] ?? { count: c.likes ?? 0, liked: !!c.liked };
     const next = { count: prev.liked ? Math.max(0, prev.count - 1) : prev.count + 1, liked: !prev.liked };
     setLocalLikes((p) => ({ ...p, [String(c.id)]: next }));
@@ -199,6 +203,7 @@ export default function CommentsPanel({
   };
 
   const handleReply = (c: CommentItem) => {
+    if (readOnly) return; // no permitir responder en modo solo lectura
     const author = (c.author ?? c.autor ?? 'usuario') as string;
     const mention = `@${author.split(' ')[0] || author} `;
     setCommentText(mention);
@@ -286,17 +291,20 @@ export default function CommentsPanel({
               <TouchableOpacity
                 activeOpacity={0.95}
                 delayLongPress={400}
-                onPressIn={() => startLongPress(String(c.id), () => {
+                onPressIn={() => {
+                  // Solo permitir abrir opciones mediante long-press si no estamos en readOnly
                   const authoredById = !!(currentUserId && c.usuario_id && String(c.usuario_id) === String(currentUserId));
                   const avatarUriLocal = c.avatar ?? c.avatar_url ?? c.autor_avatar ?? c.foto ?? c.imagen_url ?? (c.usuario_id && currentUserId && String(c.usuario_id) === String(currentUserId) ? currentUserAvatar : null);
                   const authoredByAvatar = !!(currentUserAvatar && avatarUriLocal && String(avatarUriLocal) === String(currentUserAvatar));
                   const commentAuthor = String(c.author ?? c.autor ?? '').trim();
                   const authoredByName = !!(currentUserName && nameMatches(commentAuthor, currentUserName));
-                  if (authoredById || authoredByAvatar || authoredByName) {
-                    setSelectedComment(c);
-                    setOptionsModalVisible(true);
+                  if (!readOnly && (authoredById || authoredByAvatar || authoredByName)) {
+                    startLongPress(String(c.id), () => {
+                      setSelectedComment(c);
+                      setOptionsModalVisible(true);
+                    });
                   }
-                })}
+                }}
                 onPressOut={() => cancelLongPress(String(c.id))}
                 style={styles.commentRow}
               >
@@ -317,19 +325,19 @@ export default function CommentsPanel({
                   <Text style={{ color: textColor, marginTop: 6, fontSize: getFontSizeValue(fontSize, 14) }}>{c.text ?? c.contenido}</Text>
 
                   <View style={styles.commentActionsRow}>
-                    <View style={styles.commentActionsLeft}>
-                      <TouchableOpacity onPress={() => handleLike(c)} style={styles.commentActionButton}>
-                        <IconSymbol name={likesState.liked ? 'heart.fill' : 'heart'} size={18} color={likesState.liked ? '#EF4444' : textColor} />
-                        <Text style={[styles.commentActionText, { color: textColor }]}>{likesState.count || 0}</Text>
-                      </TouchableOpacity>
-                    </View>
+                      <View style={styles.commentActionsLeft}>
+                        <TouchableOpacity onPress={() => { if (!readOnly) handleLike(c); }} style={styles.commentActionButton} disabled={readOnly}>
+                          <IconSymbol name={likesState.liked ? 'heart.fill' : 'heart'} size={18} color={likesState.liked ? '#EF4444' : (readOnly ? mutedColor : textColor)} />
+                          <Text style={[styles.commentActionText, { color: readOnly ? mutedColor : textColor }]}>{likesState.count || 0}</Text>
+                        </TouchableOpacity>
+                      </View>
 
-                    <View style={styles.commentActionsRight}>
-                      <TouchableOpacity onPress={() => handleReply(c)} style={styles.commentActionButton}>
-                        <IconSymbol name="reply" size={16} color={mutedColor} />
-                        <Text style={[styles.commentActionText, { color: mutedColor }]}>Responder</Text>
-                      </TouchableOpacity>
-                    </View>
+                      <View style={styles.commentActionsRight}>
+                        <TouchableOpacity onPress={() => { if (!readOnly) handleReply(c); }} style={styles.commentActionButton} disabled={readOnly}>
+                          <IconSymbol name="reply" size={16} color={mutedColor} />
+                          <Text style={[styles.commentActionText, { color: mutedColor }]}>Responder</Text>
+                        </TouchableOpacity>
+                      </View>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -349,17 +357,19 @@ export default function CommentsPanel({
                         <TouchableOpacity
                           activeOpacity={0.95}
                           delayLongPress={400}
-                          onPressIn={() => startLongPress(String(r.id), () => {
+                          onPressIn={() => {
                             const rAvatar = r.avatar ?? r.avatar_url ?? r.autor_avatar ?? r.foto ?? r.imagen_url ?? null;
                             const authoredByIdR = !!(currentUserId && r.usuario_id && String(r.usuario_id) === String(currentUserId));
                             const authoredByAvatarR = !!(currentUserAvatar && rAvatar && String(rAvatar) === String(currentUserAvatar));
                             const rAuthor = String(r.author ?? r.autor ?? '').trim();
                             const authoredByNameR = !!(currentUserName && nameMatches(rAuthor, currentUserName));
-                            if (authoredByIdR || authoredByAvatarR || authoredByNameR) {
-                              setSelectedComment(r);
-                              setOptionsModalVisible(true);
+                            if (!readOnly && (authoredByIdR || authoredByAvatarR || authoredByNameR)) {
+                              startLongPress(String(r.id), () => {
+                                setSelectedComment(r);
+                                setOptionsModalVisible(true);
+                              });
                             }
-                          })}
+                          }}
                           onPressOut={() => cancelLongPress(String(r.id))}
                           style={[styles.replyRow]}
                         >
@@ -378,11 +388,11 @@ export default function CommentsPanel({
                             </View>
                             <Text style={{ color: textColor, marginTop: 4, fontSize: getFontSizeValue(fontSize, 13) }}>{r.text ?? r.contenido}</Text>
                             <View style={[styles.commentActionsRow, { marginTop: 6 }]}> 
-                              <TouchableOpacity onPress={() => handleLike(r)} style={styles.commentActionButton}>
-                                <IconSymbol name={rLikes.liked ? 'heart.fill' : 'heart'} size={16} color={rLikes.liked ? '#EF4444' : textColor} />
-                                <Text style={[styles.commentActionText, { color: textColor }]}>{rLikes.count || 0}</Text>
+                              <TouchableOpacity onPress={() => { if (!readOnly) handleLike(r); }} style={styles.commentActionButton} disabled={readOnly}>
+                                <IconSymbol name={rLikes.liked ? 'heart.fill' : 'heart'} size={16} color={rLikes.liked ? '#EF4444' : (readOnly ? mutedColor : textColor)} />
+                                <Text style={[styles.commentActionText, { color: readOnly ? mutedColor : textColor }]}>{rLikes.count || 0}</Text>
                               </TouchableOpacity>
-                              <TouchableOpacity onPress={() => handleReply(r)} style={[styles.commentActionButton, { marginLeft: 10 }]}> 
+                              <TouchableOpacity onPress={() => { if (!readOnly) handleReply(r); }} style={[styles.commentActionButton, { marginLeft: 10 }]} disabled={readOnly}> 
                                 <IconSymbol name="reply" size={14} color={mutedColor} />
                                 <Text style={[styles.commentActionText, { color: mutedColor, fontSize: 13 }]}>Responder</Text>
                               </TouchableOpacity>
@@ -452,94 +462,96 @@ export default function CommentsPanel({
   {/* Ajustar marginBottom dinámicamente según la altura del teclado para builds standalone */}
   {/* Ajustar marginBottom dinámicamente según la altura del teclado para builds standalone */}
     {/* Input absolutado para quedarse pegado al borde inferior del contenedor */}
-    <View
-      style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        // Si el teclado está abierto, posicionar sobre el teclado.
-        // Cuando está cerrado, anclamos el contenedor exactamente a bottom: 0
-        // y reducimos el paddingBottom interno para que el input quede más cerca
-        // de la barra de navegación (pero sin overlappear la safe-area).
-        bottom: keyboardHeight > 0 ? Math.max(0, keyboardHeight + 8) : 0,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        // small reduction of safe-area padding to bring input visually closer to nav
-        paddingBottom: Math.max(0, (insets.bottom || 0) - 6),
-        backgroundColor: 'transparent',
-      }}
-      // Medir la altura real del input para ajustar el padding dinámicamente
-      onLayout={(e) => {
-        try {
-          const h = e.nativeEvent.layout.height;
-          if (h && h > 0 && h !== measuredInputHeight) setMeasuredInputHeight(h);
-        } catch (err) {}
-      }}
-    >
-        {editingCommentId ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <View style={{ backgroundColor: itemBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, flex: 1 }}>
-              <Text style={{ color: textColor }}>Editando comentario</Text>
+    {!readOnly && (
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          // Si el teclado está abierto, posicionar sobre el teclado.
+          // Cuando está cerrado, anclamos el contenedor exactamente a bottom: 0
+          // y reducimos el paddingBottom interno para que el input quede más cerca
+          // de la barra de navegación (pero sin overlappear la safe-area).
+          bottom: keyboardHeight > 0 ? Math.max(0, keyboardHeight + 8) : 0,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+          // small reduction of safe-area padding to bring input visually closer to nav
+          paddingBottom: Math.max(0, (insets.bottom || 0) - 6),
+          backgroundColor: 'transparent',
+        }}
+        // Medir la altura real del input para ajustar el padding dinámicamente
+        onLayout={(e) => {
+          try {
+            const h = e.nativeEvent.layout.height;
+            if (h && h > 0 && h !== measuredInputHeight) setMeasuredInputHeight(h);
+          } catch (err) {}
+        }}
+      >
+          {editingCommentId ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <View style={{ backgroundColor: itemBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, flex: 1 }}>
+                <Text style={{ color: textColor }}>Editando comentario</Text>
+              </View>
+              <TouchableOpacity onPress={() => { setEditingCommentId(null); setCommentText(''); }} style={{ marginLeft: 8, padding: 6 }}>
+                <IconSymbol name="close" size={16} color={mutedColor} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => { setEditingCommentId(null); setCommentText(''); }} style={{ marginLeft: 8, padding: 6 }}>
-              <IconSymbol name="close" size={16} color={mutedColor} />
-            </TouchableOpacity>
-          </View>
-        ) : replyTo ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <View style={{ backgroundColor: itemBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, flex: 1 }}>
-              <Text style={{ color: textColor }}>Respondiendo a @{replyTo.author}</Text>
+          ) : replyTo ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <View style={{ backgroundColor: itemBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, flex: 1 }}>
+                <Text style={{ color: textColor }}>Respondiendo a @{replyTo.author}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setReplyTo(null)} style={{ marginLeft: 8, padding: 6 }}>
+                <IconSymbol name="close" size={16} color={mutedColor} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={() => setReplyTo(null)} style={{ marginLeft: 8, padding: 6 }}>
-              <IconSymbol name="close" size={16} color={mutedColor} />
-            </TouchableOpacity>
-          </View>
-        ) : null}
+          ) : null}
 
-        <View style={styles.inputRow}> 
-          <TextInput
-            ref={inputRef}
-            value={commentText}
-            onChangeText={setCommentText}
-            placeholder="Escribe un comentario..."
-            placeholderTextColor={mutedColor}
-            style={[
-              styles.input,
-              { color: textColor, backgroundColor: itemBg, borderColor: '#00000010' },
-            ]}
-            multiline
-          />
-          <TouchableOpacity
-            onPress={async () => {
-              if (isSubmitting || !commentText.trim()) return;
-              const prevText = commentText;
-              try {
-                setIsSubmittingLocal(true);
-                // If editing a comment, call onEdit
-                if (editingCommentId && typeof onEdit === 'function') {
-                  await onEdit(editingCommentId, commentText.trim());
-                  setEditingCommentId(null);
-                  setCommentText('');
-                } else {
-                  setReplyTo(null);
-                  // Optimistic UI: clear input immediately so user sees fast feedback
-                  setCommentText('');
-                  await onSubmit(replyTo ? Number(replyTo.id) : undefined);
+          <View style={styles.inputRow}> 
+            <TextInput
+              ref={inputRef}
+              value={commentText}
+              onChangeText={setCommentText}
+              placeholder="Escribe un comentario..."
+              placeholderTextColor={mutedColor}
+              style={[
+                styles.input,
+                { color: textColor, backgroundColor: itemBg, borderColor: '#00000010' },
+              ]}
+              multiline
+            />
+            <TouchableOpacity
+              onPress={async () => {
+                if (isSubmitting || !commentText.trim()) return;
+                const prevText = commentText;
+                try {
+                  setIsSubmittingLocal(true);
+                  // If editing a comment, call onEdit
+                  if (editingCommentId && typeof onEdit === 'function') {
+                    await onEdit(editingCommentId, commentText.trim());
+                    setEditingCommentId(null);
+                    setCommentText('');
+                  } else {
+                    setReplyTo(null);
+                    // Optimistic UI: clear input immediately so user sees fast feedback
+                    setCommentText('');
+                    await onSubmit(replyTo ? Number(replyTo.id) : undefined);
+                  }
+                } catch (e) {
+                  // restore previous text on error
+                  setCommentText(prevText);
+                } finally {
+                  setIsSubmittingLocal(false);
                 }
-              } catch (e) {
-                // restore previous text on error
-                setCommentText(prevText);
-              } finally {
-                setIsSubmittingLocal(false);
-              }
-            }}
-            disabled={isSubmitting || !commentText.trim()}
-            style={{ padding: 8 }}
-          >
-            {isSubmitting ? <ActivityIndicator size="small" color={accentColor} /> : <IconSymbol name="paperplane" size={22} color={!commentText.trim() ? mutedColor : accentColor} />}
-          </TouchableOpacity>
+              }}
+              disabled={isSubmitting || !commentText.trim()}
+              style={{ padding: 8 }}
+            >
+              {isSubmitting ? <ActivityIndicator size="small" color={accentColor} /> : <IconSymbol name="paperplane" size={22} color={!commentText.trim() ? mutedColor : accentColor} />}
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+    )}
     </View>
     </KeyboardAvoidingView>
   );

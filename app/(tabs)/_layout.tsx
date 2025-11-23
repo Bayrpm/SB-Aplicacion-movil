@@ -144,10 +144,11 @@ export default function TabLayout() {
     <>
       <FontSizeProvider>
         <MovilProvider>
-  {/* Background panel under the tab bar to avoid seeing app content through it.
-    Use full tabBarHeight and anchor to bottom:0 so it always covers the area
-    regardless of extraBottom/platform differences. */}
-  <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: tabBarHeight, backgroundColor: '#222', zIndex: 998 }} />
+  {/* Background: native tab bar will be blue; render a small overlay only
+     for the system/navigation area (insets.bottom) to avoid tinting system buttons. */}
+  {(insets.bottom || 0) > 0 ? (
+    <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: insets.bottom || 0, backgroundColor: '#222', zIndex: 998 }} pointerEvents="none" />
+  ) : null}
 
         
         {/* barra navegacion inspector */}
@@ -172,6 +173,8 @@ export default function TabLayout() {
           paddingBottom: insets.bottom || 0,
           paddingTop: 8,
           overflow: 'visible',
+          // Use the app's blue as the bar background; keep bottom overlay
+          // to darken the system navigation area so buttons are not tinted.
           backgroundColor: '#0A4A90',
           borderTopWidth: 0,
           elevation: 12,

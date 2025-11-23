@@ -1079,6 +1079,7 @@ export default function ReportDetailModal({
                 commentText={commentText}
                 setCommentText={setCommentText}
                 onSubmit={submitComment}
+                readOnly={true}
                 onLike={async (commentId: string, currentlyLiked: boolean) => {
                   // Optimistically update comments locally
                   setComments((prev) => prev.map((c) => c.id === commentId ? ({ ...c, likes: (c.likes ?? 0) + (currentlyLiked ? -1 : 1), liked: !currentlyLiked }) : c));
