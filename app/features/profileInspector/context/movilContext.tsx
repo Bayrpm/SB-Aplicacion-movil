@@ -21,6 +21,28 @@ export function MovilProvider({ children }: { children: React.ReactNode }) {
   const [datosMovilActivo, setDatosMovilActivo] = useState<{ movil: Movil; km_inicio: number } | null>(null);
   const [loadingMovil, setLoadingMovil] = useState(true);
 
+  // Guardar en AsyncStorage automáticamente cuando cambian los estados
+  useEffect(() => {
+    const guardarEnCache = async () => {
+      try {
+        if (movilActivo && datosMovilActivo) {
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(datosMovilActivo));
+          console.log('[MovilContext] 💾 Estado del móvil guardado automáticamente en cache:', datosMovilActivo.movil.patente);
+        } else if (!movilActivo) {
+          await AsyncStorage.removeItem(STORAGE_KEY);
+          console.log('[MovilContext] 🗑️ Cache del móvil eliminado automáticamente');
+        }
+      } catch (error) {
+        console.error('[MovilContext] ❌ Error al guardar estado del móvil:', error);
+      }
+    };
+
+    // Solo guardar si no está en loading (evitar guardado durante inicialización)
+    if (!loadingMovil) {
+      guardarEnCache();
+    }
+  }, [movilActivo, datosMovilActivo, loadingMovil]);
+
   // Guardar en AsyncStorage cuando cambia el estado del móvil
   const guardarEstadoMovil = useCallback(async (activo: boolean, datos: { movil: Movil; km_inicio: number } | null) => {
     try {
@@ -37,28 +59,36 @@ export function MovilProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const recargarMovilActivo = useCallback(async () => {
-    console.log('[MovilContext] Recargando estado del móvil activo...');
+    console.log('[MovilContext] ========================================');
+    console.log('[MovilContext] 🔄 Recargando estado del móvil activo...');
     setLoadingMovil(true);
     
     // Primero intentar cargar desde cache
+    let hayCacheValido = false;
     try {
       const cached = await AsyncStorage.getItem(STORAGE_KEY);
+      console.log('[MovilContext] 📦 Cache encontrado:', !!cached);
       if (cached) {
         const datosCache = JSON.parse(cached);
-        console.log('[MovilContext] Móvil cargado desde cache:', datosCache.movil.patente);
+        console.log('[MovilContext] ✅ Móvil cargado desde cache:', datosCache.movil.patente, 'km:', datosCache.km_inicio);
         setMovilActivo(true);
         setDatosMovilActivo(datosCache);
+        hayCacheValido = true;
+      } else {
+        console.log('[MovilContext] ⚠️ No hay cache guardado');
       }
     } catch (error) {
-      console.error('[MovilContext] Error al leer cache:', error);
+      console.error('[MovilContext] ❌ Error al leer cache:', error);
     }
 
     // Luego verificar con la BD
+    console.log('[MovilContext] 🔍 Consultando BD...');
     const result = await obtenerUsoActivo();
-    console.log('[MovilContext] Resultado de obtenerUsoActivo:', {
+    console.log('[MovilContext] 📊 Resultado de obtenerUsoActivo:', {
       ok: result.ok,
       type: result.ok ? 'success' : result.type,
       movil: result.ok ? result.movil.patente : 'N/A',
+      km_inicio: result.ok ? result.km_inicio : 'N/A',
     });
     
     if (result.ok) {
@@ -78,11 +108,18 @@ export function MovilProvider({ children }: { children: React.ReactNode }) {
       await guardarEstadoMovil(false, null);
     } else {
       // Error de conexión u otro - mantener cache si existe
-      console.log('[MovilContext] ⚠️ Error al verificar móvil (mantener cache):', result.type);
-      // No modificar el estado si hay error temporal
+      console.log('[MovilContext] ⚠️ Error al verificar móvil (mantener cache):', result.type, result.message);
+      if (!hayCacheValido) {
+        console.log('[MovilContext] ⚠️ No hay cache válido y BD falló - móvil NO disponible');
+        setMovilActivo(false);
+        setDatosMovilActivo(null);
+      } else {
+        console.log('[MovilContext] ✅ Manteniendo móvil desde cache (BD no disponible)');
+      }
     }
     
     setLoadingMovil(false);
+    console.log('[MovilContext] ========================================');
   }, [guardarEstadoMovil]);
 
   // Cargar el estado inicial una sola vez
