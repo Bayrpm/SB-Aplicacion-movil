@@ -16,9 +16,18 @@ Notifications.setNotificationHandler({
 });
 
 export interface NotificationData {
+  // Tipo para cambio de estado de denuncia
   type: 'report_status_change';
   reportId: string;
   newStatus: string;
+  screen: string;
+}
+
+export interface AssignmentNotificationData {
+  // Tipo para asignación de denuncia a inspector
+  type: 'report_assigned';
+  reportId: string;
+  asignacionId?: number | string;
   screen: string;
 }
 
@@ -261,16 +270,19 @@ export async function sendReportUpdateNotification(
  * Maneja la notificación recibida y navega a la pantalla correspondiente
  */
 export function setupNotificationListeners(
-  onNotificationReceived: (data: NotificationData) => void
+  onNotificationReceived: (data: NotificationData | AssignmentNotificationData) => void
 ): () => void {
   // Listener para cuando llega una notificación y la app está en primer plano
   const receivedSubscription = Notifications.addNotificationReceivedListener(
     (notification) => {
-      const data = notification.request.content.data as unknown as NotificationData;
-  if (__DEV__) console.log('📬 Notificación recibida:', data);
-      
-      if (data.type === 'report_status_change') {
-        onNotificationReceived(data);
+      const data = notification.request.content.data as unknown as
+        | NotificationData
+        | AssignmentNotificationData;
+      if (__DEV__) console.log('📬 Notificación recibida:', data);
+
+      // Manejar tanto cambio de estado como asignación
+      if (data?.type === 'report_status_change' || data?.type === 'report_assigned') {
+        onNotificationReceived(data as NotificationData | AssignmentNotificationData);
       }
     }
   );
@@ -278,11 +290,13 @@ export function setupNotificationListeners(
   // Listener para cuando el usuario toca la notificación
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(
     (response) => {
-      const data = response.notification.request.content.data as unknown as NotificationData;
-  if (__DEV__) console.log('👆 Usuario tocó la notificación:', data);
-      
-      if (data.type === 'report_status_change') {
-        onNotificationReceived(data);
+      const data = response.notification.request.content.data as unknown as
+        | NotificationData
+        | AssignmentNotificationData;
+      if (__DEV__) console.log('👆 Usuario tocó la notificación:', data);
+
+      if (data?.type === 'report_status_change' || data?.type === 'report_assigned') {
+        onNotificationReceived(data as NotificationData | AssignmentNotificationData);
       }
     }
   );
@@ -301,8 +315,12 @@ export async function getInitialNotification(): Promise<NotificationData | null>
   const response = await Notifications.getLastNotificationResponseAsync();
   
   if (response) {
-    const data = response.notification.request.content.data as unknown as NotificationData;
-    return data.type === 'report_status_change' ? data : null;
+    const data = response.notification.request.content.data as unknown as
+      | NotificationData
+      | AssignmentNotificationData;
+    if (data?.type === 'report_status_change') return data as NotificationData;
+    if (data?.type === 'report_assigned') return null; // el handler que recibe assignment puede manejarlo por separado
+    return null;
   }
   
   return null;
