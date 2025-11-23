@@ -173,6 +173,18 @@ export async function isUserInspector(userId: string): Promise<boolean> {
  */
 export async function signOut() {
   try {
+    // Intentar eliminar token de notificaciones asociado al usuario/dispositivo
+    // antes de limpiar la sesión. Import dinámico para evitar ciclos de dependencia.
+    try {
+      const svc = await import('@/app/services/notificationService');
+      if (svc && typeof svc.unregisterPushNotifications === 'function') {
+        await svc.unregisterPushNotifications();
+      }
+    } catch (e) {
+      // No fatal: seguimos con el signOut aunque falle el borrado de token
+      if (typeof __DEV__ !== 'undefined' && __DEV__) console.debug('unregisterPushNotifications falló:', e);
+    }
+
     // Intenta sign out "completo" usando helper que además limpia AsyncStorage
     // importamos dinámicamente para evitar ciclos de dependencia
     const mod = await import('@/app/shared/lib/supabase');
