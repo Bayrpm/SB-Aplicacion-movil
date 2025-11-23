@@ -87,18 +87,21 @@ export default function TabLayout() {
     };
   }, [loading, inspectorLoading]);
 
-  // Navegar al tab correcto cuando el rol se define
+  // Navegar al tab correcto cuando el rol se define (solo en el montaje inicial)
   useEffect(() => {
     if (!loading && !inspectorLoading && typeof isInspector === 'boolean') {
-
-  const segs = (segments as string[]) || [];
-  const alreadyInside = segs.includes('citizen') || segs.includes('inspector');
+      const segs = (segments as string[]) || [];
+      const alreadyInside = segs.includes('citizen') || segs.includes('inspector');
+      
+      // Solo navegar si no estamos dentro de las rutas correctas
       if (!alreadyInside) {
         const routePath = isInspector ? '/inspector/inspectorHome' : '/citizen/citizenHome';
         router.replace(routePath);
       }
     }
-  }, [loading, inspectorLoading, isInspector, router]);
+    // Remover 'router' y 'segments' de las dependencias para evitar re-renderizados constantes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, inspectorLoading, isInspector]);
 
   const splashVisibleGlobal =
     typeof (globalThis as any).__APP_SPLASH_VISIBLE__ !== 'undefined'
