@@ -526,10 +526,13 @@ export async function cerrarUsoMovil(kilometraje_fin: number): Promise<CerrarUso
  * Obtiene el uso activo del inspector autenticado (si existe)
  */
 export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
+  console.log('[obtenerUsoActivo] Iniciando...');
+  
   // 1. Usuario autenticado
   const { data: authData, error: authError } = await supabase.auth.getUser();
 
   if (authError || !authData?.user) {
+    console.log('[obtenerUsoActivo] Error de autenticación:', authError);
     return {
       ok: false,
       type: 'NO_AUTH',
@@ -539,6 +542,7 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
   }
 
   const user = authData.user;
+  console.log('[obtenerUsoActivo] Usuario autenticado:', user.id);
 
   // 2. Buscar inspector
   const { data: inspector, error: inspectorError } = await supabase
@@ -548,6 +552,7 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
     .single();
 
   if (inspectorError || !inspector) {
+    console.log('[obtenerUsoActivo] Error al buscar inspector:', inspectorError);
     return {
       ok: false,
       type: 'INSPECTOR_NOT_FOUND',
@@ -556,7 +561,10 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
     };
   }
 
+  console.log('[obtenerUsoActivo] Inspector encontrado:', inspector.id);
+
   // 3. Buscar uso activo con datos del móvil
+  console.log('[obtenerUsoActivo] Buscando uso activo para inspector_id:', inspector.id);
   const { data: usoActivo, error: usoError } = await supabase
     .from('movil_usos')
     .select(`
@@ -585,7 +593,13 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
     .limit(1)
     .maybeSingle();
 
+  console.log('[obtenerUsoActivo] Resultado de búsqueda de uso activo:', { 
+    encontrado: !!usoActivo, 
+    error: usoError 
+  });
+
   if (usoError) {
+    console.log('[obtenerUsoActivo] Error en query de uso activo:', usoError);
     return {
       ok: false,
       type: 'NO_USO_ACTIVO',
@@ -595,12 +609,15 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
   }
 
   if (!usoActivo) {
+    console.log('[obtenerUsoActivo] No hay uso activo para este inspector');
     return {
       ok: false,
       type: 'NO_USO_ACTIVO',
       message: 'No tienes un móvil en uso activo.',
     };
   }
+
+  console.log('[obtenerUsoActivo] Uso activo encontrado, uso_id:', usoActivo.id);
 
   // 4. Obtener kilometraje de inicio
   const { data: lecturaInicio, error: lecturaError } = await supabase

@@ -22,17 +22,21 @@ export function MovilProvider({ children }: { children: React.ReactNode }) {
     console.log('[MovilContext] Recargando estado del móvil activo...');
     setLoadingMovil(true);
     const result = await obtenerUsoActivo();
-    console.log('[MovilContext] Resultado:', result);
+    console.log('[MovilContext] Resultado de obtenerUsoActivo:', {
+      ok: result.ok,
+      type: result.ok ? 'success' : result.type,
+      movil: result.ok ? result.movil.patente : 'N/A',
+    });
     
     if (result.ok) {
-      console.log('[MovilContext] Móvil activo encontrado:', result.movil.patente);
+      console.log('[MovilContext] Móvil activo encontrado:', result.movil.patente, 'km_inicio:', result.km_inicio);
       setMovilActivo(true);
       setDatosMovilActivo({
         movil: result.movil,
         km_inicio: result.km_inicio,
       });
     } else {
-      console.log('[MovilContext] No hay móvil activo');
+      console.log('[MovilContext] No hay móvil activo. Razón:', result.type);
       setMovilActivo(false);
       setDatosMovilActivo(null);
     }
@@ -42,8 +46,10 @@ export function MovilProvider({ children }: { children: React.ReactNode }) {
 
   // Cargar el estado inicial una sola vez
   useEffect(() => {
+    console.log('[MovilContext] useEffect - Cargando estado inicial del móvil');
     recargarMovilActivo();
-  }, [recargarMovilActivo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Solo se ejecuta una vez al montar
 
   return (
     <MovilContext.Provider
