@@ -48,25 +48,29 @@ async function handleAppState(state: string) {
     try {
       // Ver si hay sesión y refresh_token antes de arrancar el auto-refresh
       const { data } = await supabase.auth.getSession();
+      const hasSession = !!data?.session;
       const hasRefresh = !!data?.session?.refresh_token;
 
-      if (hasRefresh) {
+      console.log('[Supabase] handleAppState - active:', { hasSession, hasRefresh });
+
+      if (hasSession && hasRefresh) {
         supabase.auth.startAutoRefresh();
-      } else {
+      } else if (hasSession && !hasRefresh) {
+        // Tiene sesión pero no refresh token - NO cerrar sesión automáticamente
+        // Esto puede pasar durante operaciones normales
+        console.log('[Supabase] ⚠️ Sesión sin refresh_token - manteniendo sesión activa');
         supabase.auth.stopAutoRefresh();
-        // Limpia la sesión local para cortar el loop de "Invalid Refresh Token"
-        try {
-          // si tu versión soporta scope:'local'
-          await supabase.auth.signOut({ scope: 'local' } as any);
-        } catch {
-          // fallback compatible
-          await supabase.auth.signOut();
-        }
+      } else {
+        // No hay sesión en absoluto - solo detener auto-refresh
+        console.log('[Supabase] No hay sesión activa');
+        supabase.auth.stopAutoRefresh();
       }
-    } catch {
+    } catch (error) {
+      console.log('[Supabase] Error en handleAppState:', error);
       supabase.auth.stopAutoRefresh();
     }
   } else {
+    console.log('[Supabase] handleAppState - inactive/background');
     supabase.auth.stopAutoRefresh();
   }
 }

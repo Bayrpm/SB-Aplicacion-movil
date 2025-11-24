@@ -73,8 +73,6 @@ export default function HomeScreen() {
     movilActivo,
     datosMovilActivo,
     loadingMovil,
-    setMovilActivo,
-    setDatosMovilActivo,
     recargarMovilActivo,
   } = useMovil();
 
@@ -356,16 +354,21 @@ export default function HomeScreen() {
             filter: `inspector_id=eq.${inspector.id}`,
           },
           async (payload) => {
-            console.log('[HomeScreen] 🔔 Nueva asignación detectada por Realtime:', payload);
-            console.log('[HomeScreen] Payload new:', JSON.stringify(payload.new, null, 2));
+            try {
+              console.log('[HomeScreen] 🔔 Nueva asignación detectada por Realtime:', payload);
+              console.log('[HomeScreen] Payload new:', JSON.stringify(payload.new, null, 2));
 
-            // Esperar un momento para que la BD procese completamente
-            await new Promise((resolve) => setTimeout(resolve, 1500));
+              // Esperar un momento para que la BD procese completamente
+              await new Promise((resolve) => setTimeout(resolve, 1500));
 
-            // Recargar derivaciones y FORZAR mostrar modal de nueva derivación
-            console.log('[HomeScreen] ⚡ Llamando loadDerivaciones(true) para forzar modal...');
-            await loadDerivacionesRef.current(true); // true = forzar modal
-            console.log('[HomeScreen] ✅ loadDerivaciones completado');
+              // Recargar derivaciones y FORZAR mostrar modal de nueva derivación
+              console.log('[HomeScreen] ⚡ Llamando loadDerivaciones(true) para forzar modal...');
+              await loadDerivacionesRef.current(true); // true = forzar modal
+              console.log('[HomeScreen] ✅ loadDerivaciones completado');
+            } catch (error) {
+              console.error('[HomeScreen] ❌ Error al procesar nueva derivación:', error);
+              // No propagar el error para evitar que afecte la sesión
+            }
           }
         )
         .subscribe((status) => {
@@ -607,15 +610,14 @@ export default function HomeScreen() {
           setShowMovilModal(false);
         }}
         onInicioExitoso={async (data) => {
-          console.log('Móvil registrado:', data);
-
-          setMovilActivo(true);
-          setDatosMovilActivo({
-            movil: data.movil,
-            km_inicio: data.km_inicio,
-          });
+          console.log('[HomeScreen] Móvil registrado exitosamente:', data.movil.patente);
 
           setShowMovilModal(false);
+
+          // Recargar el estado del móvil desde la BD para sincronizar y guardar en cache
+          console.log('[HomeScreen] Recargando contexto del móvil...');
+          await recargarMovilActivo();
+
           AppAlert.alert(
             'Éxito',
             `Móvil ${data.movil.patente} registrado correctamente`
