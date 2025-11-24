@@ -1,6 +1,9 @@
 // supabase.ts (el mismo archivo donde lo tienes)
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import Constants from 'expo-constants';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import { AppState } from 'react-native';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
@@ -21,8 +24,43 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
  */
 export async function clearAuthSession() {
   try {
-    // Intenta cerrar sesión en el servidor
-    await supabase.auth.signOut();
+    // Intentar eliminar token de notificaciones asociado al usuario y dispositivo
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const deviceId = Constants.sessionId || Device.modelName || 'unknown-device';
+        try {
+          await supabase.from('tokens_push').delete().eq('usuario_id', user.id).eq('device_id', deviceId);
+        } catch (e) {
+          // noop: no bloquear el signOut por fallo al eliminar token
+        }
+
+        // Intentar eliminar también por expo_token si está disponible en el dispositivo
+        try {
+          const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+          const tokenResult = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+          const expoToken = tokenResult?.data ?? null;
+          if (expoToken) {
+            try {
+              await supabase.from('tokens_push').delete().eq('usuario_id', user.id).eq('expo_token', expoToken);
+            } catch (e) {
+              // noop
+            }
+          }
+        } catch (e) {
+          // noop - no todos los entornos podrán resolver el token
+        }
+      }
+    } catch (e) {
+      // noop - no bloquear la signOut si falla obtener usuario
+    }
+
+    // Finalmente cerrar la sesión en Supabase
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      // noop
+    }
   } catch (e) {
     // noop
   }

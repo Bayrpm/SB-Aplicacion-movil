@@ -18,11 +18,24 @@ export function useNotifications() {
   const [notificationToken, setNotificationToken] = useState<string | null>(null);
   const [notification, setNotification] = useState<NotificationData | null>(null);
   const auth = useAuth();
-
   useEffect(() => {
     let cleanup: (() => void) | undefined;
 
     const initializeNotifications = async () => {
+      // Si no hay usuario autenticado, intentar eliminar token antiguo y limpiar estado
+      if (!auth?.user) {
+        try {
+          const svc = await import('@/app/services/notificationService');
+          if (svc && typeof svc.unregisterPushNotifications === 'function') {
+            await svc.unregisterPushNotifications();
+          }
+        } catch (e) {
+          // noop
+        }
+        setNotificationToken(null);
+        // No registrar listeners cuando no hay sesión
+        return;
+      }
       // Verificar si el usuario ha activado las notificaciones
       const notificationsEnabled = await AsyncStorage.getItem('@notifications_enabled');
       
@@ -60,7 +73,8 @@ export function useNotifications() {
         cleanup();
       }
     };
-  }, []);
+  // Re-ejecutar la inicialización cada vez que cambie el usuario (login/logout)
+  }, [auth?.user?.id]);
 
   /**
    * Maneja la navegación cuando se recibe o se toca una notificación
