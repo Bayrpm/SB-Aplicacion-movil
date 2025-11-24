@@ -85,10 +85,23 @@ export function useNotifications() {
     // Si no hay usuario autenticado, no hacemos navegación
     if (!auth?.user) return;
 
-    // Si la notificación incluye un destinatario explícito, solo actuar
-    // si coincide con el usuario actualmente autenticado.
+    // Validar destinatario explícito: fallar cerrado si no existe
     const maybeDestinatario = (data as any)?.destinatario_user_id ?? (data as any)?.usuario_id ?? (data as any)?.to_user_id ?? null;
-    if (maybeDestinatario && String(maybeDestinatario) !== String(auth.user.id)) return;
+    if (!maybeDestinatario) {
+      if (__DEV__) console.warn('Notificación sin destinatario explícito, se ignora por seguridad');
+      return;
+    }
+    if (String(maybeDestinatario) !== String(auth.user.id)) return;
+
+    // Validar rol en payload si está presente: si viene role y no coincide
+    // con el rol actual del usuario, ignorar. Esto evita que un inspector
+    // vea pantallas de ciudadano aunque el payload tenga type esperado.
+    const roleFromPayload = (data as any)?.role ?? null;
+    const currentRole = auth.isInspector ? 'inspector' : 'ciudadano';
+    if (roleFromPayload && String(roleFromPayload) !== String(currentRole)) {
+      if (__DEV__) console.warn(`Notificación para role=${roleFromPayload} ignorada por rol actual=${currentRole}`);
+      return;
+    }
 
     // Si es asignación y soy inspector, abrir la vista de inspector
     if ((data as AssignmentNotificationData)?.type === 'report_assigned') {
@@ -102,7 +115,7 @@ export function useNotifications() {
       return;
     }
 
-    // Si es cambio de estado, solo navegar para usuarios ciudadanos
+    // Si es cambio de estado y el rol es ciudadano (o el usuario no es inspector), navegar a ciudadano
     if ((data as NotificationData).type === 'report_status_change' && (data as NotificationData).reportId) {
       if (!auth.isInspector) {
         router.push({
