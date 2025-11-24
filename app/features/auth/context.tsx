@@ -105,6 +105,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      // Intentar eliminar token de notificaciones asociado al dispositivo antes de limpiar sesión
+      try {
+        const svc = await import('@/app/services/notificationService');
+        if (svc && typeof svc.unregisterPushNotifications === 'function') {
+          await svc.unregisterPushNotifications();
+        }
+      } catch (e) {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) console.debug('unregisterPushNotifications falló (context signOut):', e);
+      }
+
       // Attempt a full clear of server session + local storage
       try {
         await clearAuthSession();

@@ -1,8 +1,10 @@
+import { useAuth } from '@/app/features/auth';
 import {
-    getInitialNotification,
-    NotificationData,
-    registerForPushNotifications,
-    setupNotificationListeners,
+  AssignmentNotificationData,
+  getInitialNotification,
+  NotificationData,
+  registerForPushNotifications,
+  setupNotificationListeners,
 } from '@/app/services/notificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
@@ -15,6 +17,7 @@ import { useEffect, useState } from 'react';
 export function useNotifications() {
   const [notificationToken, setNotificationToken] = useState<string | null>(null);
   const [notification, setNotification] = useState<NotificationData | null>(null);
+  const auth = useAuth();
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
@@ -44,7 +47,9 @@ export function useNotifications() {
       }
 
       // Configurar listeners para notificaciones futuras
-      cleanup = setupNotificationListeners(handleNotificationNavigation);
+      // El handler ahora verifica el rol actual para evitar navegar a pantallas
+      // de otro tipo de usuario (p.ej. ciudadano vs inspector).
+      cleanup = setupNotificationListeners((data) => handleNotificationNavigation(data as any));
     };
 
     initializeNotifications();
@@ -60,16 +65,37 @@ export function useNotifications() {
   /**
    * Maneja la navegación cuando se recibe o se toca una notificación
    */
-  const handleNotificationNavigation = (data: NotificationData) => {
-    setNotification(data);
-    
-    if (data.type === 'report_status_change' && data.reportId) {
-      // Navegar al perfil del ciudadano con el parámetro openReportId
-      // El componente citizenProfile detectará este parámetro y abrirá el modal automáticamente
-      router.push({
-        pathname: '/(tabs)/citizen/citizenProfile',
-        params: { openReportId: data.reportId }
-      });
+  const handleNotificationNavigation = (data: NotificationData | AssignmentNotificationData) => {
+    setNotification(data as NotificationData);
+
+    // Si no hay usuario autenticado, no hacemos navegación
+    if (!auth?.user) return;
+
+    // Si la notificación incluye un destinatario explícito, solo actuar
+    // si coincide con el usuario actualmente autenticado.
+    const maybeDestinatario = (data as any)?.destinatario_user_id ?? (data as any)?.usuario_id ?? (data as any)?.to_user_id ?? null;
+    if (maybeDestinatario && String(maybeDestinatario) !== String(auth.user.id)) return;
+
+    // Si es asignación y soy inspector, abrir la vista de inspector
+    if ((data as AssignmentNotificationData)?.type === 'report_assigned') {
+      if (auth.isInspector) {
+        const payload = data as AssignmentNotificationData;
+        router.push({
+          pathname: '/(tabs)/inspector/inspectorHome',
+          params: { openReportId: payload.reportId }
+        });
+      }
+      return;
+    }
+
+    // Si es cambio de estado, solo navegar para usuarios ciudadanos
+    if ((data as NotificationData).type === 'report_status_change' && (data as NotificationData).reportId) {
+      if (!auth.isInspector) {
+        router.push({
+          pathname: '/(tabs)/citizen/citizenProfile',
+          params: { openReportId: (data as NotificationData).reportId }
+        });
+      }
     }
   };
 

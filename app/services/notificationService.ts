@@ -110,14 +110,60 @@ async function saveTokenToSupabase(token: string): Promise<void> {
     // Obtener un identificador único del dispositivo
     const deviceId = Constants.sessionId || Device.modelName || 'unknown-device';
 
-    // Usar upsert para insertar o actualizar
+    // Primero, comprobar si este expo_token ya existe en la tabla
+    try {
+      const { data: existing, error: existingError } = await supabase
+        .from('tokens_push')
+        .select('*')
+        .eq('expo_token', token)
+        .maybeSingle();
+
+      if (existingError) {
+        // no fatal: continuamos al upsert
+        if (__DEV__) console.warn('Error consultando token existente:', existingError);
+      }
+
+      if (existing) {
+        // Si el token existe y pertenece a otro usuario, reasignarlo al usuario actual
+        if (existing.usuario_id !== user.id) {
+          const { error: updErr } = await supabase
+            .from('tokens_push')
+            .update({ usuario_id: user.id, device_id: deviceId, updated_at: new Date().toISOString() })
+            .eq('expo_token', token);
+          if (updErr) {
+            console.error('❌ Error reasignando token en Supabase:', updErr);
+          } else {
+            if (__DEV__) console.log('✅ Token reasignado al usuario actual en Supabase');
+          }
+          return;
+        }
+
+        // Si ya pertenece al mismo usuario, actualizar device_id/updated_at
+        const { error: updErr2 } = await supabase
+          .from('tokens_push')
+          .update({ device_id: deviceId, updated_at: new Date().toISOString() })
+          .eq('expo_token', token);
+        if (updErr2) {
+          console.error('❌ Error actualizando token en Supabase:', updErr2);
+        } else {
+          if (__DEV__) console.log('✅ Token actualizado en Supabase');
+        }
+        return;
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('Error manejando token existente:', e);
+      // seguimos al upsert como fallback
+    }
+
+    // Si no existe, usar upsert para insertar o actualizar por usuario+device
     const { error } = await supabase
       .from('tokens_push')
       .upsert({
         usuario_id: user.id,
         device_id: deviceId,
         expo_token: token,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }, {
         onConflict: 'usuario_id,device_id'
       });
@@ -311,18 +357,23 @@ export function setupNotificationListeners(
 /**
  * Obtiene la última notificación que abrió la app (si existe)
  */
-export async function getInitialNotification(): Promise<NotificationData | null> {
-  const response = await Notifications.getLastNotificationResponseAsync();
-  
-  if (response) {
-    const data = response.notification.request.content.data as unknown as
-      | NotificationData
-      | AssignmentNotificationData;
-    if (data?.type === 'report_status_change') return data as NotificationData;
-    if (data?.type === 'report_assigned') return null; // el handler que recibe assignment puede manejarlo por separado
-    return null;
-  }
-  
+export async function getInitialNotification(): Promise<NotificationData | AssignmentNotificationData | null> {
+  // `getLastNotificationResponseAsync` puede estar marcado como obsoleto
+  // en algunas versiones de `expo-notifications`. Usar un getter seguro
+  // que pruebe varias firmas para mantener compatibilidad hacia atrás.
+  const getter = (Notifications as any).getLastNotificationResponseAsync ?? (Notifications as any).getLastNotificationResponse;
+
+  if (typeof getter !== 'function') return null;
+
+  const response = await getter.call(Notifications);
+  if (!response) return null;
+
+  const data = response.notification?.request?.content?.data as unknown as
+    | NotificationData
+    | AssignmentNotificationData;
+
+  if (data?.type === 'report_status_change') return data as NotificationData;
+  if (data?.type === 'report_assigned') return data as AssignmentNotificationData;
   return null;
 }
 export default {
