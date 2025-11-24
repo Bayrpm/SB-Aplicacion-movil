@@ -3,6 +3,7 @@ import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 // expo-av will be imported dynamically at runtime to avoid native-module require on startup
+import { useAuth } from '@/app/features/auth';
 import { deleteReportComment, updateReportComment } from '@/app/features/report/api/report.api';
 import CommentsPanel, { CommentItem } from '@/components/commentsPanel';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
@@ -86,6 +87,7 @@ export default function ReportDetailModal({
   onToggleLike,
   isLiked = false,
 }: ReportDetailModalProps) {
+  const { isInspector } = useAuth();
   const insets = useSafeAreaInsets();
   const { fontSize } = useFontSize();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background'); // Color específico para cards
@@ -162,6 +164,18 @@ export default function ReportDetailModal({
     // Reset translate when modal opens/closes
     translateY.setValue(0);
   }, [commentsModalVisible]);
+
+  // Defensa adicional: si este modal se abre pero el usuario actual es inspector,
+  // cerramos inmediatamente para evitar mostrar UI de ciudadano.
+  useEffect(() => {
+    if (visible && isInspector) {
+      try {
+        onClose();
+      } catch (e) {
+        // noop
+      }
+    }
+  }, [visible, isInspector]);
 
   // Cargar evidencias (firmadas) al abrir el modal
   useEffect(() => {

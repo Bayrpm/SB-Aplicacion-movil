@@ -1,4 +1,5 @@
 // app/features/report/components/reportDetailModal.tsx
+import { useAuth } from '@/app/features/auth';
 import { listEvidencesSigned } from '@/app/features/report/api/evidences.api';
 import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import CommentsPanel from '@/components/commentsPanel';
@@ -66,6 +67,7 @@ export default function ReportDetailModal({
   reportIds,
   onClose,
 }: ReportDetailModalProps) {
+  const { isInspector } = useAuth();
   const { fontSize } = useFontSize();
   const insets = useSafeAreaInsets();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background');
@@ -255,6 +257,18 @@ export default function ReportDetailModal({
       setSelectedReportForComments(null);
     }
   }, [visible, reportId, reportIds]);
+
+  // Defensa en profundidad: si este modal se monta pero el usuario actual es inspector,
+  // cerramos inmediatamente para evitar mostrar UI de ciudadano en sesión inspector.
+  useEffect(() => {
+    if (visible && isInspector) {
+      try {
+        onClose();
+      } catch (e) {
+        // noop
+      }
+    }
+  }, [visible, isInspector]);
 
   // Cargar perfil del usuario actual para usar su avatar en comentarios propios
   useEffect(() => {

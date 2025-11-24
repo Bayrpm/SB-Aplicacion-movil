@@ -267,6 +267,11 @@ export async function sendReportUpdateNotification(
       title: '📢 Actualización de Denuncia',
       body: `Tu denuncia "${reportTitle}" ${statusMessage}`,
       data: {
+        // Identificador explícito del destinatario para que el cliente pueda
+        // validar que la notificación le corresponde al usuario actual.
+        destinatario_user_id: userId,
+        // Role objetivo: en este flujo el destinatario es un ciudadano
+        role: 'ciudadano',
         type: 'report_status_change',
         reportId: reportId,
         newStatus: estadoNombre,
@@ -303,7 +308,9 @@ export async function sendReportUpdateNotification(
       payload: {
         reportId,
         newStatusId,
-        title: reportTitle
+        title: reportTitle,
+        destinatario_user_id: userId,
+        role: 'ciudadano'
       }
     });
 
