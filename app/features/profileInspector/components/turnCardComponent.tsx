@@ -1,193 +1,215 @@
-// app/features/profileInspector/components/turnCardComponent.tsx
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+
+
+// app/features/profileInspector/components/TurnCardContainer.tsx
+import { useFontSize } from '@/app/features/settings/fontSizeContext';
+import { useThemeColor } from '@/hooks/use-theme-color';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { getTurnoInspectorCompat as getTurnoInspector, InspectorTurnoResponse } from '../api/inspectorProfile.api';
 
 interface TurnCardProps {
-  shiftTitle?: string;
-  schedule?: string;
-  statusText?: string;
-  timeAgo?: string;
-  place?: string;
+  shiftTitle: string;
+  schedule: string;
+  description: string;
+  isActive: boolean;
+  inspectorType: boolean;
   onPressDetail?: () => void;
   onCloseShift?: () => void;
 }
 
 const TurnCard: React.FC<TurnCardProps> = ({
-  shiftTitle = 'Turno mañana',
-  schedule = '06:00 am - 13:00 pm',
-  statusText = 'Estado: Activo.',
-  timeAgo = 'Hace 2 horas.',
-  place = 'Trebol',
+  shiftTitle,
+  schedule,
+  description,
+  isActive,
+  inspectorType,
   onPressDetail,
   onCloseShift,
 }) => {
   return (
-    <View style={styles.container}>
-      {/* Título Turno + check */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Turno</Text>
-        <View style={styles.headerCheck}>
-          <IconSymbol name="check" size={20} color="#FFFFFF" />
+    (() => {
+      const { fontSize } = useFontSize();
+      const bgColor = useThemeColor({ light: '#fff', dark: '#071229' }, 'background');
+      const textColor = useThemeColor({}, 'text');
+      const mutedColor = useThemeColor({ light: '#6B7280', dark: '#9CA3AF' }, 'icon');
+
+      const getFontSizeValue = (size: 'small' | 'medium' | 'large', base: number) => {
+        switch (size) {
+          case 'small':
+            return base * 0.85;
+          case 'medium':
+            return base;
+          case 'large':
+            return base * 1.25;
+          default:
+            return base;
+        }
+      };
+
+      return (
+        <View style={[styles.card, { backgroundColor: bgColor }] }>
+          <Text style={[styles.title, { color: textColor, fontSize: getFontSizeValue(fontSize, 18) }]}>{shiftTitle}</Text>
+          <Text style={[styles.info, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Horario: {schedule}</Text>
+          {description && <Text style={[styles.info, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Descripción: {description}</Text>}
+          <Text style={[styles.info, isActive ? styles.activeStatus : styles.inactiveStatus, { fontSize: getFontSizeValue(fontSize, 14) }]}>
+            Estado: {isActive ? 'Activo' : 'Inactivo'}
+          </Text>
+          <Text style={[styles.info, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Tipo: {inspectorType ? 'Inspector' : 'Otro'}</Text>
         </View>
-      </View>
-
-      {/* Card principal */}
-      <View style={styles.card}>
-        <View style={styles.row}>
-          <View style={styles.avatar}>
-            <IconSymbol name="person" size={32} color="#FFFFFF" />
-          </View>
-
-          <View style={styles.info}>
-            <Text style={styles.shiftTitle}>{shiftTitle}</Text>
-            <Text style={styles.schedule}>{schedule}</Text>
-            <Text style={styles.status}>{statusText}</Text>
-          </View>
-        </View>
-
-        <View style={styles.bottomRow}>
-          <View>
-            <View style={styles.bottomItem}>
-              <IconSymbol name="access-time" size={14} color="#7A7A7A" />
-              <Text style={styles.bottomText}>{timeAgo}</Text>
-            </View>
-            <View style={styles.bottomItem}>
-              <IconSymbol name="vpn-key" size={14} color="#7A7A7A" />
-              <Text style={styles.bottomText}>{place}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.detailButton}
-            activeOpacity={0.7}
-            onPress={onPressDetail}
-          >
-            <Text style={styles.detailButtonText}>Ver detalle</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <TouchableOpacity
-        style={styles.closeButton}
-        activeOpacity={0.8}
-        onPress={onCloseShift}
-      >
-        <Text style={styles.closeButtonText}>Cerrar turno</Text>
-      </TouchableOpacity>
-    </View>
+      );
+    })()
   );
 };
 
-export default TurnCard;
+interface TurnCardContainerProps {
+  onPressDetail?: () => void;
+  onCloseShift?: () => void;
+}
+
+function formatSchedule(horaInicio: string, horaTermino: string): string {
+  if (!horaInicio || !horaTermino) return 'Horario no disponible';
+
+  const start = horaInicio.slice(0, 5);
+  const end = horaTermino.slice(0, 5);
+  return `${start} - ${end}`;
+}
+
+const TurnCardContainer: React.FC<TurnCardContainerProps> = ({
+  onPressDetail,
+  onCloseShift,
+}) => {
+  const [turnoData, setTurnoData] = useState<InspectorTurnoResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchTurno = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const data = await getTurnoInspector();
+
+        if (!isMounted) return;
+
+        setTurnoData(data);
+      } catch (err) {
+        if (!isMounted) return;
+
+        const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+        setError(errorMessage);
+        setTurnoData(null);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchTurno();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator />
+        <Text style={styles.infoText}>Cargando turno...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
+
+  if (!turnoData || !turnoData.turno_data) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.infoText}>
+          No tienes un turno asignado.
+        </Text>
+      </View>
+    );
+  }
+
+  const turno = turnoData.turno_data;
+  const shiftTitle = turno.nombre || 'Turno asignado';
+  const schedule = formatSchedule(turno.hora_inicio, turno.hora_termino);
+  const description = turno.descripcion || '';
+  const isActive = turno.activo;
+  const inspectorType = turno.inspector;
+
+  return (
+    <TurnCard
+      shiftTitle={shiftTitle}
+      schedule={schedule}
+      description={description}
+      isActive={isActive}
+      inspectorType={inspectorType}
+      onPressDetail={onPressDetail}
+      onCloseShift={onCloseShift}
+    />
+  );
+};
+
+
+
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 24,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-
+  infoText: {
+    fontSize: 14,
+    color: '#555',
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginRight: 8,
-    padding: 10,
-    alignContent: 'center',
-  },
-  headerCheck: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#24C568',
-    alignItems: 'center',
-    justifyContent: 'center',
+  errorText: {
+    fontSize: 14,
+    color: '#FF0000',
   },
   card: {
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+    marginHorizontal: 16,
+    marginVertical: 8,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
   },
-  row: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    color: '#333',
   },
   info: {
-    flex: 1,
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
   },
-  shiftTitle: {
-    fontSize: 16,
+  activeStatus: {
+    color: '#4CAF50',
     fontWeight: '600',
-    marginBottom: 4,
   },
-  schedule: {
-    fontSize: 13,
-    color: '#555555',
-    marginBottom: 2,
-  },
-  status: {
-    fontSize: 13,
-    color: '#333333',
-  },
-  bottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  bottomItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  bottomText: {
-    fontSize: 11,
-    color: '#7A7A7A',
-    marginLeft: 4,
-  },
-  detailButton: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#000000',
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-  },
-  detailButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  closeButton: {
-    marginTop: 24,
-    width: '70%',
-    borderRadius: 24,
-    paddingVertical: 12,
-    backgroundColor: '#FF0000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  inactiveStatus: {
+    color: '#F44336',
     fontWeight: '600',
   },
 });
+
+export default TurnCardContainer; 

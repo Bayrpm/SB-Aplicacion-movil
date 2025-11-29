@@ -16,9 +16,18 @@ Notifications.setNotificationHandler({
 });
 
 export interface NotificationData {
+  // Tipo para cambio de estado de denuncia
   type: 'report_status_change';
   reportId: string;
   newStatus: string;
+  screen: string;
+}
+
+export interface AssignmentNotificationData {
+  // Tipo para asignación de denuncia a inspector
+  type: 'report_assigned';
+  reportId: string;
+  asignacionId?: number | string;
   screen: string;
 }
 
@@ -101,14 +110,60 @@ async function saveTokenToSupabase(token: string): Promise<void> {
     // Obtener un identificador único del dispositivo
     const deviceId = Constants.sessionId || Device.modelName || 'unknown-device';
 
-    // Usar upsert para insertar o actualizar
+    // Primero, comprobar si este expo_token ya existe en la tabla
+    try {
+      const { data: existing, error: existingError } = await supabase
+        .from('tokens_push')
+        .select('*')
+        .eq('expo_token', token)
+        .maybeSingle();
+
+      if (existingError) {
+        // no fatal: continuamos al upsert
+        if (__DEV__) console.warn('Error consultando token existente:', existingError);
+      }
+
+      if (existing) {
+        // Si el token existe y pertenece a otro usuario, reasignarlo al usuario actual
+        if (existing.usuario_id !== user.id) {
+          const { error: updErr } = await supabase
+            .from('tokens_push')
+            .update({ usuario_id: user.id, device_id: deviceId, updated_at: new Date().toISOString() })
+            .eq('expo_token', token);
+          if (updErr) {
+            console.error('❌ Error reasignando token en Supabase:', updErr);
+          } else {
+            if (__DEV__) console.log('✅ Token reasignado al usuario actual en Supabase');
+          }
+          return;
+        }
+
+        // Si ya pertenece al mismo usuario, actualizar device_id/updated_at
+        const { error: updErr2 } = await supabase
+          .from('tokens_push')
+          .update({ device_id: deviceId, updated_at: new Date().toISOString() })
+          .eq('expo_token', token);
+        if (updErr2) {
+          console.error('❌ Error actualizando token en Supabase:', updErr2);
+        } else {
+          if (__DEV__) console.log('✅ Token actualizado en Supabase');
+        }
+        return;
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('Error manejando token existente:', e);
+      // seguimos al upsert como fallback
+    }
+
+    // Si no existe, usar upsert para insertar o actualizar por usuario+device
     const { error } = await supabase
       .from('tokens_push')
       .upsert({
         usuario_id: user.id,
         device_id: deviceId,
         expo_token: token,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }, {
         onConflict: 'usuario_id,device_id'
       });
@@ -212,6 +267,11 @@ export async function sendReportUpdateNotification(
       title: '📢 Actualización de Denuncia',
       body: `Tu denuncia "${reportTitle}" ${statusMessage}`,
       data: {
+        // Identificador explícito del destinatario para que el cliente pueda
+        // validar que la notificación le corresponde al usuario actual.
+        destinatario_user_id: userId,
+        // Role objetivo: en este flujo el destinatario es un ciudadano
+        role: 'ciudadano',
         type: 'report_status_change',
         reportId: reportId,
         newStatus: estadoNombre,
@@ -248,7 +308,9 @@ export async function sendReportUpdateNotification(
       payload: {
         reportId,
         newStatusId,
-        title: reportTitle
+        title: reportTitle,
+        destinatario_user_id: userId,
+        role: 'ciudadano'
       }
     });
 
@@ -261,16 +323,19 @@ export async function sendReportUpdateNotification(
  * Maneja la notificación recibida y navega a la pantalla correspondiente
  */
 export function setupNotificationListeners(
-  onNotificationReceived: (data: NotificationData) => void
+  onNotificationReceived: (data: NotificationData | AssignmentNotificationData) => void
 ): () => void {
   // Listener para cuando llega una notificación y la app está en primer plano
   const receivedSubscription = Notifications.addNotificationReceivedListener(
     (notification) => {
-      const data = notification.request.content.data as unknown as NotificationData;
-  if (__DEV__) console.log('📬 Notificación recibida:', data);
-      
-      if (data.type === 'report_status_change') {
-        onNotificationReceived(data);
+      const data = notification.request.content.data as unknown as
+        | NotificationData
+        | AssignmentNotificationData;
+      if (__DEV__) console.log('📬 Notificación recibida:', data);
+
+      // Manejar tanto cambio de estado como asignación
+      if (data?.type === 'report_status_change' || data?.type === 'report_assigned') {
+        onNotificationReceived(data as NotificationData | AssignmentNotificationData);
       }
     }
   );
@@ -278,11 +343,13 @@ export function setupNotificationListeners(
   // Listener para cuando el usuario toca la notificación
   const responseSubscription = Notifications.addNotificationResponseReceivedListener(
     (response) => {
-      const data = response.notification.request.content.data as unknown as NotificationData;
-  if (__DEV__) console.log('👆 Usuario tocó la notificación:', data);
-      
-      if (data.type === 'report_status_change') {
-        onNotificationReceived(data);
+      const data = response.notification.request.content.data as unknown as
+        | NotificationData
+        | AssignmentNotificationData;
+      if (__DEV__) console.log('👆 Usuario tocó la notificación:', data);
+
+      if (data?.type === 'report_status_change' || data?.type === 'report_assigned') {
+        onNotificationReceived(data as NotificationData | AssignmentNotificationData);
       }
     }
   );
@@ -297,14 +364,23 @@ export function setupNotificationListeners(
 /**
  * Obtiene la última notificación que abrió la app (si existe)
  */
-export async function getInitialNotification(): Promise<NotificationData | null> {
-  const response = await Notifications.getLastNotificationResponseAsync();
-  
-  if (response) {
-    const data = response.notification.request.content.data as unknown as NotificationData;
-    return data.type === 'report_status_change' ? data : null;
-  }
-  
+export async function getInitialNotification(): Promise<NotificationData | AssignmentNotificationData | null> {
+  // `getLastNotificationResponseAsync` puede estar marcado como obsoleto
+  // en algunas versiones de `expo-notifications`. Usar un getter seguro
+  // que pruebe varias firmas para mantener compatibilidad hacia atrás.
+  const getter = (Notifications as any).getLastNotificationResponseAsync ?? (Notifications as any).getLastNotificationResponse;
+
+  if (typeof getter !== 'function') return null;
+
+  const response = await getter.call(Notifications);
+  if (!response) return null;
+
+  const data = response.notification?.request?.content?.data as unknown as
+    | NotificationData
+    | AssignmentNotificationData;
+
+  if (data?.type === 'report_status_change') return data as NotificationData;
+  if (data?.type === 'report_assigned') return data as AssignmentNotificationData;
   return null;
 }
 export default {

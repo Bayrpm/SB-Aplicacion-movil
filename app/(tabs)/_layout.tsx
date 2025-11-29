@@ -1,5 +1,6 @@
 import { useAuth } from '@/app/features/auth';
 // ReportPickerModal se muestra desde la pantalla `citizenReport` via tabPress
+import { MovilProvider } from '@/app/features/profileInspector/context/movilContext';
 import { useReportModal } from '@/app/features/report/context';
 import { FontSizeProvider } from '@/app/features/settings/fontSizeContext';
 import { HapticTab } from '@/components/haptic-tab';
@@ -86,18 +87,21 @@ export default function TabLayout() {
     };
   }, [loading, inspectorLoading]);
 
-  // Navegar al tab correcto cuando el rol se define
+  // Navegar al tab correcto cuando el rol se define (solo en el montaje inicial)
   useEffect(() => {
     if (!loading && !inspectorLoading && typeof isInspector === 'boolean') {
-
-  const segs = (segments as string[]) || [];
-  const alreadyInside = segs.includes('citizen') || segs.includes('inspector');
+      const segs = (segments as string[]) || [];
+      const alreadyInside = segs.includes('citizen') || segs.includes('inspector');
+      
+      // Solo navegar si no estamos dentro de las rutas correctas
       if (!alreadyInside) {
         const routePath = isInspector ? '/inspector/inspectorHome' : '/citizen/citizenHome';
         router.replace(routePath);
       }
     }
-  }, [loading, inspectorLoading, isInspector, router]);
+    // Remover 'router' y 'segments' de las dependencias para evitar re-renderizados constantes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, inspectorLoading, isInspector]);
 
   const splashVisibleGlobal =
     typeof (globalThis as any).__APP_SPLASH_VISIBLE__ !== 'undefined'
@@ -139,10 +143,12 @@ export default function TabLayout() {
   return (
     <>
       <FontSizeProvider>
-  {/* Background panel under the tab bar to avoid seeing app content through it.
-    Use full tabBarHeight and anchor to bottom:0 so it always covers the area
-    regardless of extraBottom/platform differences. */}
-  <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: tabBarHeight, backgroundColor: '#222', zIndex: 998 }} />
+        <MovilProvider>
+  {/* Background: native tab bar will be blue; render a small overlay only
+     for the system/navigation area (insets.bottom) to avoid tinting system buttons. */}
+  {(insets.bottom || 0) > 0 ? (
+    <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: insets.bottom || 0, backgroundColor: '#222', zIndex: 998 }} pointerEvents="none" />
+  ) : null}
 
         
         {/* barra navegacion inspector */}
@@ -167,6 +173,8 @@ export default function TabLayout() {
           paddingBottom: insets.bottom || 0,
           paddingTop: 8,
           overflow: 'visible',
+          // Use the app's blue as the bar background; keep bottom overlay
+          // to darken the system navigation area so buttons are not tinted.
           backgroundColor: '#0A4A90',
           borderTopWidth: 0,
           elevation: 12,
@@ -255,14 +263,14 @@ export default function TabLayout() {
         }
       />
       <Tabs.Screen
-        name="inspector/inspectorNotification"
+        name="inspector/inspectorReport"
         options={
           isInspector
             ? {
-                title: 'notificaciones',
+                title: 'Reportes',
                 tabBarIcon: ({ color }) => (
                   <View style={{ width: 72, height: 52, marginTop: 8, alignItems: 'center', justifyContent: 'center' }}>
-                    <IconSymbol size={36} name="notification.fill" color={color} />
+                    <IconSymbol size={36} name="form" color={color} />
                   </View>
                 ),
                 tabBarItemStyle: { flex: 1 },
@@ -292,6 +300,7 @@ export default function TabLayout() {
       />
   </TabsAny>
   {/* ReportPickerModal se muestra desde la pantalla `citizen/citizenReport` (escucha tabPress) */}
+        </MovilProvider>
       </FontSizeProvider>
     </>
   );

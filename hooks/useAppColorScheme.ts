@@ -5,8 +5,8 @@ import { Appearance, ColorSchemeName } from 'react-native';
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 // ===== Estado global (singleton por módulo) =====
-let currentMode: ThemeMode = 'system';
-let currentScheme: ColorSchemeName = Appearance.getColorScheme();
+let currentMode: ThemeMode = 'light';
+let currentScheme: ColorSchemeName = 'light';
 const listeners = new Set<(scheme: ColorSchemeName) => void>();
 let loaded = false;
 let systemSub: { remove: () => void } | null = null;

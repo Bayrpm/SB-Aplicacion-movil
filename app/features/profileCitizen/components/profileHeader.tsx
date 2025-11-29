@@ -22,6 +22,8 @@ interface ProfileHeaderProps {
   backgroundColor?: string;
   onSettingsPress?: () => void;
   onEditPress?: () => void;
+  /** Si es false, se ocultan las acciones de editar/avtar */
+  showActions?: boolean;
   onHeightChange?: (height: number) => void;
 }
 
@@ -35,6 +37,7 @@ export default function ProfileHeader({
   backgroundColor,
   onSettingsPress,
   onEditPress,
+  showActions = true,
   onHeightChange,
 }: ProfileHeaderProps) {
   const { fontSize } = useFontSize();
@@ -192,24 +195,26 @@ export default function ProfileHeader({
         para quedar mitad dentro y mitad fuera del SVG. top se calcula sumando insets.top
         porque el SVG está desplazado por el paddingTop del header. */}
   <View style={{ position: 'absolute', left: 0, right: 0, top: (buttonTopState ?? computedButtonTopFallback), alignItems: 'center', zIndex: 30 }} pointerEvents="box-none">
-      <TouchableOpacity
-        style={[
-          styles.editButton,
-          {
-            backgroundColor: buttonBg,
-            borderWidth: 2,
-            borderColor: buttonBorderColor,
-            width: BUTTON_WIDTH,
-            height: BUTTON_HEIGHT,
-            borderRadius: Math.round(BUTTON_HEIGHT / 2),
-          },
-        ]}
-        onPress={onEditPress}
-        activeOpacity={0.7}
-      >
-        <IconSymbol name="edit" size={20} color={buttonContentColor} />
-        <Text style={[styles.editButtonText, { color: buttonContentColor, fontSize: getFontSizeValue(fontSize, 16) }]}>Editar</Text>
-      </TouchableOpacity>
+      {showActions && (
+        <TouchableOpacity
+          style={[
+            styles.editButton,
+            {
+              backgroundColor: buttonBg,
+              borderWidth: 2,
+              borderColor: buttonBorderColor,
+              width: BUTTON_WIDTH,
+              height: BUTTON_HEIGHT,
+              borderRadius: Math.round(BUTTON_HEIGHT / 2),
+            },
+          ]}
+          onPress={onEditPress}
+          activeOpacity={0.7}
+        >
+          <IconSymbol name="edit" size={20} color={buttonContentColor} />
+          <Text style={[styles.editButtonText, { color: buttonContentColor, fontSize: getFontSizeValue(fontSize, 16) }]}>Editar</Text>
+        </TouchableOpacity>
+      )}
     </View>
       {/* Botón Editar: ahora hijo de headerContainer, posición absoluta respecto a la pantalla */}
 
@@ -235,7 +240,8 @@ export default function ProfileHeader({
         {/* Avatar: ahora responsivo para pantallas pequeñas/grandes */}
         <TouchableOpacity
           activeOpacity={0.8}
-          onPress={() => {
+          onPress={async () => {
+            if (!showActions) return;
             // Construir botones dinámicamente: Modificar, Eliminar (solo si hay avatar), Cancelar
             const buttons: any[] = [];
 
@@ -311,9 +317,11 @@ export default function ProfileHeader({
               <Text style={[styles.avatarText, { fontSize: getFontSizeValue(fontSize, Math.max(28, Math.round(Math.min(120, Math.round(width * 0.28)) * 0.36))) }]}>{userInitials}</Text>
             )}
           {/* pequeño icono superpuesto */}
-          <View style={styles.avatarOverlayBtn} pointerEvents="none">
-            <IconSymbol name="camera" size={18} color="#fff" />
-          </View>
+          {showActions && (
+            <View style={styles.avatarOverlayBtn} pointerEvents="none">
+              <IconSymbol name="camera" size={18} color="#fff" />
+            </View>
+          )}
         </TouchableOpacity>
 
         {/* Nombre del usuario */}

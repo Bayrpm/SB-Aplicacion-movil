@@ -123,12 +123,13 @@ export async function signInUser(email: string, password: string) {
     // Consulta existencia booleana de inspector
     const { data: inspectorData, error: inspectorError } = await supabase
       .from('inspectores')
-      .select('id')
+      .select('id, activo')
       .eq('usuario_id', userId)
       .limit(1)
       .maybeSingle();
 
-    const isInspector = !!inspectorData;
+    // Considerar inspector sólo si existe registro y `activo` es true
+    const isInspector = !!inspectorData && inspectorData.activo === true;
     const combinedError = profileError ?? inspectorError ?? null;
 
     return { profile: profile ?? null, isInspector, error: combinedError, session: data?.session ?? null, user: data?.user ?? null, exists: true };
@@ -155,14 +156,14 @@ export async function isUserInspector(userId: string): Promise<boolean> {
   try {
     const { data, error } = await supabase
       .from('inspectores')
-      .select('id')
+      .select('id, activo')
       .eq('usuario_id', userId)
       .limit(1)
       .maybeSingle();
     if (error) {
       return false;
     }
-    return !!data;
+    return !!data && data.activo === true;
   } catch {
     return false;
   }
@@ -173,6 +174,18 @@ export async function isUserInspector(userId: string): Promise<boolean> {
  */
 export async function signOut() {
   try {
+    // Intentar eliminar token de notificaciones asociado al usuario/dispositivo
+    // antes de limpiar la sesión. Import dinámico para evitar ciclos de dependencia.
+    try {
+      const svc = await import('@/app/services/notificationService');
+      if (svc && typeof svc.unregisterPushNotifications === 'function') {
+        await svc.unregisterPushNotifications();
+      }
+    } catch (e) {
+      // No fatal: seguimos con el signOut aunque falle el borrado de token
+      if (typeof __DEV__ !== 'undefined' && __DEV__) console.debug('unregisterPushNotifications falló:', e);
+    }
+
     // Intenta sign out "completo" usando helper que además limpia AsyncStorage
     // importamos dinámicamente para evitar ciclos de dependencia
     const mod = await import('@/app/shared/lib/supabase');

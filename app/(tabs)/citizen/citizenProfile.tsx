@@ -63,10 +63,35 @@ export default function HomeScreen() {
   // Detectar si viene desde una notificación y cargar el reporte
   React.useEffect(() => {
     if (params.openReportId) {
-      // Abrir reporte desde notificación (sin log de depuración)
+      // Si el usuario actual es inspector, ignoramos el parámetro
+      // y nos aseguramos de navegar al flujo de inspector para evitar
+      // que se muestre la UI de ciudadano por error.
+      if (isInspector) {
+        try {
+          router.replace('/inspector/inspectorHome');
+        } catch (e) {
+          // noop
+        }
+        return;
+      }
+
+      // Abrir reporte desde notificación (solo si NO es inspector)
       loadReportFromNotification(params.openReportId as string);
     }
   }, [params.openReportId]);
+
+  // Seguridad adicional: si este componente se monta pero el usuario es inspector,
+  // redirigimos inmediatamente al flujo de inspector para evitar mostrar contenido
+  // de ciudadano (por ejemplo cuando quedan params residuales en el router).
+  React.useEffect(() => {
+    if (isInspector) {
+      try {
+        router.replace('/inspector/inspectorHome');
+      } catch (e) {
+        // noop
+      }
+    }
+  }, [isInspector]);
 
   // Función para cargar un reporte específico desde su ID
   const loadReportFromNotification = async (reportId: string) => {

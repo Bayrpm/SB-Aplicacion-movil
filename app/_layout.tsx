@@ -22,7 +22,7 @@ export const unstable_settings = {
 function DeepLinkHandler() {
   const router = useRouter();
   const { openReportDetail } = useReportModal();
-  const { session } = useAuth();
+  const { session, isInspector } = useAuth();
 
   useEffect(() => {
     // Solo manejar deep links si hay sesión activa
@@ -46,17 +46,28 @@ function DeepLinkHandler() {
     return () => {
       subscription.remove();
     };
-  }, [session]);
+  }, [session, isInspector]);
 
   const handleDeepLink = (url: string) => {
     // Formato esperado: sbaplicacionmovil://report/{reportId}
     const match = url.match(/sbaplicacionmovil:\/\/report\/(.+)/);
     if (match && match[1]) {
       const reportId = match[1];
-      
+
+      // Si el usuario actual es inspector, no abrimos el modal ciudadano.
+      // En su lugar, navegamos al flujo de inspector y descartamos el deep link.
+      if (isInspector) {
+        try {
+          router.push('/(tabs)/inspector/inspectorHome' as any);
+        } catch (e) {
+          // noop
+        }
+        return;
+      }
+
       // Navegar al home del ciudadano
       router.push('/(tabs)/citizen/citizenHome' as any);
-      
+
       // Esperar un momento para que la navegación se complete y luego abrir el modal
       setTimeout(() => {
         openReportDetail(reportId);

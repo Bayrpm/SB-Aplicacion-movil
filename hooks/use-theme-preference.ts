@@ -9,7 +9,7 @@ const THEME_STORAGE_KEY = '@theme_mode';
 
 export function useThemePreference() {
   const systemColorScheme = useColorScheme();
-  const [themeMode, setThemeMode] = useState<ThemeMode>('system');
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [isLoading, setIsLoading] = useState(true);
 
   // Cargar preferencia guardada

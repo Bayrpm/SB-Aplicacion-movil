@@ -1,5 +1,6 @@
 // Fallback for using MaterialIcons on Android and web.
 import { Ionicons } from '@expo/vector-icons';
+import AntDesign from '@expo/vector-icons/AntDesign';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -42,6 +43,11 @@ const FA_MAPPING: Record<string, string> = {
   // alias corto para X/Twitter
   'x': 'x',
   'clock': 'clock',
+};
+
+// Mapeo a AntDesign (icons usados en UI)
+const ANT_MAPPING: Record<string, string> = {
+  'form': 'form',
 };
 
 // Mapeo a MaterialCommunityIcons (MC)
@@ -119,7 +125,15 @@ const EXTRA_MATERIAL: Record<string, string> = {
   'description': 'description',
   'security': 'security',
   'check': 'check',
+  'car': 'car'
 };
+
+// MaterialIcons uses 'directions-car' for car-like icon names. Update mapping
+if (EXTRA_MATERIAL['car'] === 'car') {
+  EXTRA_MATERIAL['car'] = 'directions-car';
+}
+// Alias adicional: 'plus' (usado en UI) -> Material 'add'
+EXTRA_MATERIAL['plus'] = 'add';
 
 /**
  * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
@@ -149,6 +163,11 @@ export function IconSymbol({
   // MaterialCommunityIcons
   if (MC_MAPPING[key]) {
     return <MaterialCommunityIcons name={MC_MAPPING[key] as any} size={size} color={color as any} style={style} />;
+  }
+
+  // AntDesign
+  if (ANT_MAPPING[key]) {
+    return <AntDesign name={ANT_MAPPING[key] as any} size={size} color={color as any} style={style} />;
   }
 
   // FontAwesome5

@@ -1,9 +1,10 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ProfileHeader from '@/app/features/profileCitizen/components/profileHeader';
+import ProfileSettingsModal from '@/app/features/profileCitizen/components/settingsModal';
 
 import { useAuth } from '@/app/features/auth';
 import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
@@ -13,7 +14,11 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
-import TurnCard from '@/app/features/profileInspector/components/turnCardComponent';
+import { registrarSalidaTurnoActual, verificarTurnoActivo } from '@/app/features/profileInspector/api/turnInspector.api';
+import { ModalTurnInspector } from '@/app/features/profileInspector/components/modalTurnInspector';
+import TurnCardContainer from '@/app/features/profileInspector/components/turnCardComponent';
+import { VehicleCard } from '@/app/features/profileInspector/components/vehicleCardComponent';
+import { useMovil } from '@/app/features/profileInspector/context/movilContext';
 
 const { height } = Dimensions.get('window');
 
@@ -32,7 +37,15 @@ export default function HomeScreen() {
   const spinnerColor = useThemeColor({ light: '#0A4A90', dark: '#FFFFFF' }, 'tint');
 
   const [profile, setProfile] = React.useState<InspectorProfile | null>(null);
+  const [headerHeight, setHeaderHeight] = React.useState<number>(Math.min(350, height * 0.35));
   const [loading, setLoading] = React.useState(true);
+  const [showTurnModal, setShowTurnModal] = React.useState(false);
+  const [turnoActivo, setTurnoActivo] = React.useState(false);
+  const [loadingTurno, setLoadingTurno] = React.useState(true);
+  const [showSettingsModal, setShowSettingsModal] = React.useState(false);
+
+  // Usar el contexto global del móvil
+  const { movilActivo, datosMovilActivo, loadingMovil } = useMovil();
 
   useFocusEffect(
     React.useCallback(() => {
@@ -60,7 +73,19 @@ export default function HomeScreen() {
         }
       };
 
+      const checkTurnoStatus = async () => {
+        setLoadingTurno(true);
+        const activo = await verificarTurnoActivo();
+        if (isActive) {
+          setTurnoActivo(activo);
+          setLoadingTurno(false);
+        }
+      };
+
+      // El móvil ya se carga desde el contexto, no necesitamos verificarlo aquí
+
       fetchProfile();
+      checkTurnoStatus();
 
       return () => {
         isActive = false;
@@ -103,6 +128,37 @@ export default function HomeScreen() {
   const displayEmail = profile?.perfil?.email ?? user?.email ?? 'Sin correo disponible';
   const displayPhone = profile?.perfil?.telefono ?? 'Sin teléfono registrado';
   const avatarUrl = profile?.perfil?.avatar_url ?? null;
+
+  const handleCerrarTurno = () => {
+    AppAlert.alert(
+      'Cerrar turno',
+      '¿Estás seguro que deseas cerrar el turno?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar turno',
+          style: 'destructive',
+          onPress: async () => {
+            setLoadingTurno(true);
+            const result = await registrarSalidaTurnoActual();
+            
+            if (!result.ok) {
+              AppAlert.alert('Error', result.message);
+              setLoadingTurno(false);
+              return;
+            }
+
+            setTurnoActivo(false);
+            setLoadingTurno(false);
+            AppAlert.alert('Éxito', 'Turno cerrado correctamente');
+            // Recargar perfil
+            const { data: profileData } = await getInspectorProfile();
+            setProfile(profileData);
+          },
+        },
+      ]
+    );
+  };
 
   const handleSignOut = () => {
     AppAlert.alert(
@@ -151,18 +207,22 @@ export default function HomeScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 90 }, // espacio para tab bar u otros elementos
+          { paddingBottom: insets.bottom + 140 }, // espacio para tab bar u otros elementos (aumentado)
         ]}
         showsVerticalScrollIndicator={false}
       >
         {/* HEADER */}
-        <View style={styles.headerWrapper}>
+        <View style={[styles.headerWrapper, { height: headerHeight }] }>
           <ProfileHeader
             userName={displayName}
             userEmail={displayEmail}
             userPhone={displayPhone}
             userInitials={displayInitials}
             avatarUrl={avatarUrl}
+            showActions={false}
+            onHeightChange={(h) => {
+              if (h && typeof h === 'number' && h > 0) setHeaderHeight(h);
+            }}
           />
 
           {/* Botón Cerrar sesión */}
@@ -192,23 +252,25 @@ export default function HomeScreen() {
               },
             ]}
             activeOpacity={0.7}
-            onPress={() => { }}
+            onPress={() => setShowSettingsModal(true)}
           >
             <IconSymbol name="settings" size={28} color={settingsIconColor} />
           </TouchableOpacity>
         </View>
 
+        {/* Settings modal for inspector (limited options) */}
+        <ProfileSettingsModal
+          visible={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+          inspector={true}
+        />
+
         {/* Espacio entre header y contenido */}
         <View style={styles.headerSpacer} />
 
         {/* Informacion card turnos */}
-        <View style={styles.container}>
-          <TurnCard
-            shiftTitle="Turno mañana"
-            schedule="06:00 am - 13:00 pm"
-            statusText="Estado: Activo."
-            timeAgo="Hace 2 horas."
-            place="Trebol"
+        <View style={[styles.container, { marginTop: 20 }]}>
+          <TurnCardContainer
             onPressDetail={() => {
               console.log('Ver detalle del turno');
             }}
@@ -217,7 +279,62 @@ export default function HomeScreen() {
             }}
           />
         </View>
+
+        {/* Botón de control de turno */}
+        <View style={[styles.startTurnButtonContainer, { marginBottom: Math.max(insets.bottom, 16) }] }>
+          {loadingTurno ? (
+            <ActivityIndicator size="small" color="#2563eb" />
+          ) : turnoActivo ? (
+            <TouchableOpacity
+              style={[styles.startTurnButton, styles.endTurnButton]}
+              activeOpacity={0.7}
+              onPress={handleCerrarTurno}
+            >
+              <IconSymbol name="clock" size={24} color="#FFFFFF" />
+              <Text style={styles.startTurnButtonText}>Cerrar Turno</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.startTurnButton}
+              activeOpacity={0.7}
+              onPress={() => {
+                console.log('[inspectorProfile] Iniciar Turno pressed');
+                setShowTurnModal(true);
+              }}
+            >
+              <IconSymbol name="clock" size={24} color="#FFFFFF" />
+              <Text style={styles.startTurnButtonText}>Iniciar Turno</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Card de móvil activo */}
+        {!loadingMovil && movilActivo && datosMovilActivo && (
+          <View style={styles.vehicleCardContainer}>
+            <VehicleCard
+              movil={datosMovilActivo.movil}
+              km_inicio={datosMovilActivo.km_inicio}
+            />
+          </View>
+        )}
       </ScrollView>
+
+      {/* Modal de inicio de turno */}
+      <ModalTurnInspector
+        visible={showTurnModal}
+        onClose={() => setShowTurnModal(false)}
+        onIngresoExitoso={(data) => {
+          console.log('Turno iniciado:', data);
+          setShowTurnModal(false);
+          setTurnoActivo(true);
+          // Recargar perfil para actualizar datos
+          const fetchProfile = async () => {
+            const { data: profileData } = await getInspectorProfile();
+            setProfile(profileData);
+          };
+          fetchProfile();
+        }}
+      />
     </View>
   );
 }
@@ -275,6 +392,35 @@ const styles = StyleSheet.create({
   headerSpacer: {
     height: 20,
   },
-
-
+  startTurnButtonContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  startTurnButton: {
+    backgroundColor: '#2563eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  startTurnButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  endTurnButton: {
+    backgroundColor: '#dc2626',
+  },
+  vehicleCardContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
 });

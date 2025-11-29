@@ -12,8 +12,11 @@ export interface InspectorTurnType {
   id: number;
   nombre: string;
   descripcion: string | null;
+  activo: boolean;
   hora_inicio: string;
   hora_termino: string;
+  operador: boolean;
+  inspector: boolean;
 }
 
 export interface InspectorProfile {
@@ -33,6 +36,12 @@ function normalizeRelation<T>(relation: T | T[] | null | undefined): T | null {
   return relation as T;
 }
 
+/**
+ * Obtiene el perfil completo del inspector autenticado
+ * Incluye información personal y datos del turno asignado
+ * 
+ * @returns Objeto con data (perfil del inspector) y error
+ */
 export async function getInspectorProfile(): Promise<{
   data: InspectorProfile | null;
   error: string | null;
@@ -65,8 +74,11 @@ export async function getInspectorProfile(): Promise<{
           id,
           nombre,
           descripcion,
+          activo,
           hora_inicio,
-          hora_termino
+          hora_termino,
+          operador,
+          inspector
         )
       `)
       .eq('usuario_id', userData.user.id)
@@ -94,7 +106,7 @@ export async function getInspectorProfile(): Promise<{
         activo: data.activo,
         tipo_turno: data.tipo_turno ?? null,
         perfil: normalizeRelation<InspectorPersonInfo>(data.perfil),
-        turno_tipo: normalizeRelation<InspectorTurnType>(data.turno_tipo),
+        turno_tipo: normalizeRelation<InspectorTurnType>(data.turno_tipo as any),
       },
       error: null,
     };
@@ -107,3 +119,56 @@ export async function getInspectorProfile(): Promise<{
   }
 }
 
+/**
+ * Obtiene solo los datos del turno asignado al inspector autenticado
+ * Esta es una función de conveniencia que extrae el turno de getInspectorProfile()
+ * 
+ * @returns Datos del turno o null si no tiene turno asignado
+ * @throws Error si hay un problema al obtener los datos
+ */
+export async function getTurnoInspector(): Promise<InspectorTurnType | null> {
+  const { data, error } = await getInspectorProfile();
+  
+  if (error) {
+    throw new Error(error);
+  }
+  
+  return data?.turno_tipo ?? null;
+}
+
+/**
+ * Interfaz de respuesta compatible con el formato anterior
+ * @deprecated Usar getInspectorProfile() directamente para obtener más información
+ */
+export interface InspectorTurnoResponse {
+  inspector_id: number;
+  tipo_turno_id: number | null;
+  turno_data: InspectorTurnType | null;
+}
+
+/**
+ * Obtiene los datos del turno en formato compatible con la versión anterior
+ * @deprecated Usar getInspectorProfile() o getTurnoInspector() en su lugar
+ * 
+ * @returns Objeto con información del inspector y su turno asignado
+ * @throws Error si no hay usuario autenticado o si ocurre un error
+ */
+export async function getTurnoInspectorCompat(): Promise<InspectorTurnoResponse> {
+  const { data, error } = await getInspectorProfile();
+  
+  if (error) {
+    throw new Error(error);
+  }
+  
+  if (!data) {
+    throw new Error('Inspector no encontrado');
+  }
+  
+  return {
+    inspector_id: data.id,
+    tipo_turno_id: data.tipo_turno,
+    turno_data: data.turno_tipo,
+  };
+}
+
+export default {};
