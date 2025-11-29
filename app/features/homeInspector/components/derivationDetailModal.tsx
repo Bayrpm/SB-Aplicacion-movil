@@ -5,8 +5,10 @@ import {
   fetchDenunciaObservaciones,
   updateDenunciaObservacion,
 } from '@/app/features/homeInspector/api/inspectorDerivations.api';
+import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { supabase } from '@/app/shared/lib/supabase';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -143,6 +145,24 @@ export default function DerivationDetailModal({
   const [observations, setObservations] = useState<any[]>([]);
   const [loadingObs, setLoadingObs] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const { fontSize } = useFontSize();
+  const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background');
+  const textColor = useThemeColor({}, 'text');
+  const mutedColor = useThemeColor({ light: '#6B7280', dark: '#9CA3AF' }, 'icon');
+  const tintColor = useThemeColor({ light: '#2563eb', dark: '#2563eb' }, 'tint');
+
+  const getFontSizeValue = (size: 'small' | 'medium' | 'large', base: number) => {
+    switch (size) {
+      case 'small':
+        return base * 0.85;
+      case 'medium':
+        return base;
+      case 'large':
+        return base * 1.25;
+      default:
+        return base;
+    }
+  };
   
 
   if (!derivacion) {
@@ -328,16 +348,16 @@ export default function DerivationDetailModal({
       }}
     >
       <View style={styles.backdrop}>
-        <View style={[styles.modalContainer, { maxHeight: modalMaxHeight }]}>
+        <View style={[styles.modalContainer, { maxHeight: modalMaxHeight, backgroundColor: bgColor }]}>
             <View style={styles.header}>
             <View style={styles.headerTitleRow}>
               <IconSymbol
                 name="assignment"
                 size={22}
                 style={styles.headerIcon}
-                color="#000"
+                color={tintColor}
               />
-              <Text style={styles.headerTitle}>
+              <Text style={[styles.headerTitle, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
                 {derivacion.titulo || 'Detalle de denuncia'}
               </Text>
             </View>
@@ -347,7 +367,7 @@ export default function DerivationDetailModal({
               disabled={isClosing}
               style={styles.closeButton}
             >
-              <IconSymbol name="close" size={20} color="#000" />
+              <IconSymbol name="close" size={20} color={mutedColor} />
             </TouchableOpacity>
           </View>
 
@@ -367,14 +387,14 @@ export default function DerivationDetailModal({
             >
             {/* Folio y estado */}
             <View style={[styles.row, styles.rowInline]}>
-              <Text style={styles.label}>Folio</Text>
-              <Text style={styles.folioValue}>{derivacion.folio || 'Sin folio'}</Text>
+              <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>Folio</Text>
+              <Text style={[styles.folioValue, { color: tintColor, fontSize: getFontSizeValue(fontSize, 16) }]}>{derivacion.folio || 'Sin folio'}</Text>
             </View>
 
             <View style={[styles.row, styles.rowInline]}>
-              <Text style={styles.label}>Estado derivación</Text>
+              <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>Estado derivación</Text>
               <View style={[styles.badge, { backgroundColor: badgeCfg.bgColor }]}>
-                <Text style={[styles.badgeText, { color: badgeCfg.textColor }]}>{estadoLabel}</Text>
+                <Text style={[styles.badgeText, { color: badgeCfg.textColor, fontSize: getFontSizeValue(fontSize, 12) }]}>{estadoLabel}</Text>
               </View>
             </View>
 
@@ -387,54 +407,54 @@ export default function DerivationDetailModal({
             */}
 
             <View style={styles.row}>
-              <Text style={styles.label}>Derivada el</Text>
-              <Text style={styles.value}>Fecha: {fechaDerivacionFecha}  Hora: {fechaDerivacionHora}</Text>
+              <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>Derivada el</Text>
+              <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Fecha: {fechaDerivacionFecha}  Hora: {fechaDerivacionHora}</Text>
             </View>
 
             {/* Fechas de atención */}
             {derivacion.fechaInicioAtencion && (
               <View style={styles.row}>
-                <Text style={styles.label}>Inicio atención</Text>
-                <Text style={styles.value}>Fecha: {formatDate(derivacion.fechaInicioAtencion)}  Hora: {formatTime(derivacion.fechaInicioAtencion)}</Text>
+                <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>Inicio atención</Text>
+                <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Fecha: {formatDate(derivacion.fechaInicioAtencion)}  Hora: {formatTime(derivacion.fechaInicioAtencion)}</Text>
               </View>
             )}
 
             {derivacion.fechaTermino && (
               <View style={styles.row}>
-                <Text style={styles.label}>Término atención</Text>
-                <Text style={styles.value}>Fecha: {formatDate(derivacion.fechaTermino)}  Hora: {formatTime(derivacion.fechaTermino)}</Text>
+                <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>Término atención</Text>
+                <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Fecha: {formatDate(derivacion.fechaTermino)}  Hora: {formatTime(derivacion.fechaTermino)}</Text>
               </View>
             )}
 
             {derivacion.descripcion && (
               <View style={styles.row}>
-                <Text style={styles.label}>Descripción</Text>
-                <Text style={styles.value}>{derivacion.descripcion}</Text>
+                <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>Descripción</Text>
+                <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>{derivacion.descripcion}</Text>
               </View>
             )}
 
             {derivacion.ubicacionTexto && (
               <View style={styles.row}>
-                <Text style={styles.label}>Dirección</Text>
-                <Text style={styles.value}>{derivacion.ubicacionTexto}</Text>
+                <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>Dirección</Text>
+                <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>{derivacion.ubicacionTexto}</Text>
               </View>
             )}
 
             {/* Observaciones asociadas a la denuncia */}
             <View style={styles.row}>
-              <Text style={styles.label}>Observaciones</Text>
+              <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>Observaciones</Text>
               {loadingObs ? (
-                <Text style={styles.value}>Cargando...</Text>
+                <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Cargando...</Text>
               ) : observations.length === 0 ? (
-                <Text style={styles.value}>Sin observaciones</Text>
+                <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Sin observaciones</Text>
               ) : (
                 observations.map((o) => (
                   <View key={o.id} style={styles.obsItem}>
                     <View style={styles.obsRow}>
                       <View style={styles.obsInfo}>
                         <View style={styles.obsHeader}>
-                          <Text style={styles.obsTipo}>{o.tipo === 'TERRENO' ? 'Inspector' : o.tipo}</Text>
-                          <Text style={styles.obsDate}>{formatDate(o.created_at)} {formatTime(o.created_at)}</Text>
+                          <Text style={[styles.obsTipo, { color: '#444', fontSize: getFontSizeValue(fontSize, 12) }]}>{o.tipo === 'TERRENO' ? 'Inspector' : o.tipo}</Text>
+                          <Text style={[styles.obsDate, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 11) }]}>{formatDate(o.created_at)} {formatTime(o.created_at)}</Text>
                         </View>
 
                         {editingObsId === o.id ? (
@@ -444,7 +464,7 @@ export default function DerivationDetailModal({
                                 if (r) inputRefs.current[o.id] = r;
                                 else delete inputRefs.current[o.id];
                               }}
-                              style={styles.editInput}
+                              style={[styles.editInput, { backgroundColor: bgColor, color: textColor, fontSize: getFontSizeValue(fontSize, 13) }]}
                               value={editingObsContent}
                               onChangeText={setEditingObsContent}
                               multiline
@@ -470,7 +490,7 @@ export default function DerivationDetailModal({
                                 disabled={editingLoading}
                                 accessibilityRole="button"
                               >
-                                <Text style={styles.smallButtonSecondaryText}>Cancelar</Text>
+                                <Text style={[styles.smallButtonSecondaryText, { color: tintColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Cancelar</Text>
                               </TouchableOpacity>
 
                               <TouchableOpacity
@@ -537,13 +557,13 @@ export default function DerivationDetailModal({
                                 {editingLoading ? (
                                   <ActivityIndicator color="#fff" />
                                 ) : (
-                                  <Text style={styles.smallButtonPrimaryText}>Guardar</Text>
+                                  <Text style={[styles.smallButtonPrimaryText, { fontSize: getFontSizeValue(fontSize, 14) }]}>Guardar</Text>
                                 )}
                               </TouchableOpacity>
                             </View>
                           </View>
                         ) : (
-                          <Text style={styles.obsContenido}>{o.contenido}</Text>
+                          <Text style={[styles.obsContenido, { color: textColor, fontSize: getFontSizeValue(fontSize, 13) }]}>{o.contenido}</Text>
                         )}
                       </View>
 
@@ -554,13 +574,13 @@ export default function DerivationDetailModal({
                               setEditingObsId(o.id);
                               setEditingObsContent(o.contenido || '');
                             }}
-                            style={styles.editActionBlue}
+                            style={[styles.editActionBlue, { backgroundColor: tintColor }]}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             accessibilityRole="button"
                             accessibilityLabel={`Editar observación ${o.id}`}
                           >
                             <IconSymbol name="edit" size={18} color="#fff" />
-                            <Text style={styles.editActionText}>Editar</Text>
+                            <Text style={[styles.editActionText, { fontSize: getFontSizeValue(fontSize, 12) }]}>Editar</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -572,24 +592,25 @@ export default function DerivationDetailModal({
 
               {/* Zona de cierre: solo si la derivación NO está cerrada según estadoNombre */}
               {!isClosingMode && estadoNombre !== 'CERRADA' && (
-                <View style={styles.footer}>
+                <View style={[styles.footer, { borderTopColor: mutedColor }] }>
                   <TouchableOpacity
-                    style={styles.finalizarButton}
+                    style={[styles.finalizarButton, { backgroundColor: tintColor }]}
                     onPress={handleStartClosing}
                     disabled={isClosing}
                   >
-                    <Text style={styles.finalizarButtonText}>Finalizar caso</Text>
+                    <Text style={[styles.finalizarButtonText, { fontSize: getFontSizeValue(fontSize, 14) }]}>Finalizar caso</Text>
                   </TouchableOpacity>
                 </View>
               )}
 
               {isClosingMode && (
-                <View style={styles.footerClosing} ref={(r) => { footerRef.current = r; }}>
-                  <Text style={styles.reporteLabel}>Reporte final</Text>
+                <View style={[styles.footerClosing, { borderTopColor: mutedColor }]} ref={(r) => { footerRef.current = r; }}>
+                  <Text style={[styles.reporteLabel, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>Reporte final</Text>
                   <TextInput
                     ref={(r) => { reporteInputRef.current = r; }}
-                    style={styles.reporteInput}
+                    style={[styles.reporteInput, { backgroundColor: bgColor, color: textColor, fontSize: getFontSizeValue(fontSize, 13) }]}
                     placeholder="Describe brevemente qué hiciste y el resultado..."
+                    placeholderTextColor={mutedColor}
                     value={reporte}
                     onChangeText={setReporte}
                     editable={!isClosing}
@@ -598,24 +619,22 @@ export default function DerivationDetailModal({
 
                   <View style={styles.footerButtonsRow}>
                     <TouchableOpacity
-                      style={styles.cancelButton}
+                      style={[styles.cancelButton, { borderColor: mutedColor }]}
                       onPress={handleCancelClosing}
                       disabled={isClosing}
                     >
-                      <Text style={styles.cancelButtonText}>Cancelar</Text>
+                      <Text style={[styles.cancelButtonText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>Cancelar</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.confirmButton}
+                      style={[styles.confirmButton, { backgroundColor: tintColor }]}
                       onPress={handleConfirmClose}
                       disabled={isClosing}
                     >
                       {isClosing ? (
                         <ActivityIndicator color="#fff" />
                       ) : (
-                        <Text style={styles.confirmButtonText}>
-                          Confirmar cierre
-                        </Text>
+                        <Text style={[styles.confirmButtonText, { fontSize: getFontSizeValue(fontSize, 13) }]}>Confirmar cierre</Text>
                       )}
                     </TouchableOpacity>
                   </View>

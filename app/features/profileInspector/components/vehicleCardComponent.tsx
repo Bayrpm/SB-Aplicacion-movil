@@ -1,5 +1,7 @@
 // app/features/profileInspector/components/vehicleCardComponent.tsx
+import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Movil } from '../api/dataMovil.api';
@@ -23,34 +25,57 @@ export function VehicleCard({ movil, km_inicio }: VehicleCardProps) {
       : 'No especificado';
 
   return (
-    <View style={styles.card}>
-      <View style={styles.header}>
-        <IconSymbol name="car" size={28} color="#059669" />
-        <Text style={styles.title}>Móvil en uso</Text>
-      </View>
+    (() => {
+      const { fontSize } = useFontSize();
+      const bgColor = useThemeColor({ light: '#ffffff', dark: '#071229' }, 'background');
+      const textColor = useThemeColor({}, 'text');
+      const mutedColor = useThemeColor({ light: '#6b7280', dark: '#9CA3AF' }, 'icon');
+      const accent = useThemeColor({ light: '#059669', dark: '#059669' }, 'tint');
 
-      <View style={styles.content}>
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Patente:</Text>
-          <Text style={styles.value}>{movil.patente}</Text>
-        </View>
+      const getFontSizeValue = (size: 'small' | 'medium' | 'large', base: number) => {
+        switch (size) {
+          case 'small':
+            return base * 0.85;
+          case 'medium':
+            return base;
+          case 'large':
+            return base * 1.25;
+          default:
+            return base;
+        }
+      };
 
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Tipo:</Text>
-          <Text style={styles.value}>{movilTipo}</Text>
-        </View>
+      return (
+        <View style={[styles.card, { backgroundColor: bgColor }] }>
+          <View style={styles.header}>
+            <IconSymbol name="car" size={28} color={accent} />
+            <Text style={[styles.title, { color: textColor, fontSize: getFontSizeValue(fontSize, 18) }]}>Móvil en uso</Text>
+          </View>
 
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Vehículo:</Text>
-          <Text style={styles.value}>{vehiculoNombre}</Text>
-        </View>
+          <View style={styles.content}>
+            <View style={styles.infoRow}>
+              <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Patente:</Text>
+              <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 15) }]}>{movil.patente}</Text>
+            </View>
 
-        <View style={styles.infoRow}>
-          <Text style={styles.label}>Km inicial:</Text>
-          <Text style={styles.value}>{km_inicio.toLocaleString()} km</Text>
+            <View style={styles.infoRow}>
+              <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Tipo:</Text>
+              <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 15) }]}>{movilTipo}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Vehículo:</Text>
+              <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 15) }]}>{vehiculoNombre}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Text style={[styles.label, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Km inicial:</Text>
+              <Text style={[styles.value, { color: textColor, fontSize: getFontSizeValue(fontSize, 15) }]}>{km_inicio.toLocaleString()} km</Text>
+            </View>
+          </View>
         </View>
-      </View>
-    </View>
+      );
+    })()
   );
 }
 

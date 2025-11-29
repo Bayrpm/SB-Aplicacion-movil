@@ -2,6 +2,8 @@
 
 
 // app/features/profileInspector/components/TurnCardContainer.tsx
+import { useFontSize } from '@/app/features/settings/fontSizeContext';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { getTurnoInspectorCompat as getTurnoInspector, InspectorTurnoResponse } from '../api/inspectorProfile.api';
@@ -26,17 +28,37 @@ const TurnCard: React.FC<TurnCardProps> = ({
   onCloseShift,
 }) => {
   return (
-    <View style={styles.card}>
-      <Text style={styles.title}>{shiftTitle}</Text>
-      <Text style={styles.info}>Horario: {schedule}</Text>
-      {description && <Text style={styles.info}>Descripción: {description}</Text>}
-      <Text style={[styles.info, isActive ? styles.activeStatus : styles.inactiveStatus]}>
-        Estado: {isActive ? 'Activo' : 'Inactivo'}
-      </Text>
-      <Text style={styles.info}>
-        Tipo: {inspectorType ? 'Inspector' : 'Otro'}
-      </Text>
-    </View>
+    (() => {
+      const { fontSize } = useFontSize();
+      const bgColor = useThemeColor({ light: '#fff', dark: '#071229' }, 'background');
+      const textColor = useThemeColor({}, 'text');
+      const mutedColor = useThemeColor({ light: '#6B7280', dark: '#9CA3AF' }, 'icon');
+
+      const getFontSizeValue = (size: 'small' | 'medium' | 'large', base: number) => {
+        switch (size) {
+          case 'small':
+            return base * 0.85;
+          case 'medium':
+            return base;
+          case 'large':
+            return base * 1.25;
+          default:
+            return base;
+        }
+      };
+
+      return (
+        <View style={[styles.card, { backgroundColor: bgColor }] }>
+          <Text style={[styles.title, { color: textColor, fontSize: getFontSizeValue(fontSize, 18) }]}>{shiftTitle}</Text>
+          <Text style={[styles.info, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Horario: {schedule}</Text>
+          {description && <Text style={[styles.info, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Descripción: {description}</Text>}
+          <Text style={[styles.info, isActive ? styles.activeStatus : styles.inactiveStatus, { fontSize: getFontSizeValue(fontSize, 14) }]}>
+            Estado: {isActive ? 'Activo' : 'Inactivo'}
+          </Text>
+          <Text style={[styles.info, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 14) }]}>Tipo: {inspectorType ? 'Inspector' : 'Otro'}</Text>
+        </View>
+      );
+    })()
   );
 };
 

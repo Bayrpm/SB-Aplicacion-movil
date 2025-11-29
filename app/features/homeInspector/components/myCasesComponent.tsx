@@ -1,5 +1,7 @@
 // app/features/profileInspector/components/myCasesComponent.tsx
+import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useThemeColor } from '@/hooks/use-theme-color';
 import React from 'react';
 import {
     GestureResponderEvent,
@@ -57,10 +59,29 @@ export default function MyCases({
 }: MyCasesProps) {
   const statusCfg = STATUS_CONFIG[status];
 
+  const { fontSize } = useFontSize();
+  const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background');
+  const textColor = useThemeColor({}, 'text');
+  const mutedColor = useThemeColor({ light: '#6B7280', dark: '#9CA3AF' }, 'icon');
+  const accentColor = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint');
+
+  const getFontSizeValue = (size: 'small' | 'medium' | 'large', base: number) => {
+    switch (size) {
+      case 'small':
+        return base * 0.85;
+      case 'medium':
+        return base;
+      case 'large':
+        return base * 1.25;
+      default:
+        return base;
+    }
+  };
+
   const isInProgress = status === 'EN_PROCESO';
 
   return (
-    <View style={[styles.card, isInProgress && styles.cardInProgress]}>
+    <View style={[styles.card, isInProgress && styles.cardInProgress, { backgroundColor: bgColor }] }>
       {/* Header */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
@@ -68,9 +89,9 @@ export default function MyCases({
             name="alert-circle-outline"
             size={24}
             style={styles.carIcon}
-            color={'#000'}
+            color={accentColor}
           />
-          <Text style={styles.title}>{title}</Text>
+          <Text style={[styles.title, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>{title}</Text>
         </View>
 
         {/* Badge de estado */}
@@ -83,7 +104,7 @@ export default function MyCases({
           <Text
             style={[
               styles.statusText,
-              { color: statusCfg.textColor },
+              { color: statusCfg.textColor, fontSize: getFontSizeValue(fontSize, 11) },
             ]}
           >
             {statusCfg.label}
@@ -92,7 +113,7 @@ export default function MyCases({
       </View>
 
       {/* Descripción */}
-      <Text style={styles.description}>{description}</Text>
+      <Text style={[styles.description, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>{description}</Text>
 
       {/* Footer */}
       <View style={styles.footerRow}>
@@ -103,7 +124,7 @@ export default function MyCases({
               name="access-time"
               size={16}
               style={styles.footerIcon}
-              color={'#000'}
+              color={mutedColor}
             />
             {inspector ? (
               (() => {
@@ -125,12 +146,12 @@ export default function MyCases({
                   return null;
                 })();
 
-                if (maybeDate) {
+                  if (maybeDate) {
                   const d = maybeDate as Date;
                   const dateString = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
                   const timeString = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
                   return (
-                    <Text style={styles.footerText} numberOfLines={1}>
+                    <Text style={[styles.footerText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 11) }]} numberOfLines={1}>
                       Fecha: {dateString}  Hora: {timeString}
                     </Text>
                   );
@@ -138,15 +159,15 @@ export default function MyCases({
 
                 // Fallback: mostrar el texto original (ej. "Hace 1 hora")
                 return (
-                  <Text style={styles.footerText} numberOfLines={1}>
+                  <Text style={[styles.footerText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 11) }]} numberOfLines={1}>
                     {timeAgo}
                   </Text>
                 );
               })()
             ) : (
-              <Text style={styles.footerText} numberOfLines={1}>
-                {timeAgo}
-              </Text>
+                <Text style={[styles.footerText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 11) }]} numberOfLines={1}>
+                  {timeAgo}
+                </Text>
             )}
           </View>
           <View style={styles.footerItem}>
@@ -154,9 +175,9 @@ export default function MyCases({
               name="place"
               size={16}
               style={styles.footerIcon}
-              color={'#000'}
+              color={mutedColor}
             />
-            <Text style={styles.footerText} numberOfLines={1} ellipsizeMode="tail">
+            <Text style={[styles.footerText, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 11) }]} numberOfLines={1} ellipsizeMode="tail">
               {address}
             </Text>
           </View>
@@ -165,11 +186,11 @@ export default function MyCases({
         {/* Derecha: botón */}
         <View style={styles.footerRight}>
           <TouchableOpacity
-            style={styles.detailButton}
+            style={[styles.detailButton, { backgroundColor: accentColor }]}
             onPress={onPressDetail}
             activeOpacity={0.7}
           >
-            <Text style={styles.detailButtonText}>Ver detalle</Text>
+            <Text style={[styles.detailButtonText, { fontSize: getFontSizeValue(fontSize, 12) }]}>Ver detalle</Text>
           </TouchableOpacity>
         </View>
       </View>
