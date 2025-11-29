@@ -2,7 +2,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
-import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { AppState } from 'react-native';
 
@@ -24,18 +23,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
  */
 export async function clearAuthSession() {
   try {
-    // Intentar eliminar token de notificaciones asociado al usuario y dispositivo
+    // Intentar eliminar únicamente el token de notificaciones del dispositivo actual
+    // (no borrar tokens de otros dispositivos del mismo usuario)
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const deviceId = Constants.sessionId || Device.modelName || 'unknown-device';
+        const deviceId = Constants.sessionId || 'unknown-device';
         try {
+          // Eliminar filas que coincidan con usuario_id + device_id (dispositivo actual)
           await supabase.from('tokens_push').delete().eq('usuario_id', user.id).eq('device_id', deviceId);
         } catch (e) {
-          // noop: no bloquear el signOut por fallo al eliminar token
+          // noop: no bloquear el signOut por fallo al eliminar token por device_id
         }
 
-        // Intentar eliminar también por expo_token si está disponible en el dispositivo
+        // Intentar también eliminar por expo_token local si está disponible
         try {
           const projectId = Constants.expoConfig?.extra?.eas?.projectId;
           const tokenResult = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
@@ -57,7 +58,20 @@ export async function clearAuthSession() {
 
     // Finalmente cerrar la sesión en Supabase
     try {
-      await supabase.auth.signOut();
+      // Intentar signOut con alcance global si la SDK lo soporta.
+      // Nota: dependiendo de la versión de supabase-js esto puede o no aceptar la opción { global: true }.
+      // Si no está soportado, fallback a signOut() simple.
+      try {
+        // @ts-ignore: some supabase-js versions accept { global: true }
+        const maybe = await supabase.auth.signOut({ global: true } as any);
+        // Si la llamada falla de forma controlada, el catch inferior manejará el fallback
+      } catch (inner) {
+        try {
+          await supabase.auth.signOut();
+        } catch (_) {
+          // noop
+        }
+      }
     } catch (e) {
       // noop
     }

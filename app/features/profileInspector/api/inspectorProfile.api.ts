@@ -170,3 +170,5 @@ export async function getTurnoInspectorCompat(): Promise<InspectorTurnoResponse>
     turno_data: data.turno_tipo,
   };
 }
+
+export default {};

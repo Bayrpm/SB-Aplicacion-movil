@@ -705,3 +705,5 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
     km_inicio: lecturaInicio.kilometraje_km,
   };
 }
+
+export default {};

@@ -59,7 +59,8 @@ export default function CitizenHome() {
           styles.container,
           {
             backgroundColor: scheme === "dark" ? "#000000ff" : "#fff",
-            paddingBottom: insets.bottom + 26,
+            // Aumentar padding inferior para evitar solapamiento con la tab bar
+            paddingBottom: (insets.bottom || 0) + 96,
           },
         ]}
       >

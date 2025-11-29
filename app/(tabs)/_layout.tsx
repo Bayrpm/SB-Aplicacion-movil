@@ -263,14 +263,14 @@ export default function TabLayout() {
         }
       />
       <Tabs.Screen
-        name="inspector/inspectorNotification"
+        name="inspector/inspectorReport"
         options={
           isInspector
             ? {
-                title: 'notificaciones',
+                title: 'Reportes',
                 tabBarIcon: ({ color }) => (
                   <View style={{ width: 72, height: 52, marginTop: 8, alignItems: 'center', justifyContent: 'center' }}>
-                    <IconSymbol size={36} name="notification.fill" color={color} />
+                    <IconSymbol size={36} name="form" color={color} />
                   </View>
                 ),
                 tabBarItemStyle: { flex: 1 },

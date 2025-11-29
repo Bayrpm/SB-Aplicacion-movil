@@ -141,7 +141,7 @@ const TurnCardContainer: React.FC<TurnCardContainerProps> = ({
   );
 };
 
-export default TurnCardContainer;
+
 
 const styles = StyleSheet.create({
   container: {
@@ -189,3 +189,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default TurnCardContainer; 

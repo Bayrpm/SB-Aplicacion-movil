@@ -1,19 +1,19 @@
 // app/features/profileInspector/components/modalMovilInspector.tsx
 import React from 'react';
 import {
-    ActivityIndicator,
-    Modal,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Modal,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import {
-    buscarMovilPorPatente,
-    cerrarUsoMovil,
-    iniciarUsoMovil,
-    Movil,
+  buscarMovilPorPatente,
+  cerrarUsoMovil,
+  iniciarUsoMovil,
+  Movil,
 } from '../api/dataMovil.api';
 
 type ModoModal = 'iniciar' | 'cerrar';
@@ -502,3 +502,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 });
+
+export default ModalMovilInspector;

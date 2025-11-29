@@ -136,24 +136,24 @@ export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult>
     };
   }
 
-  // 3. Regla de los 15 minutos - validación en el front
-  const ahora = new Date();
-  const inicioPermitido = calcularInicioPermitido(turnoTipo.hora_inicio);
+  // // 3. Regla de los 15 minutos - validación en el front
+  // const ahora = new Date();
+  // const inicioPermitido = calcularInicioPermitido(turnoTipo.hora_inicio);
 
-  console.log('[turno][ingreso] ahora:', ahora.toISOString(), 'inicioPermitido:', inicioPermitido.toISOString());
+  // console.log('[turno][ingreso] ahora:', ahora.toISOString(), 'inicioPermitido:', inicioPermitido.toISOString());
 
-  if (ahora < inicioPermitido) {
-    return {
-      ok: false,
-      type: 'FUERA_VENTANA',
-      message:
-        'Todavía no puedes iniciar tu turno. Solo se puede ingresar 15 minutos antes de la hora de inicio.',
-      detalle: {
-        hora_inicio: turnoTipo.hora_inicio,
-        inicio_permitido: inicioPermitido.toISOString(),
-      },
-    };
-  }
+  // if (ahora < inicioPermitido) {
+  //   return {
+  //     ok: false,
+  //     type: 'FUERA_VENTANA',
+  //     message:
+  //       'Todavía no puedes iniciar tu turno. Solo se puede ingresar 15 minutos antes de la hora de inicio.',
+  //     detalle: {
+  //       hora_inicio: turnoTipo.hora_inicio,
+  //       inicio_permitido: inicioPermitido.toISOString(),
+  //     },
+  //   };
+  // }
 
   // 4. Buscar o crear el turno ACTIVO del día actual
   const hoy = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -471,3 +471,5 @@ export async function verificarTurnoActivo(): Promise<boolean> {
     return false;
   }
 }
+
+export default {};

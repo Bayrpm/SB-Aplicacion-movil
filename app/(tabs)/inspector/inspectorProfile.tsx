@@ -283,7 +283,10 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={styles.startTurnButton}
               activeOpacity={0.7}
-              onPress={() => setShowTurnModal(true)}
+              onPress={() => {
+                console.log('[inspectorProfile] Iniciar Turno pressed');
+                setShowTurnModal(true);
+              }}
             >
               <IconSymbol name="clock" size={24} color="#FFFFFF" />
               <Text style={styles.startTurnButtonText}>Iniciar Turno</Text>

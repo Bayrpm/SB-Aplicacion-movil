@@ -598,3 +598,5 @@ export async function marcarDerivacionEnProceso(
 
   return { ok: true };
 }
+
+export default {}; 

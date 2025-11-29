@@ -152,3 +152,5 @@ export function useMovil() {
   }
   return context;
 }
+
+export default {};
