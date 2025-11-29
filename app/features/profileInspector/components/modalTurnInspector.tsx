@@ -1,15 +1,15 @@
 // app/features/profileInspector/components/modalTurnInspector.tsx
 import React from 'react';
 import {
-  Modal,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Modal,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import {
-  registrarIngresoTurnoActual,
-  TurnoIngresoResult,
+    registrarIngresoTurnoActual,
+    TurnoIngresoResult,
 } from '../api/turnInspector.api';
 
 interface ModalTurnInspectorProps {
@@ -87,10 +87,10 @@ export class ModalTurnInspector extends React.Component<
     const { visible, onClose } = this.props;
     const { now, loading, errorMessage } = this.state;
 
-    const timeString = now.toLocaleTimeString('es-CL', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    // Formato explícito solicitado: Fecha: dd/mm/yyyy  Hora: HH:MM (24h)
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const dateString = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+    const timeString = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
     return (
       <Modal
@@ -103,7 +103,10 @@ export class ModalTurnInspector extends React.Component<
           <View style={styles.container}>
             <Text style={styles.title}>Ingreso de turno</Text>
 
-            <Text style={styles.label}>Hora actual</Text>
+            <Text style={styles.label}>Fecha</Text>
+            <Text style={styles.time}>{dateString}</Text>
+
+            <Text style={[styles.label, { marginTop: 8 }]}>Hora</Text>
             <Text style={styles.time}>{timeString}</Text>
 
             {errorMessage && (

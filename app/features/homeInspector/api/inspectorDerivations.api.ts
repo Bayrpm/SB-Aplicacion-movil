@@ -222,6 +222,149 @@ export async function fetchInspectorDerivaciones(): Promise<DerivacionesResult> 
   };
 }
 
+/**
+ * Obtiene las observaciones asociadas a una denuncia por su id.
+ */
+export async function fetchDenunciaObservaciones(
+  denunciaId: string
+): Promise<{ ok: true; items: any[] } | { ok: false; error: any }> {
+  try {
+    const { data, error } = await supabase
+      .from('denuncia_observaciones')
+      .select('*')
+      .eq('denuncia_id', denunciaId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('[API] fetchDenunciaObservaciones error:', error);
+      return { ok: false, error };
+    }
+
+    return { ok: true, items: data || [] };
+  } catch (err) {
+    console.error('[API] fetchDenunciaObservaciones exception:', err);
+    return { ok: false, error: err };
+  }
+}
+
+/**
+ * Actualiza el contenido de una observación verificando existencia y propietario.
+ * Devuelve el item actualizado o un error estructurado.
+ */
+export type UpdateObservacionResult =
+  | { ok: true; item: any }
+  | { ok: false; type: 'NO_AUTH' | 'NOT_OWNER' | 'NOT_FOUND' | 'DB_ERROR'; message: string; detalle?: any };
+
+export async function updateDenunciaObservacion(
+  observacionId: number,
+  contenido: string
+): Promise<UpdateObservacionResult> {
+  // 1. Usuario autenticado
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData?.user) {
+    return { ok: false, type: 'NO_AUTH', message: 'Usuario no autenticado.', detalle: authError };
+  }
+
+  const user = authData.user;
+
+  try {
+    // 2. Verificar existencia de la observación y obtener datos relevantes
+    const { data: existing, error: selError } = await supabase
+      .from('denuncia_observaciones')
+      .select('id, creado_por, denuncia_id, tipo')
+      .eq('id', observacionId)
+      .maybeSingle();
+
+    if (selError) {
+      console.error('[API] updateDenunciaObservacion select error:', selError);
+      return { ok: false, type: 'DB_ERROR', message: 'Error al buscar la observación.', detalle: selError };
+    }
+
+    if (!existing) {
+      return { ok: false, type: 'NOT_FOUND', message: 'Observación no encontrada.' };
+    }
+
+    // Permitir edición si el usuario es el creador
+    let canEdit = existing.creado_por === user.id;
+    // Variables para diagnóstico en caso de fallo
+    let inspectorRow: any = null;
+    let asignRow: any = null;
+
+    // Si no es el creador, permitir edición si el usuario es el inspector actualmente asignado
+    if (!canEdit) {
+      try {
+        const selInspector = await supabase
+          .from('inspectores')
+          .select('id')
+          .eq('usuario_id', user.id)
+          .maybeSingle();
+        const { data: inspectorData, error: inspectorError } = selInspector as any;
+        inspectorRow = inspectorData;
+
+        if (inspectorError) {
+          console.error('[API] updateDenunciaObservacion inspector lookup error:', inspectorError);
+        } else if (inspectorRow && inspectorRow.id) {
+          const selAsig = await supabase
+            .from('asignaciones_inspector')
+            .select('id')
+            .eq('denuncia_id', existing.denuncia_id)
+            .eq('inspector_id', inspectorRow.id)
+            .is('fecha_termino', null)
+            .maybeSingle();
+          const { data: asignData, error: asignError } = selAsig as any;
+          asignRow = asignData;
+
+          if (asignError) {
+            console.error('[API] updateDenunciaObservacion asignacion lookup error:', asignError);
+          } else if (asignRow) {
+            // Hay una asignación activa: permitir editar
+            canEdit = true;
+          }
+        }
+      } catch (errCheck) {
+        console.error('[API] updateDenunciaObservacion ownership check exception:', errCheck);
+      }
+    }
+
+    if (!canEdit) {
+      return {
+        ok: false,
+        type: 'NOT_OWNER',
+        message: 'No tienes permisos para editar esta observación.',
+        detalle: { existing, userId: user.id, inspectorRow, asignRow },
+      };
+    }
+
+    // 3. Ejecutar el update de forma segura
+    const { data: updated, error: updError } = await supabase
+      .from('denuncia_observaciones')
+      .update({ contenido })
+      .eq('id', observacionId)
+      .select()
+      .maybeSingle();
+
+    if (updError) {
+      console.error('[API] updateDenunciaObservacion update error:', updError);
+      return { ok: false, type: 'DB_ERROR', message: 'Error al actualizar la observación.', detalle: updError };
+    }
+
+    if (!updated) {
+      // No se actualizó ninguna fila
+      return {
+        ok: false,
+        type: 'NOT_FOUND',
+        message: 'No se actualizó la observación (0 filas afectadas).',
+        detalle: { existing, userId: user.id, inspectorRow, asignRow },
+      };
+    }
+
+    return { ok: true, item: updated };
+  } catch (err) {
+    console.error('[API] updateDenunciaObservacion exception:', err);
+    return { ok: false, type: 'DB_ERROR', message: 'Excepción al actualizar la observación.', detalle: err };
+  }
+}
+
 // Tipos de resultado para cierre de derivación
 export type CerrarDerivacionErrorType =
   | 'NO_AUTH'

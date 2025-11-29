@@ -11,12 +11,12 @@ import { ThemeMode, useAppColorScheme } from '@/hooks/useAppColorScheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
 import {
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,8 +25,13 @@ interface SettingsModalProps {
   onClose: () => void;
 }
 
+// Si `inspector` es true, mostramos solo las opciones permitidas para inspectores
+interface SettingsModalPropsExtended extends SettingsModalProps {
+  inspector?: boolean;
+}
 
-export default function SettingsModal({ visible, onClose }: SettingsModalProps) {
+
+export default function SettingsModal({ visible, onClose, inspector = false }: SettingsModalPropsExtended) {
   const insets = useSafeAreaInsets();
   const [, setAppThemeMode] = useAppColorScheme();
   const bgColor = useThemeColor({ light: '#FFFFFF', dark: '#071229' }, 'background');
@@ -38,7 +43,7 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
 
   const { fontSize, setFontSize: setGlobalFontSize } = useFontSize();
   
-  const [themeMode, setThemeMode] = React.useState<ThemeMode>('system');
+  const [themeMode, setThemeMode] = React.useState<ThemeMode>('light');
   const [notificationsEnabled, setNotificationsEnabled] = React.useState(true);
   const [showThemeSelector, setShowThemeSelector] = React.useState(false);
   const [showFontSizeSelector, setShowFontSizeSelector] = React.useState(false);
@@ -251,114 +256,119 @@ export default function SettingsModal({ visible, onClose }: SettingsModalProps) 
                 <IconSymbol name="chevron-right" size={20} color={mutedColor} />
               </TouchableOpacity>
             </View>
-
-            {/* Sección Solicitudes */}
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>SOLICITUDES</Text>
-              
-              <TouchableOpacity 
-                style={[styles.settingItem, { backgroundColor: itemBg }]}
-                onPress={handleCameraRequestPress}
-                activeOpacity={0.7}
-              >
-                <View style={styles.settingLeft}>
-                  <View style={[styles.iconContainer, { backgroundColor: accentColor }]}>
-                    <IconSymbol name="camera" size={20} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.settingText}>
-                    <Text style={[styles.settingLabel, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
-                      Solicitar cámaras
-                    </Text>
-                    <Text style={[styles.settingDescription, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>
-                      Enviar solicitud a central cámaras
-                    </Text>
-                  </View>
-                </View>
-                <IconSymbol name="chevron-right" size={20} color={mutedColor} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Sección Notificaciones */}
-            <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>NOTIFICACIONES</Text>
-              
-              <TouchableOpacity 
-                style={[styles.settingItem, { backgroundColor: itemBg }]}
-                onPress={handleNotificationsPress}
-                activeOpacity={0.7}
-              >
-                <View style={styles.settingLeft}>
-                  <View style={[styles.iconContainer, { backgroundColor: notificationsEnabled ? accentColor : mutedColor }]}>
-                    <IconSymbol name="notifications" size={20} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.settingText}>
+            {/* Sección Solicitudes (solo para ciudadanos) */}
+            {!inspector && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>SOLICITUDES</Text>
+                
+                <TouchableOpacity 
+                  style={[styles.settingItem, { backgroundColor: itemBg }]}
+                  onPress={handleCameraRequestPress}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.settingLeft}>
+                    <View style={[styles.iconContainer, { backgroundColor: accentColor }]}>
+                      <IconSymbol name="camera" size={20} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.settingText}>
                       <Text style={[styles.settingLabel, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
-                      Estado de denuncias
-                    </Text>
+                        Solicitar cámaras
+                      </Text>
                       <Text style={[styles.settingDescription, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>
-                      {notificationsEnabled ? 'Activadas' : 'Desactivadas'}
-                    </Text>
+                        Enviar solicitud a central cámaras
+                      </Text>
+                    </View>
                   </View>
-                </View>
-                <View style={[
-                  styles.statusBadge,
-                  { backgroundColor: notificationsEnabled ? '#10B981' : '#EF4444' }
-                ]}>
-                  <Text style={styles.statusBadgeText}>
-                    {notificationsEnabled ? 'ON' : 'OFF'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
+                  <IconSymbol name="chevron-right" size={20} color={mutedColor} />
+                </TouchableOpacity>
+              </View>
+            )}
 
-            {/* Sección Legal */}
-            <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>LEGAL</Text>
-              
-              <TouchableOpacity 
-                style={[styles.settingItem, { backgroundColor: itemBg }]}
-                onPress={handleTermsPress}
-                activeOpacity={0.7}
-              >
-                <View style={styles.settingLeft}>
-                  <View style={[styles.iconContainer, { backgroundColor: accentColor }]}>
-                    <IconSymbol name="description" size={20} color="#FFFFFF" />
+            {/* Sección Notificaciones (solo para ciudadanos) */}
+            {!inspector && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>NOTIFICACIONES</Text>
+                
+                <TouchableOpacity 
+                  style={[styles.settingItem, { backgroundColor: itemBg }]}
+                  onPress={handleNotificationsPress}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.settingLeft}>
+                    <View style={[styles.iconContainer, { backgroundColor: notificationsEnabled ? accentColor : mutedColor }]}>
+                      <IconSymbol name="notifications" size={20} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.settingText}>
+                        <Text style={[styles.settingLabel, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
+                        Estado de denuncias
+                      </Text>
+                        <Text style={[styles.settingDescription, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>
+                        {notificationsEnabled ? 'Activadas' : 'Desactivadas'}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.settingText}>
-                      <Text style={[styles.settingLabel, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
-                      Términos y Condiciones
-                    </Text>
-                      <Text style={[styles.settingDescription, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>
-                      Lee nuestros términos de uso
+                  <View style={[
+                    styles.statusBadge,
+                    { backgroundColor: notificationsEnabled ? '#10B981' : '#EF4444' }
+                  ]}>
+                    <Text style={styles.statusBadgeText}>
+                      {notificationsEnabled ? 'ON' : 'OFF'}
                     </Text>
                   </View>
-                </View>
-                <IconSymbol name="chevron-right" size={20} color={mutedColor} />
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
+            )}
 
-              <View style={styles.separator} />
+            {/* Sección Legal (solo para ciudadanos) */}
+            {!inspector && (
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 12) }]}>LEGAL</Text>
+                
+                <TouchableOpacity 
+                  style={[styles.settingItem, { backgroundColor: itemBg }]}
+                  onPress={handleTermsPress}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.settingLeft}>
+                    <View style={[styles.iconContainer, { backgroundColor: accentColor }]}>
+                      <IconSymbol name="description" size={20} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.settingText}>
+                        <Text style={[styles.settingLabel, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
+                        Términos y Condiciones
+                      </Text>
+                        <Text style={[styles.settingDescription, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>
+                        Lee nuestros términos de uso
+                      </Text>
+                    </View>
+                  </View>
+                  <IconSymbol name="chevron-right" size={20} color={mutedColor} />
+                </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={[styles.settingItem, { backgroundColor: itemBg }]}
-                onPress={handlePrivacyPress}
-                activeOpacity={0.7}
-              >
-                <View style={styles.settingLeft}>
-                  <View style={[styles.iconContainer, { backgroundColor: accentColor }]}>
-                    <IconSymbol name="security" size={20} color="#FFFFFF" />
+                <View style={styles.separator} />
+
+                <TouchableOpacity 
+                  style={[styles.settingItem, { backgroundColor: itemBg }]}
+                  onPress={handlePrivacyPress}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.settingLeft}>
+                    <View style={[styles.iconContainer, { backgroundColor: accentColor }]}>
+                      <IconSymbol name="security" size={20} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.settingText}>
+                        <Text style={[styles.settingLabel, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
+                        Políticas de Privacidad
+                      </Text>
+                        <Text style={[styles.settingDescription, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>
+                        Conoce cómo protegemos tus datos
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.settingText}>
-                      <Text style={[styles.settingLabel, { color: textColor, fontSize: getFontSizeValue(fontSize, 16) }]}>
-                      Políticas de Privacidad
-                    </Text>
-                      <Text style={[styles.settingDescription, { color: mutedColor, fontSize: getFontSizeValue(fontSize, 13) }]}>
-                      Conoce cómo protegemos tus datos
-                    </Text>
-                  </View>
-                </View>
-                <IconSymbol name="chevron-right" size={20} color={mutedColor} />
-              </TouchableOpacity>
-            </View>
+                  <IconSymbol name="chevron-right" size={20} color={mutedColor} />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Información de la app */}
             <View style={styles.appInfo}>

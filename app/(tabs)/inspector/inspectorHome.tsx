@@ -576,7 +576,9 @@ export default function HomeScreen() {
                     ? `Folio: ${item.folio}`
                     : 'Sin descripción')
                 }
-                timeAgo={formatTimeAgo(item.fechaDerivacion)}
+                // Pasamos la fecha exacta y activamos el modo inspector
+                dateTime={item.fechaDerivacion}
+                inspector={true}
                 address={
                   item.ubicacionTexto ?? 'Sin dirección'
                 }
@@ -640,20 +642,22 @@ export default function HomeScreen() {
         }}
       />
 
-      {/* Modal de detalle de derivación */}
-      <DerivationDetailModal
-        visible={detailVisible}
-        derivacion={selectedDerivation}
-        onClose={() => setDetailVisible(false)}
-        onClosedSuccessfully={async () => {
-          // Guardar el folio y mostrar modal de éxito
-          setClosedFolio(selectedDerivation?.folio || null);
-          setDetailVisible(false);
-          setShowCloseSuccessModal(true);
-          // Recargar derivaciones
-          await loadDerivaciones();
-        }}
-      />
+      {/* Modal de detalle de derivación (montar solo si hay derivación seleccionada) */}
+      {detailVisible && selectedDerivation && (
+        <DerivationDetailModal
+          visible={detailVisible}
+          derivacion={selectedDerivation}
+          onClose={() => setDetailVisible(false)}
+          onClosedSuccessfully={async () => {
+            // Guardar el folio y mostrar modal de éxito
+            setClosedFolio(selectedDerivation?.folio || null);
+            setDetailVisible(false);
+            setShowCloseSuccessModal(true);
+            // Recargar derivaciones
+            await loadDerivaciones();
+          }}
+        />
+      )}
 
       {/* Modal de nueva derivación */}
       <NewDerivationModal
@@ -771,7 +775,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   registerVehicleButton: {
-    backgroundColor: '#059669',
+    backgroundColor: '#2563eb',
   },
   closeVehicleButton: {
     backgroundColor: '#dc2626',

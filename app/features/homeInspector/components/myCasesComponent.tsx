@@ -2,11 +2,11 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React from 'react';
 import {
-  GestureResponderEvent,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    GestureResponderEvent,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 export type CaseStatus = 'PENDIENTE' | 'EN_PROCESO' | 'CERRADA';
@@ -15,9 +15,13 @@ export interface MyCasesProps {
   title?: string;
   description?: string;
   timeAgo?: string;
+  /** Fecha/hora exacta del evento (ISO string o Date). Si se pasa y `inspector=true`, se mostrará en formato dd/mm/yyyy y HH:MM */
+  dateTime?: string | Date | null;
   address?: string;
   status?: CaseStatus;
   onPressDetail?: (event: GestureResponderEvent) => void;
+  /** Si true, formatea la fecha/hora para la vista inspector */
+  inspector?: boolean;
 }
 
 const STATUS_CONFIG: Record<
@@ -48,6 +52,8 @@ export default function MyCases({
   address = 'Av. Colón sur',
   status = 'PENDIENTE', // 👈 por defecto pendiente, las derivaciones reales vendrán con su estado
   onPressDetail,
+  dateTime = null,
+  inspector = false,
 }: MyCasesProps) {
   const statusCfg = STATUS_CONFIG[status];
 
@@ -99,9 +105,49 @@ export default function MyCases({
               style={styles.footerIcon}
               color={'#000'}
             />
-            <Text style={styles.footerText} numberOfLines={1}>
-              {timeAgo}
-            </Text>
+            {inspector ? (
+              (() => {
+                const pad = (n: number) => n.toString().padStart(2, '0');
+
+                // Prefer explicit `dateTime` prop when provided
+                const maybeDate = dateTime ? (typeof dateTime === 'string' ? new Date(dateTime) : (dateTime as Date)) : (() => {
+                  // Try to parse `timeAgo` if it looks like a date/time (ISO or timestamp)
+                  if (typeof timeAgo === 'string') {
+                    // Heurística: si contiene dígitos y '-' o 'T' o ':' es probable que sea un datetime
+                    if (/\d{4}-\d{2}-\d{2}|T|:\d{2}:/.test(timeAgo)) {
+                      const parsed = new Date(timeAgo);
+                      if (!isNaN(parsed.getTime())) return parsed;
+                    }
+                    // También permitir formatos con '/' (dd/mm/yyyy o mm/dd/yyyy) -- intentar parsear
+                    const parsed2 = new Date(timeAgo);
+                    if (!isNaN(parsed2.getTime())) return parsed2;
+                  }
+                  return null;
+                })();
+
+                if (maybeDate) {
+                  const d = maybeDate as Date;
+                  const dateString = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+                  const timeString = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                  return (
+                    <Text style={styles.footerText} numberOfLines={1}>
+                      Fecha: {dateString}  Hora: {timeString}
+                    </Text>
+                  );
+                }
+
+                // Fallback: mostrar el texto original (ej. "Hace 1 hora")
+                return (
+                  <Text style={styles.footerText} numberOfLines={1}>
+                    {timeAgo}
+                  </Text>
+                );
+              })()
+            ) : (
+              <Text style={styles.footerText} numberOfLines={1}>
+                {timeAgo}
+              </Text>
+            )}
           </View>
           <View style={styles.footerItem}>
             <IconSymbol

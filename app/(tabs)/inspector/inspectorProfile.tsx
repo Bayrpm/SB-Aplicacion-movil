@@ -4,6 +4,7 @@ import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, Text, TouchableO
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ProfileHeader from '@/app/features/profileCitizen/components/profileHeader';
+import ProfileSettingsModal from '@/app/features/profileCitizen/components/settingsModal';
 
 import { useAuth } from '@/app/features/auth';
 import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
@@ -36,10 +37,12 @@ export default function HomeScreen() {
   const spinnerColor = useThemeColor({ light: '#0A4A90', dark: '#FFFFFF' }, 'tint');
 
   const [profile, setProfile] = React.useState<InspectorProfile | null>(null);
+  const [headerHeight, setHeaderHeight] = React.useState<number>(Math.min(350, height * 0.35));
   const [loading, setLoading] = React.useState(true);
   const [showTurnModal, setShowTurnModal] = React.useState(false);
   const [turnoActivo, setTurnoActivo] = React.useState(false);
   const [loadingTurno, setLoadingTurno] = React.useState(true);
+  const [showSettingsModal, setShowSettingsModal] = React.useState(false);
 
   // Usar el contexto global del móvil
   const { movilActivo, datosMovilActivo, loadingMovil } = useMovil();
@@ -204,18 +207,22 @@ export default function HomeScreen() {
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 90 }, // espacio para tab bar u otros elementos
+          { paddingBottom: insets.bottom + 140 }, // espacio para tab bar u otros elementos (aumentado)
         ]}
         showsVerticalScrollIndicator={false}
       >
         {/* HEADER */}
-        <View style={styles.headerWrapper}>
+        <View style={[styles.headerWrapper, { height: headerHeight }] }>
           <ProfileHeader
             userName={displayName}
             userEmail={displayEmail}
             userPhone={displayPhone}
             userInitials={displayInitials}
             avatarUrl={avatarUrl}
+            showActions={false}
+            onHeightChange={(h) => {
+              if (h && typeof h === 'number' && h > 0) setHeaderHeight(h);
+            }}
           />
 
           {/* Botón Cerrar sesión */}
@@ -245,17 +252,24 @@ export default function HomeScreen() {
               },
             ]}
             activeOpacity={0.7}
-            onPress={() => { }}
+            onPress={() => setShowSettingsModal(true)}
           >
             <IconSymbol name="settings" size={28} color={settingsIconColor} />
           </TouchableOpacity>
         </View>
 
+        {/* Settings modal for inspector (limited options) */}
+        <ProfileSettingsModal
+          visible={showSettingsModal}
+          onClose={() => setShowSettingsModal(false)}
+          inspector={true}
+        />
+
         {/* Espacio entre header y contenido */}
         <View style={styles.headerSpacer} />
 
         {/* Informacion card turnos */}
-        <View style={styles.container}>
+        <View style={[styles.container, { marginTop: 20 }]}>
           <TurnCardContainer
             onPressDetail={() => {
               console.log('Ver detalle del turno');
@@ -267,7 +281,7 @@ export default function HomeScreen() {
         </View>
 
         {/* Botón de control de turno */}
-        <View style={styles.startTurnButtonContainer}>
+        <View style={[styles.startTurnButtonContainer, { marginBottom: Math.max(insets.bottom, 16) }] }>
           {loadingTurno ? (
             <ActivityIndicator size="small" color="#2563eb" />
           ) : turnoActivo ? (

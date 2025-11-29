@@ -123,12 +123,13 @@ export async function signInUser(email: string, password: string) {
     // Consulta existencia booleana de inspector
     const { data: inspectorData, error: inspectorError } = await supabase
       .from('inspectores')
-      .select('id')
+      .select('id, activo')
       .eq('usuario_id', userId)
       .limit(1)
       .maybeSingle();
 
-    const isInspector = !!inspectorData;
+    // Considerar inspector sólo si existe registro y `activo` es true
+    const isInspector = !!inspectorData && inspectorData.activo === true;
     const combinedError = profileError ?? inspectorError ?? null;
 
     return { profile: profile ?? null, isInspector, error: combinedError, session: data?.session ?? null, user: data?.user ?? null, exists: true };
@@ -155,14 +156,14 @@ export async function isUserInspector(userId: string): Promise<boolean> {
   try {
     const { data, error } = await supabase
       .from('inspectores')
-      .select('id')
+      .select('id, activo')
       .eq('usuario_id', userId)
       .limit(1)
       .maybeSingle();
     if (error) {
       return false;
     }
-    return !!data;
+    return !!data && data.activo === true;
   } catch {
     return false;
   }

@@ -3,11 +3,11 @@ import { DerivacionItem } from '@/app/features/homeInspector/api/inspectorDeriva
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import React from 'react';
 import {
-    Modal,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 interface NewDerivationModalProps {
@@ -37,9 +37,14 @@ export default function NewDerivationModal({
 
   const titulo = derivacion.titulo || 'Nueva derivación asignada';
   const folio = derivacion.folio || 'Sin folio';
-  const fechaDerivacion = new Date(
-    derivacion.fechaDerivacion
-  ).toLocaleString('es-CL');
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const parsed = new Date(derivacion.fechaDerivacion);
+  const fechaDerivacion = (() => {
+    if (isNaN(parsed.getTime())) return '';
+    const dateString = `${pad(parsed.getDate())}/${pad(parsed.getMonth() + 1)}/${parsed.getFullYear()}`;
+    const timeString = `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`;
+    return `Fecha: ${dateString}  Hora: ${timeString}`;
+  })();
 
   return (
     <Modal
