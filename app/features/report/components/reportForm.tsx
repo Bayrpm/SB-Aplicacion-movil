@@ -198,6 +198,16 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
         } catch {}
       }
 
+      // Validación cliente: asegurarse de que haya texto de ubicación y coordenadas antes de enviar
+      if (!ubicacionTexto.trim() || !useX || !useY) {
+        AppAlert.alert(
+          'Ubicación requerida',
+          'Debes especificar una dirección antes de enviar la denuncia. Asegúrate de permitir acceso a la ubicación o edita la ubicación manualmente.'
+        );
+        setSubmitting(false);
+        return;
+      }
+
       // Validar que no haya denuncia reciente de la misma categoría EN LA MISMA UBICACIÓN (últimas 24h, radio 30m)
       // IMPORTANTE: Validar DESPUÉS de calcular las coordenadas finales
       if (categoryId && useX && useY) {
