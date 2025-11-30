@@ -9,6 +9,7 @@ import ProfileSettingsModal from '@/app/features/profileCitizen/components/setti
 import { useAuth } from '@/app/features/auth';
 import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
 import { getInspectorProfile, type InspectorProfile } from '@/app/features/profileInspector/api/inspectorProfile.api';
+import { supabase } from '@/app/shared/lib/supabase';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -91,6 +92,55 @@ AppAlert.alert('Error', 'No se pudo cargar el perfil del inspector');
       };
     }, [])
   );
+
+  // Suscripción Realtime para refrescar perfil/turno cuando la BDD cambia (p.ej. cambios desde backend)
+  React.useEffect(() => {
+    let mounted = true;
+
+    const setupRealtime = async () => {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData?.user) return null;
+
+      const { data: inspector } = await supabase
+        .from('inspectores')
+        .select('id')
+        .eq('usuario_id', authData.user.id)
+        .single();
+
+      if (!inspector) return null;
+
+      const channel = supabase
+        .channel(`turnos-realtime-${inspector.id}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'turnos', filter: `inspector_id=eq.${inspector.id}` },
+          async (_payload) => {
+            try {
+              // Refrescar perfil y estado de turno
+              const { data: profileData } = await getInspectorProfile();
+              if (!mounted) return;
+              setProfile(profileData);
+              const activo = await verificarTurnoActivo();
+              if (!mounted) return;
+              setTurnoActivo(activo);
+            } catch (e) {
+              // ignore
+            }
+          }
+        )
+        .subscribe();
+
+      return channel;
+    };
+
+    const channelPromise = setupRealtime();
+    return () => {
+      mounted = false;
+      channelPromise.then((channel) => {
+        if (channel) supabase.removeChannel(channel);
+      });
+    };
+  }, []);
 
   const displayName = React.useMemo(() => {
     const nombre = profile?.perfil?.nombre?.trim() ?? '';

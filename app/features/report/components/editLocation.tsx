@@ -1,7 +1,8 @@
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useAppColorScheme } from '@/hooks/useAppColorScheme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import * as Network from 'expo-network';
@@ -9,6 +10,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Appearance,
     Dimensions,
     FlatList,
     Keyboard,
@@ -21,7 +23,7 @@ import {
 import MapView, { PROVIDER_GOOGLE, Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { reverseGeocode } from '../lib/googleGeocoding';
-import { getMapStyle } from '../lib/mapStyles';
+import { DARK_MAP_STYLE, LIGHT_MAP_STYLE } from '../lib/mapStyles';
 import { invokeLocationEdit } from '../types/locationBridge';
 import { getReportFormSnapshot, setReportFormSnapshot } from '../types/reportFormBridge';
 
@@ -31,7 +33,19 @@ export default function EditLocationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams();
-  const scheme = useColorScheme();
+  const [appScheme] = useAppColorScheme();
+  const scheme = appScheme ?? 'light';
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const persisted = await AsyncStorage.getItem('@theme_mode');
+        console.debug('[theme-debug] editLocation - appScheme:', appScheme, 'Appearance.getColorScheme():', Appearance.getColorScheme(), "@theme_mode:", persisted);
+      } catch (e) {
+        console.debug('[theme-debug] editLocation - failed to read persisted theme', e);
+      }
+    })();
+  }, [appScheme]);
   const textColor = useThemeColor({}, 'text');
   const iconColor = useThemeColor({}, 'icon');
   const panelBg = useThemeColor({ light: '#FFFFFF', dark: '#0B1627' }, 'background');
@@ -83,7 +97,7 @@ export default function EditLocationScreen() {
 
   const [footerHeight, setFooterHeight] = useState(0);
 
-  const mapStyle = React.useMemo(() => getMapStyle(scheme), [scheme]);
+  const mapStyle = React.useMemo(() => (scheme === 'dark' ? DARK_MAP_STYLE : LIGHT_MAP_STYLE), [scheme]);
 
   // ===== Helpers =====
   const TYPE_REGEX = /(avenida|av\.?|calle|pasaje|camino|ruta|autopista|alameda|costanera|pje\.?)/i;
@@ -625,8 +639,9 @@ export default function EditLocationScreen() {
 
       {/* Map */}
   <View style={[styles.mapWrap, { marginTop: NAV_HEIGHT, marginBottom: tabBarHeightLocal + 4 }]} pointerEvents="box-none">
-        {center ? (
+          {center ? (
           <MapView
+            key={`map-${scheme}`}
             ref={mapRef}
             style={styles.map}
             provider={PROVIDER_GOOGLE}

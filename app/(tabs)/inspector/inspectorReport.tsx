@@ -36,7 +36,7 @@ export default function InspectorNotificationScreen() {
       </View>
 
       <View style={styles.listWrap}>
-        <ReportsList />
+        <ReportsList allowInspectorDetails={true} />
       </View>
 
       <ReportPickerModal

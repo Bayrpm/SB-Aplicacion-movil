@@ -1,6 +1,7 @@
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useAppColorScheme } from '@/hooks/useAppColorScheme';
 import React, { useState } from 'react';
-import { StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 interface RegistrationStep2Props {
   onNext: (data: { telefono: string }) => void;
   onSkip: () => void;
@@ -11,7 +12,8 @@ interface RegistrationStep2Props {
 export function RegistrationStep2({ onNext, onSkip, onBack, initialData }: RegistrationStep2Props) {
   const labelColor = useThemeColor({}, 'text');
   const placeholderColor = useThemeColor({ light: '#9CA3AF', dark: '#FFFFFF' }, 'icon');
-    const scheme = useColorScheme();
+    const [appScheme] = useAppColorScheme();
+    const scheme = appScheme ?? 'light';
     const inputBg = useThemeColor({ light: '#F8F9FA', dark: '#000000' }, 'background');
     const errorBg = scheme === 'dark' ? '#222' : '#fff';
   const inputBorder = useThemeColor({ light: '#E9ECEF', dark: '#FFFFFF' }, 'icon');

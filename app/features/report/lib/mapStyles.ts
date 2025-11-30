@@ -51,7 +51,59 @@ export const DARK_MAP_STYLE: any[] = [
 
 // Para tema claro: usa un array vacío para forzar refresco del estilo en MapView
 // (algunas versiones no limpian el estilo si se pasa undefined/null).
-export const LIGHT_MAP_STYLE: any[] = [];
+// Estilo claro explícito para evitar depender de comportamiento de plataforma
+export const LIGHT_MAP_STYLE: any[] = [
+  // Fondo general: tono suave, no puro blanco
+  { elementType: 'geometry', stylers: [{ color: '#eef3f6' }] },
+  // Etiquetas: contraste moderado y legible
+  { elementType: 'labels.text.fill', stylers: [{ color: '#1f3136' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#eef3f6' }] },
+
+  // Agua: azul más marcado y con ligero stroke para diferenciar del fondo
+  // Agua: azul claro y reconocible
+  { featureType: 'water', elementType: 'geometry.fill', stylers: [{ color: '#74b7ff' }] },
+  { featureType: 'water', elementType: 'geometry.stroke', stylers: [{ color: '#4fa8ff' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#0f5f8a' }] },
+
+  // Parques/espacios verdes: relleno verde claro y borde suave
+  // Parques: verde vivo pero suave
+  { featureType: 'poi.park', elementType: 'geometry.fill', stylers: [{ color: '#87c06b' }] },
+  { featureType: 'poi.park', elementType: 'geometry.stroke', stylers: [{ color: '#6aa956' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#114b1a' }] },
+
+  // POI y construcciones: ligeramente desaturado para no competir con calles
+  { featureType: 'poi', elementType: 'geometry.fill', stylers: [{ color: '#f4f6f7' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#475259' }] },
+
+  // Calles: fills claros (no grises planos) y strokes definidos para separación
+  { featureType: 'road.highway', elementType: 'geometry.fill', stylers: [{ color: '#ffe6a8' }] },
+  { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#e0bc6a' }] },
+  { featureType: 'road.arterial', elementType: 'geometry.fill', stylers: [{ color: '#fffaf0' }] },
+  { featureType: 'road.arterial', elementType: 'geometry.stroke', stylers: [{ color: '#e7ded3' }] },
+  { featureType: 'road.local', elementType: 'geometry.fill', stylers: [{ color: '#ffffff' }] },
+  { featureType: 'road.local', elementType: 'geometry.stroke', stylers: [{ color: '#d7dde0' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#4a5b5f' }] },
+
+  // Edificaciones y paisaje: tonos neutrales que separan del fondo
+  { featureType: 'landscape', elementType: 'geometry.fill', stylers: [{ color: '#eef4f5' }] },
+  { featureType: 'landscape.man_made', elementType: 'geometry.fill', stylers: [{ color: '#eef0f1' }] },
+
+  // Límites y admin: ligero gris para definición
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#e3ecf0' }] },
+  { featureType: 'administrative', elementType: 'labels.text.fill', stylers: [{ color: '#2f4248' }] },
+
+  // Transporte/transit: neutral y legible
+  { featureType: 'transit', elementType: 'geometry.fill', stylers: [{ color: '#eaf0f2' }] },
+
+  // Íconos: mantener visibles
+  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'on' }] },
+  { featureType: 'poi.business', elementType: 'labels.text.fill', stylers: [{ color: '#2f5055' }] },
+  // Reglas explícitas al final para asegurar que parques se muestren verdes
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#87c06b' }] },
+  { featureType: 'poi.park', elementType: 'geometry.fill', stylers: [{ color: '#87c06b' }] },
+  { featureType: 'poi.park', elementType: 'geometry.stroke', stylers: [{ color: '#6aa956' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#114b1a' }] },
+];
 
 export function getMapStyle(scheme: ColorSchemeName) {
   // Dark: aplica estilo; Light/otros: array vacío para limpiar estilo de forma inmediata.

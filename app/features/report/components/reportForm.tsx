@@ -9,6 +9,7 @@ import {
   Dimensions,
   Image,
   Keyboard,
+  Linking,
   Modal,
   PixelRatio,
   Platform,
@@ -46,7 +47,7 @@ type PropsExtended = Props & { initialData?: InitialData };
 export default function ReportForm({ onClose, categoryId, onBack, initialData }: PropsExtended) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isInspector } = useAuth();
   const categories = useReportCategories();
   const { setReportFormOpen } = useReportModal();
 
@@ -153,6 +154,24 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
       AppAlert.alert('Descripción muy corta', 'La descripción debe tener al menos 30 caracteres');
       return;
     }
+    // Si el usuario denegó permisos de ubicación, impedir envío y mostrar mensaje formal
+    try {
+      const { getForegroundPermissionsAsync } = await import('expo-location');
+      const perm = await getForegroundPermissionsAsync();
+      if (perm?.status === 'denied') {
+        AppAlert.alert(
+          'No se puede enviar la denuncia',
+          'No es posible enviar denuncias sin acceso a la ubicación. Por favor habilite los permisos de ubicación en la configuración del dispositivo para continuar.',
+          [
+            { text: 'Abrir configuración', onPress: () => { try { Linking.openSettings(); } catch (e) {} } },
+            { text: 'Entendido', style: 'cancel' },
+          ]
+        );
+        return;
+      }
+    } catch (e) {
+      // ignorar errores de verificación de permisos y continuar
+    }
 
   setSubmitting(true);
     try {
@@ -245,7 +264,16 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
           }
         } catch {}
         RNAlert.alert('Enviado', 'Tu denuncia ha sido enviada correctamente.');
-        try { router.replace('/citizen/citizenReport'); } catch {}
+        try {
+          // Redirigir según el rol: inspector -> pantalla de inspector;
+          // ciudadano -> pantalla de ciudadano. Esto garantiza que un
+          // inspector nunca termine en la vista de ciudadano tras enviar.
+          if (isInspector) {
+            try { router.replace('/inspector/inspectorReport'); } catch {}
+          } else {
+            try { router.replace('/citizen/citizenReport'); } catch {}
+          }
+        } catch {}
         onClose?.();
       }
     } catch {

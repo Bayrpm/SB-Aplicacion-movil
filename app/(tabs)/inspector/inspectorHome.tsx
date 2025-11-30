@@ -10,7 +10,11 @@ import DerivationDetailModal from '@/app/features/homeInspector/components/deriv
 import MyCases, { CaseStatus } from '@/app/features/homeInspector/components/myCasesComponent';
 import NewDerivationModal from '@/app/features/homeInspector/components/NewDerivationModal';
 
+import FilterModal, { InspectorFilterOptions } from '@/app/features/homeInspector/components/inspectorFilterModal';
+import { getAllCategories, getAllEstados } from '@/app/features/profileCitizen/api/profile.api';
+import { getTurnoInspector } from '@/app/features/profileInspector/api/inspectorProfile.api';
 import {
+  calcularInicioPermitido,
   registrarSalidaTurnoActual,
   verificarTurnoActivo,
 } from '@/app/features/profileInspector/api/turnInspector.api';
@@ -22,6 +26,8 @@ import { supabase } from '@/app/shared/lib/supabase';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useThemeColor } from '@/hooks/use-theme-color';
+import { useAppColorScheme } from '@/hooks/useAppColorScheme';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -30,7 +36,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  useColorScheme,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -76,6 +81,19 @@ export default function HomeScreen() {
   } = useMovil();
 
   const insets = useSafeAreaInsets();
+  // Tema/colores para botón (coincidir con ReportsList)
+  const textColor = useThemeColor({}, 'text');
+  const accentColor = useThemeColor({ light: '#0A4A90', dark: '#0A4A90' }, 'tint');
+  const buttonBg = useThemeColor({ light: 'transparent', dark: '#0A4A90' }, 'tint');
+  const buttonText = useThemeColor({ light: '#0A4A90', dark: '#FFFFFF' }, 'tint');
+
+  // Filtro mediante modal (reutiliza FilterModal)
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [filters, setFilters] = useState<InspectorFilterOptions>({ orderBy: null as any, categoryId: null, estadoId: null });
+  const [categories, setCategories] = useState<{ id: number; nombre: string }[]>([]);
+  const [estados, setEstados] = useState<{ id: number; nombre: string }[]>([]);
+  // Estado lógico derivado (ALL / EN_PROCESO / CERRADA)
+  const [filterStatus, setFilterStatus] = useState<'ALL'|'EN_PROCESO'|'CERRADA'>('ALL');
 
   // === Derivaciones: listado + selección actual ===
   const [cases, setCases] = useState<DerivacionItem[]>([]);
@@ -88,6 +106,27 @@ export default function HomeScreen() {
   const [newDerivation, setNewDerivation] = useState<DerivacionItem | null>(null);
   const [showNewDerivationModal, setShowNewDerivationModal] = useState(false);
   const maxFechaDerivacionVistoRef = React.useRef<string | null>(null);
+
+  // Cargar datos para el modal de filtros (categorías y estados)
+  React.useEffect(() => {
+    let mounted = true;
+    const loadFiltersData = async () => {
+      try {
+        const [catsRes, estadosRes] = await Promise.all([getAllCategories(), getAllEstados()]);
+        if (!mounted) return;
+        if (catsRes?.data) setCategories(catsRes.data);
+        if (estadosRes?.data) {
+          // Filtrar fuera 'PENDIENTE'
+          const filtered = (estadosRes.data || []).filter((e: any) => String(e.nombre).toUpperCase() !== 'PENDIENTE');
+          setEstados(filtered);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadFiltersData();
+    return () => { mounted = false; };
+  }, []);
 
   // Debug: Log cuando cambian los estados del modal de nueva derivación
   React.useEffect(() => {
@@ -124,7 +163,8 @@ export default function HomeScreen() {
           CERRADA: 2,
         };
 
-        ordenadas = [...result.items].sort((a, b) => {
+        // Primero ordenamos como antes
+        const sorted = [...result.items].sort((a, b) => {
           const ea = ordenEstado[mapEstadoToCaseStatus(a.estadoNombre)] ?? 99;
           const eb = ordenEstado[mapEstadoToCaseStatus(b.estadoNombre)] ?? 99;
           if (ea !== eb) return ea - eb;
@@ -136,13 +176,45 @@ export default function HomeScreen() {
           );
         });
 
+        // Luego filtramos para excluir derivaciones con fecha en el futuro.
+        // Queremos incluir desde el día actual hacia atrás (incluye todo el día actual),
+        // por lo que comparamos contra el fin del día actual.
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
+
+        ordenadas = sorted.filter((item) => {
+          if (!item.fechaDerivacion) return true; // mantener si no hay fecha
+          const d = new Date(item.fechaDerivacion);
+          if (isNaN(d.getTime())) return true; // mantener si fecha inválida
+          return d.getTime() <= endOfToday.getTime();
+        });
+
 
         // Debug: Log del mapeo de estados
         ordenadas.forEach((c, idx) => {
           const mappedStatus = mapEstadoToCaseStatus(c.estadoNombre);
         });
 
-        setCases(ordenadas);
+        // Aplicar orden (fecha asc/desc) si corresponde — si orderBy es null, mantenemos el orden original
+        const orderBy = (filters && (filters as any).orderBy) ?? null;
+        const sortedByDate = orderBy ? [...ordenadas].sort((a, b) => {
+          const ta = new Date(a.fechaDerivacion).getTime();
+          const tb = new Date(b.fechaDerivacion).getTime();
+          if (!ta || !tb) return 0;
+          return orderBy === 'fecha_desc' ? tb - ta : ta - tb;
+        }) : ordenadas;
+
+        // Aplicar filtro por estado si corresponde
+        let filtradas = sortedByDate;
+        try {
+          if (filterStatus !== 'ALL') {
+            filtradas = sortedByDate.filter((it) => mapEstadoToCaseStatus(it.estadoNombre) === filterStatus);
+          }
+        } catch {
+          filtradas = sortedByDate;
+        }
+
+        setCases(filtradas);
 
         // Detectar nueva derivación: buscar la EN_PROCESO más reciente
         const derivacionesEnProceso = ordenadas.filter(
@@ -179,7 +251,7 @@ export default function HomeScreen() {
 
       setLoadingCases(false);
       return ordenadas;
-    }, []);
+    }, [filterStatus, filters]);
 
   /**
    * Al tocar un caso:
@@ -221,6 +293,56 @@ export default function HomeScreen() {
     [loadDerivaciones]
   );
 
+    // Handler para validar si se permite iniciar turno antes de abrir el modal
+    const handleStartTurn = useCallback(async () => {
+      try {
+        const turno = await getTurnoInspector();
+
+        if (!turno) {
+          AppAlert.alert('Sin turno asignado', 'No tienes un turno asignado para hoy.');
+          return;
+        }
+
+        // Helper local para construir un Date con la hora de hoy + time string 'HH:MM:SS' o 'HH:MM'
+        const buildToday = (time: string) => {
+          const parts = time.split(':');
+          const h = parseInt(parts[0] ?? '0', 10) || 0;
+          const m = parseInt(parts[1] ?? '0', 10) || 0;
+          const s = parseInt(parts[2] ?? '0', 10) || 0;
+          const now = new Date();
+          return new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, s);
+        };
+
+        const inicio = buildToday(turno.hora_inicio);
+        const termino = buildToday(turno.hora_termino);
+        const inicioPermitido = calcularInicioPermitido(turno.hora_inicio);
+        const ahora = new Date();
+
+        if (ahora < inicioPermitido) {
+          const pad = (n: number) => n.toString().padStart(2, '0');
+          const horarioStr = `${pad(inicioPermitido.getHours())}:${pad(inicioPermitido.getMinutes())}`;
+          AppAlert.alert(
+            'Fuera de ventana',
+            `Todavía no puedes iniciar tu turno. Solo se permite iniciar desde ${horarioStr}.`
+          );
+          return;
+        }
+
+        if (ahora > termino) {
+          AppAlert.alert(
+            'Horario terminado',
+            'No puedes iniciar el turno fuera del horario asignado.'
+          );
+          return;
+        }
+
+        // Si pasa las validaciones, abrir modal de ingreso
+        setShowTurnModal(true);
+      } catch (error: any) {
+        AppAlert.alert('Error', 'No se pudo verificar el turno. Intenta nuevamente.');
+      }
+    }, []);
+
   // Debug: Log cuando cambia el estado del modal de móvil
   React.useEffect(() => {
   }, [showMovilModal]);
@@ -229,7 +351,8 @@ export default function HomeScreen() {
   React.useEffect(() => {
   }, [loadingMovil, movilActivo, datosMovilActivo]);
 
-  const scheme = useColorScheme() ?? 'light';
+  const [appScheme] = useAppColorScheme();
+  const scheme = appScheme ?? 'light';
   const logoSource =
     scheme === 'dark'
       ? require('@/assets/images/img_logo_blanco.png')
@@ -415,7 +538,7 @@ export default function HomeScreen() {
                 styles.startTurnButton,
               ]}
               activeOpacity={0.7}
-              onPress={() => setShowTurnModal(true)}
+              onPress={handleStartTurn}
             >
               <IconSymbol
                 name="clock"
@@ -484,9 +607,19 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Título Mis Casos */}
-        <View style={styles.contenedor}>
+        {/* Título Mis Casos + botón de filtro */}
+        <View style={[styles.contenedor, styles.casesHeaderRow]}>
           <Text style={styles.titulo}>Mis casos</Text>
+          <TouchableOpacity
+            style={[styles.filterButton, { backgroundColor: buttonBg, borderColor: accentColor }]}
+            onPress={() => setShowFilterModal(true)}
+            activeOpacity={0.8}
+          >
+            <IconSymbol name="filter-list" size={18} color={buttonText} />
+            <Text style={[styles.filterText, { color: buttonText }]}>
+              {filterStatus === 'ALL' ? 'Filtrar' : (filterStatus === 'EN_PROCESO' ? 'En proceso' : 'Cerradas')}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Mis Casos */}
@@ -525,6 +658,31 @@ export default function HomeScreen() {
               />
             ))}
         </View>
+        {/* Filter modal (reutiliza diseño de ReportsList) */}
+        <FilterModal
+          visible={showFilterModal}
+          onClose={() => setShowFilterModal(false)}
+          currentFilters={filters}
+          onApplyFilters={async (newFilters) => {
+            setFilters(newFilters);
+            // Mapear estado seleccionado a filterStatus (excluimos PENDIENTE)
+            const selectedEstado = estados.find(e => e.id === newFilters.estadoId);
+            if (!selectedEstado) {
+              setFilterStatus('ALL');
+            } else if (String(selectedEstado.nombre).toUpperCase() === 'EN_PROCESO') {
+              setFilterStatus('EN_PROCESO');
+            } else if (String(selectedEstado.nombre).toUpperCase() === 'CERRADA') {
+              setFilterStatus('CERRADA');
+            } else {
+              setFilterStatus('ALL');
+            }
+            setShowFilterModal(false);
+            // recargar con nuevos filtros
+            await loadDerivaciones();
+          }}
+          categories={categories}
+          estados={estados}
+        />
       </ParallaxScrollView>
 
       {/* Modal de inicio de turno */}
@@ -708,5 +866,27 @@ const styles = StyleSheet.create({
   },
   vehicleCardContainer: {
     paddingHorizontal: 16,
+  },
+  casesHeaderRow: {
+    width: '100%',
+    marginTop: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+  },
+  filterButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  filterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 });

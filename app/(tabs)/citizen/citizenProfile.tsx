@@ -68,7 +68,10 @@ export default function HomeScreen() {
       // que se muestre la UI de ciudadano por error.
       if (isInspector) {
         try {
-          router.replace('/inspector/inspectorHome');
+          // Redirigir al flujo de inspector y pasar el id del reporte para que
+          // el listado inspector abra el modal correspondiente.
+          const id = String(params.openReportId);
+          router.replace(`/inspector/inspectorReport?openReportId=${encodeURIComponent(id)}`);
         } catch (e) {
           // noop
         }

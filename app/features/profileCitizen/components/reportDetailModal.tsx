@@ -5,6 +5,7 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 // expo-av will be imported dynamically at runtime to avoid native-module require on startup
 import { useAuth } from '@/app/features/auth';
 import { deleteReportComment, updateReportComment } from '@/app/features/report/api/report.api';
+import { supabase } from '@/app/shared/lib/supabase';
 import CommentsPanel, { CommentItem } from '@/components/commentsPanel';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import React, { useEffect, useState } from 'react';
@@ -33,6 +34,8 @@ interface ReportDetailModalProps {
   report: CitizenReport | null;
   onToggleLike?: () => void;
   isLiked?: boolean;
+  // Si true, permite que usuarios con rol inspector vean el modal.
+  allowInspector?: boolean;
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -86,7 +89,9 @@ export default function ReportDetailModal({
   report,
   onToggleLike,
   isLiked = false,
+  allowInspector = false,
 }: ReportDetailModalProps) {
+  const propsAllowInspector = !!allowInspector;
   const { isInspector } = useAuth();
   const insets = useSafeAreaInsets();
   const { fontSize } = useFontSize();
@@ -165,17 +170,18 @@ export default function ReportDetailModal({
     translateY.setValue(0);
   }, [commentsModalVisible]);
 
-  // Defensa adicional: si este modal se abre pero el usuario actual es inspector,
-  // cerramos inmediatamente para evitar mostrar UI de ciudadano.
+  // Defensa adicional: por defecto NO mostramos el modal a inspectores.
+  // Sin embargo, si el consumidor establece `allowInspector=true`, permitimos
+  // que el modal se muestre también para inspectores (caso de flujo inspector).
   useEffect(() => {
-    if (visible && isInspector) {
+    if (visible && isInspector && !propsAllowInspector) {
       try {
         onClose();
       } catch (e) {
         // noop
       }
     }
-  }, [visible, isInspector]);
+  }, [visible, isInspector, propsAllowInspector]);
 
   // Cargar evidencias (firmadas) al abrir el modal
   useEffect(() => {
@@ -319,6 +325,75 @@ export default function ReportDetailModal({
       })();
     }
   }, [report?.id]);
+
+  // Suscripción realtime para reflejar cambios de la denuncia (estado, evidencias, stats)
+  useEffect(() => {
+    if (!report?.id || !visible) return;
+    let mounted = true;
+
+    const channel = supabase
+      .channel(`denuncias-realtime-${report.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'denuncias', filter: `id=eq.${report.id}` },
+        async (payload: any) => {
+          try {
+            if (!mounted) return;
+
+            // Si la payload trae el nuevo estado, resolver el nombre y actualizarlo localmente
+            const newRow = payload?.new ?? null;
+            if (newRow && newRow.estado_id != null) {
+              try {
+                const res = await getEstadoById(Number(newRow.estado_id));
+                if (mounted && res?.data?.nombre) setResolvedEstadoName(res.data.nombre);
+              } catch (e) {
+                // ignore
+              }
+            }
+
+            // Refrescar stats (likes/comments) para que se reflejen cambios inmediatos
+            try {
+              const s = await fetchReportStats(report.id);
+              if (!mounted) return;
+              setReportStats((prev) => ({
+                ...prev,
+                [report.id]: {
+                  likes: s.likes,
+                  dislikes: s.dislikes,
+                  hasLiked: s.userReaction === 'LIKE',
+                  hasDisliked: s.userReaction === 'DISLIKE',
+                  commentsCount: s.commentsCount,
+                }
+              }));
+            } catch (e) {
+              // ignore
+            }
+
+            // Si hubo cambio en evidencias, recargarlas
+            if (newRow) {
+              try {
+                const ev = await listEvidencesSigned(report.id);
+                if (mounted) setEvidences(ev || []);
+              } catch (e) {
+                // ignore
+              }
+            }
+          } catch (e) {
+            // ignore any handler error
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      try {
+        supabase.removeChannel(channel);
+      } catch (e) {
+        // ignore
+      }
+    };
+  }, [visible, report?.id]);
 
   // Handlers that operate per-report (mirror app/features/report implementation)
   const handleLike = async (reportId: string) => {
