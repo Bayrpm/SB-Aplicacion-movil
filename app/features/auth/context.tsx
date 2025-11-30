@@ -43,12 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[AuthContext] 🔐 onAuthStateChange:', event, {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        hasRefreshToken: !!session?.refresh_token
-      });
-      setSession(session);
+setSession(session);
       setUser(session?.user ?? null);
     });
 
@@ -117,7 +112,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await svc.unregisterPushNotifications();
         }
       } catch (e) {
-        if (typeof __DEV__ !== 'undefined' && __DEV__) console.debug('unregisterPushNotifications falló (context signOut):', e);
       }
 
       // Attempt a full clear of server session + local storage

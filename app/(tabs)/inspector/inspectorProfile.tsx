@@ -64,8 +64,7 @@ export default function HomeScreen() {
           setProfile(data);
         } catch (error) {
           if (!isActive) return;
-          console.error('Error inesperado al obtener perfil del inspector:', error);
-          AppAlert.alert('Error', 'No se pudo cargar el perfil del inspector');
+AppAlert.alert('Error', 'No se pudo cargar el perfil del inspector');
         } finally {
           if (isActive) {
             setLoading(false);
@@ -272,11 +271,9 @@ export default function HomeScreen() {
         <View style={[styles.container, { marginTop: 20 }]}>
           <TurnCardContainer
             onPressDetail={() => {
-              console.log('Ver detalle del turno');
-            }}
+}}
             onCloseShift={() => {
-              console.log('Cerrar turno');
-            }}
+}}
           />
         </View>
 
@@ -298,8 +295,7 @@ export default function HomeScreen() {
               style={styles.startTurnButton}
               activeOpacity={0.7}
               onPress={() => {
-                console.log('[inspectorProfile] Iniciar Turno pressed');
-                setShowTurnModal(true);
+setShowTurnModal(true);
               }}
             >
               <IconSymbol name="clock" size={24} color="#FFFFFF" />
@@ -324,8 +320,7 @@ export default function HomeScreen() {
         visible={showTurnModal}
         onClose={() => setShowTurnModal(false)}
         onIngresoExitoso={(data) => {
-          console.log('Turno iniciado:', data);
-          setShowTurnModal(false);
+setShowTurnModal(false);
           setTurnoActivo(true);
           // Recargar perfil para actualizar datos
           const fetchProfile = async () => {

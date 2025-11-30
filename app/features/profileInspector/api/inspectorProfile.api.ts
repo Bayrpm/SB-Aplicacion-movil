@@ -85,8 +85,7 @@ export async function getInspectorProfile(): Promise<{
       .maybeSingle();
 
     if (error) {
-      console.error('Error al obtener perfil del inspector:', error);
-      return {
+return {
         data: null,
         error: error.message || 'Error al obtener el perfil del inspector',
       };
@@ -111,8 +110,7 @@ export async function getInspectorProfile(): Promise<{
       error: null,
     };
   } catch (error: any) {
-    console.error('Error inesperado al obtener perfil del inspector:', error);
-    return {
+return {
       data: null,
       error: error?.message || 'Error inesperado',
     };

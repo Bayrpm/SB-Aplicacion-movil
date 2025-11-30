@@ -70,8 +70,7 @@ export default function SettingsModal({ visible, onClose, inspector = false }: S
         setNotificationsEnabled(savedNotifications === 'true');
       }
     } catch (error) {
-      console.error('Error cargando preferencias:', error);
-    }
+}
   };
 
   const handleThemeModePress = () => {
@@ -87,8 +86,7 @@ export default function SettingsModal({ visible, onClose, inspector = false }: S
       
       AppAlert.alert('Tema actualizado', 'El tema se ha aplicado correctamente');
     } catch (error) {
-      console.error('Error guardando tema:', error);
-      AppAlert.alert('Error', 'No se pudo guardar la preferencia de tema');
+AppAlert.alert('Error', 'No se pudo guardar la preferencia de tema');
     }
   };
 
@@ -125,8 +123,7 @@ export default function SettingsModal({ visible, onClose, inspector = false }: S
         );
       }
     } catch (error) {
-      console.error('Error al cambiar estado de notificaciones:', error);
-      AppAlert.alert(
+AppAlert.alert(
         'Error',
         'Hubo un problema al cambiar el estado de las notificaciones'
       );
@@ -169,8 +166,7 @@ export default function SettingsModal({ visible, onClose, inspector = false }: S
       setShowFontSizeSelector(false);
       AppAlert.alert('Tamaño de letra actualizado', 'El cambio se aplicó inmediatamente');
     } catch (error) {
-      console.error('Error guardando tamaño de letra:', error);
-      AppAlert.alert('Error', 'No se pudo guardar la preferencia');
+AppAlert.alert('Error', 'No se pudo guardar la preferencia');
     }
   };
 

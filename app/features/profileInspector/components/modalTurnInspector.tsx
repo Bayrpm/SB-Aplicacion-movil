@@ -57,14 +57,9 @@ export class ModalTurnInspector extends React.Component<
 
   async handleIngresar() {
     this.setState({ loading: true, errorMessage: null });
-
-    console.log('[ModalTurnInspector] Ingresar pressed - llamando a registrarIngresoTurnoActual');
-    const result: TurnoIngresoResult = await registrarIngresoTurnoActual();
-    console.log('[ModalTurnInspector] registrarIngresoTurnoActual result:', result);
-
-    if (!result.ok) {
-      console.error('[ModalTurnInspector] Error al ingresar turno:', result.message);
-      this.setState({
+const result: TurnoIngresoResult = await registrarIngresoTurnoActual();
+if (!result.ok) {
+this.setState({
         loading: false,
         errorMessage: result.message,
       });

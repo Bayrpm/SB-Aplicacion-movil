@@ -25,17 +25,12 @@ export default function NewDerivationModal({
 }: NewDerivationModalProps) {
   // Log para debugging
   React.useEffect(() => {
-    console.log('[NewDerivationModal] 🎭 Render - visible:', visible, 'derivacion:', derivacion?.folio);
-  }, [visible, derivacion]);
+}, [visible, derivacion]);
 
   if (!derivacion) {
-    console.log('[NewDerivationModal] ❌ No hay derivación - no renderizar');
-    return null;
+return null;
   }
-
-  console.log('[NewDerivationModal] ✅ Renderizando modal con visible:', visible);
-
-  const titulo = derivacion.titulo || 'Nueva derivación asignada';
+const titulo = derivacion.titulo || 'Nueva derivación asignada';
   const folio = derivacion.folio || 'Sin folio';
   const pad = (n: number) => n.toString().padStart(2, '0');
   const parsed = new Date(derivacion.fechaDerivacion);

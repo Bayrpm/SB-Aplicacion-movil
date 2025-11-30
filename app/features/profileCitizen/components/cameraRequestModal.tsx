@@ -162,8 +162,7 @@ export default function CameraRequestModal({
         ]
       );
     } catch (error: any) {
-      console.error('Error al enviar solicitud:', error);
-      AppAlert.alert('Error', 'No se pudo enviar la solicitud. Por favor, intente nuevamente.');
+AppAlert.alert('Error', 'No se pudo enviar la solicitud. Por favor, intente nuevamente.');
     } finally {
       setSending(false);
     }

@@ -123,8 +123,7 @@ export default function ProfileHeader({
           // diagnostic measurements available; no logging in production
         }
       } catch (e) {
-        console.warn('measure error', e);
-      }
+}
     };
     const t = setTimeout(measure, 0);
     return () => clearTimeout(t);
@@ -257,7 +256,7 @@ export default function ProfileHeader({
                   const { data, error } = await uploadCitizenAvatar(uri);
                   if (error || !data) { AppAlert.alert('Error', error || 'No se pudo subir la imagen'); return; }
                   AppAlert.alert('Éxito', 'Avatar actualizado correctamente');
-                  try { onAvatarUpdated && onAvatarUpdated(data); } catch (e) { console.warn('onAvatarUpdated error', e); }
+                  try { onAvatarUpdated && onAvatarUpdated(data); } catch (e) {  }
                 } catch (e) {
                   AppAlert.alert('Error', 'No se pudo cambiar la foto de perfil');
                 }
@@ -276,19 +275,16 @@ export default function ProfileHeader({
                         try {
                           const { data, error } = await deleteCitizenAvatar(avatarUrl);
                           if (error) {
-                            console.error('deleteCitizenAvatar error:', error);
-                            AppAlert.alert('Error', typeof error === 'string' ? error : String(error));
+AppAlert.alert('Error', typeof error === 'string' ? error : String(error));
                             return;
                           }
                           AppAlert.alert('Avatar', 'Avatar eliminado correctamente');
                           try {
                             if (onAvatarUpdated) onAvatarUpdated(data ?? null);
                           } catch (cbErr) {
-                            console.warn('onAvatarUpdated callback error:', cbErr);
-                          }
+}
                         } catch (e) {
-                          console.error('Eliminar avatar exception:', e);
-                          AppAlert.alert('Error', 'No se pudo eliminar avatar');
+AppAlert.alert('Error', 'No se pudo eliminar avatar');
                         }
                       } }
                   ]);

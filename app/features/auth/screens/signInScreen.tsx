@@ -317,8 +317,7 @@ export default function SignInScreen() {
       });
     } catch (error) {
       // En caso de error inesperado
-      console.error('Error al iniciar sesión:', error);
-      AppAlert.alert('Error', 'Ocurrió un error al iniciar sesión');
+AppAlert.alert('Error', 'Ocurrió un error al iniciar sesión');
       stopLoading();
     }
   };

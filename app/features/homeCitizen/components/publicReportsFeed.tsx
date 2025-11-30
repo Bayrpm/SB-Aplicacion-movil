@@ -346,8 +346,7 @@ export default function PublicReportsFeed() {
         const short = typeof payloadSummary === 'string' ? payloadSummary.slice(0, 200) : JSON.stringify(payloadSummary).slice(0, 200);
         // Use console.debug so logs can be filtered in debug builds
         // eslint-disable-next-line no-console
-        console.debug(`[feed:sub] ${type} ${new Date().toISOString()} -> ${short}`);
-      } catch (_) {
+} catch (_) {
         // ignore logging errors
       }
     };
@@ -357,8 +356,7 @@ export default function PublicReportsFeed() {
       (newReport: any) => {
         if (suspendSubscriptionRef.current) {
           // eslint-disable-next-line no-console
-          console.debug('[feed:sub] suspended new -> ignored', new Date().toISOString());
-          return;
+return;
         }
         if (!isReportInRange(newReport)) return;
         const mapped = mapReportToCitizen(newReport);
@@ -381,8 +379,7 @@ export default function PublicReportsFeed() {
       (updatedReport: any) => {
         if (suspendSubscriptionRef.current) {
           // eslint-disable-next-line no-console
-          console.debug('[feed:sub] suspended update -> ignored', new Date().toISOString());
-          return;
+return;
         }
         if (!isReportInRange(updatedReport)) {
           // enqueue delete
@@ -413,8 +410,7 @@ export default function PublicReportsFeed() {
       (reportId: string) => {
         if (suspendSubscriptionRef.current) {
           // eslint-disable-next-line no-console
-          console.debug('[feed:sub] suspended delete -> ignored', new Date().toISOString());
-          return;
+return;
         }
         queuedDeletes.set(reportId, true as true);
         // also remove any pending adds/updates

@@ -162,8 +162,7 @@ export default function EditProfileModal({
         },
       ]);
     } catch (error: any) {
-      console.error('Error al actualizar perfil:', error);
-      AppAlert.alert('Error', 'Error inesperado al actualizar el perfil');
+AppAlert.alert('Error', 'Error inesperado al actualizar el perfil');
     } finally {
       setSaving(false);
     }

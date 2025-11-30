@@ -39,8 +39,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
   let token: string | null = null;
 
   if (!Device.isDevice) {
-    if (__DEV__) console.log('Las notificaciones push solo funcionan en dispositivos físicos');
-    return null;
+return null;
   }
 
   try {
@@ -55,22 +54,18 @@ export async function registerForPushNotifications(): Promise<string | null> {
     }
 
     if (finalStatus !== 'granted') {
-      if (__DEV__) console.log('No se otorgaron permisos para notificaciones');
-      return null;
+return null;
     }
 
     // Obtener el token de Expo Push
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
     
     if (!projectId) {
-      console.error('No se encontró el projectId de EAS');
-      return null;
+return null;
     }
 
   token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-  if (__DEV__) console.log('✅ Token de notificación obtenido:', token);
-
-    // Configurar canal de notificación para Android
+// Configurar canal de notificación para Android
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('denuncias-updates', {
         name: 'Actualizaciones de Denuncias',
@@ -90,8 +85,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
     return token;
   } catch (error) {
-    console.error('❌ Error al registrar notificaciones:', error);
-    return null;
+return null;
   }
 }
 
@@ -103,8 +97,7 @@ async function saveTokenToSupabase(token: string): Promise<void> {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
-      if (__DEV__) console.log('No hay usuario autenticado');
-      return;
+return;
     }
 
     // Obtener un identificador único del dispositivo
@@ -120,8 +113,7 @@ async function saveTokenToSupabase(token: string): Promise<void> {
 
       if (existingError) {
         // no fatal: continuamos al upsert
-        if (__DEV__) console.warn('Error consultando token existente:', existingError);
-      }
+}
 
       if (existing) {
         // Si el token existe y pertenece a otro usuario, reasignarlo al usuario actual
@@ -131,10 +123,8 @@ async function saveTokenToSupabase(token: string): Promise<void> {
             .update({ usuario_id: user.id, device_id: deviceId, updated_at: new Date().toISOString() })
             .eq('expo_token', token);
           if (updErr) {
-            console.error('❌ Error reasignando token en Supabase:', updErr);
-          } else {
-            if (__DEV__) console.log('✅ Token reasignado al usuario actual en Supabase');
-          }
+} else {
+}
           return;
         }
 
@@ -144,15 +134,12 @@ async function saveTokenToSupabase(token: string): Promise<void> {
           .update({ device_id: deviceId, updated_at: new Date().toISOString() })
           .eq('expo_token', token);
         if (updErr2) {
-          console.error('❌ Error actualizando token en Supabase:', updErr2);
-        } else {
-          if (__DEV__) console.log('✅ Token actualizado en Supabase');
-        }
+} else {
+}
         return;
       }
     } catch (e) {
-      if (__DEV__) console.warn('Error manejando token existente:', e);
-      // seguimos al upsert como fallback
+// seguimos al upsert como fallback
     }
 
     // Si no existe, usar upsert para insertar o actualizar por usuario+device
@@ -169,13 +156,10 @@ async function saveTokenToSupabase(token: string): Promise<void> {
       });
 
     if (error) {
-      console.error('❌ Error guardando token en Supabase:', error);
-    } else {
-      if (__DEV__) console.log('✅ Token guardado exitosamente en Supabase');
-    }
+} else {
+}
   } catch (error) {
-    console.error('❌ Error en saveTokenToSupabase:', error);
-  }
+}
 }
 
 /**
@@ -197,13 +181,11 @@ export async function unregisterPushNotifications(): Promise<void> {
       if (user && expoToken) {
         // Delete any rows that match this exact expo_token for this user
         await supabase.from('tokens_push').delete().eq('usuario_id', user.id).eq('expo_token', expoToken);
-        if (__DEV__) console.log('✅ Token eliminado de Supabase por expo_token');
-        return;
+return;
       }
     } catch (tokErr) {
       // Ignore token retrieval errors and fall back to deviceId-based deletion below
-      if (__DEV__) console.debug('No se pudo obtener expo token en unregister:', tokErr);
-    }
+}
 
     // Fallback: delete by usuario_id + device_id (older behavior). This may fail
     // if the stored device_id was different at registration time; keep both checks.
@@ -213,12 +195,9 @@ export async function unregisterPushNotifications(): Promise<void> {
         .delete()
         .eq('usuario_id', user.id)
         .eq('device_id', deviceId);
-
-      if (__DEV__) console.log('✅ Token eliminado de Supabase por device_id (fallback)');
-    }
+}
   } catch (error) {
-    console.error('❌ Error al eliminar token:', error);
-  }
+}
 }
 
 /**
@@ -239,8 +218,7 @@ export async function sendReportUpdateNotification(
       .eq('usuario_id', userId);
 
     if (tokensError || !tokens || tokens.length === 0) {
-      if (__DEV__) console.log('Usuario no tiene tokens de notificación registrados');
-      return;
+return;
     }
 
     // Obtener el nombre del estado
@@ -294,14 +272,11 @@ export async function sendReportUpdateNotification(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ Error enviando notificación:', errorText);
-      return;
+return;
     }
 
     const result = await response.json();
-  if (__DEV__) console.log('✅ Notificación enviada:', result);
-
-    // Registrar en la tabla de notificaciones enviadas
+// Registrar en la tabla de notificaciones enviadas
     await supabase.from('notificaciones_enviadas').insert({
       usuario_id: userId,
       tipo: 'CAMBIO_ESTADO_DENUNCIA',
@@ -315,8 +290,7 @@ export async function sendReportUpdateNotification(
     });
 
   } catch (error) {
-    console.error('❌ Error en sendReportUpdateNotification:', error);
-  }
+}
 }
 
 /**
@@ -331,9 +305,7 @@ export function setupNotificationListeners(
       const data = notification.request.content.data as unknown as
         | NotificationData
         | AssignmentNotificationData;
-      if (__DEV__) console.log('📬 Notificación recibida:', data);
-
-      // Manejar tanto cambio de estado como asignación
+// Manejar tanto cambio de estado como asignación
       if (data?.type === 'report_status_change' || data?.type === 'report_assigned') {
         onNotificationReceived(data as NotificationData | AssignmentNotificationData);
       }
@@ -346,9 +318,7 @@ export function setupNotificationListeners(
       const data = response.notification.request.content.data as unknown as
         | NotificationData
         | AssignmentNotificationData;
-      if (__DEV__) console.log('👆 Usuario tocó la notificación:', data);
-
-      if (data?.type === 'report_status_change' || data?.type === 'report_assigned') {
+if (data?.type === 'report_status_change' || data?.type === 'report_assigned') {
         onNotificationReceived(data as NotificationData | AssignmentNotificationData);
       }
     }

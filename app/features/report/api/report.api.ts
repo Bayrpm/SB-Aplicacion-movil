@@ -28,8 +28,7 @@ export async function fetchReportCategories(): Promise<ReportCategory[]> {
       .order('orden', { ascending: true });
 
     if (error) {
-      console.warn('fetchReportCategories supabase error', error);
-      return [];
+return [];
     }
     if (!Array.isArray(data)) return [];
 
@@ -79,8 +78,7 @@ export async function fetchPublicReports(): Promise<{
   try {
     const { data, error } = await supabase.rpc('get_denuncias_publicas_recientes');
     if (error) {
-      console.warn('fetchPublicReports supabase error', error);
-      return [];
+return [];
     }
     if (!Array.isArray(data)) return [];
 
@@ -93,18 +91,9 @@ export async function fetchPublicReports(): Promise<{
 
       // Si las coordenadas fueron convertidas o son inválidas, loguear para debugging
       if (validation.wasConverted) {
-        console.log(
-          `[Coordenadas] Reporte ${row.id}: Coordenadas invertidas corregidas ` +
-          `(${row.coords_x}, ${row.coords_y}) -> ` +
-          `(${validation.coordinates.latitude}, ${validation.coordinates.longitude})`
-        );
-      }
+}
       if (!validation.isValid) {
-        console.warn(
-          `[Coordenadas] Reporte ${row.id}: Coordenadas inválidas ` +
-          `(${row.coords_x}, ${row.coords_y}), usando coordenadas por defecto de San Bernardo`
-        );
-      }
+}
 
       return {
         id: String(row.id),
@@ -121,8 +110,7 @@ export async function fetchPublicReports(): Promise<{
       };
     });
   } catch (e) {
-    console.warn('fetchPublicReports exception', e);
-    return [];
+return [];
   }
 }
 
@@ -163,8 +151,7 @@ export async function checkRecentReportByCategory(
       p_categoria_publica_id: categoria_publica_id,
     });
     if (error) {
-      console.warn('checkRecentReportByCategory error', error);
-      return false;
+return false;
     }
     if (!Array.isArray(data) || data.length === 0) return false;
 
@@ -176,8 +163,7 @@ export async function checkRecentReportByCategory(
     }
     return false;
   } catch (e) {
-    console.warn('checkRecentReportByCategory exception', e);
-    return false;
+return false;
   }
 }
 
@@ -204,8 +190,7 @@ export async function fetchPublicReportDetail(id: string): Promise<{
     .maybeSingle();
 
   if (error) {
-    console.warn('fetchPublicReportDetail supabase error', error);
-    throw error;
+throw error;
   }
   if (!data) throw new Error('No se encontró la denuncia o no es pública');
 
@@ -220,18 +205,9 @@ export async function fetchPublicReportDetail(id: string): Promise<{
   );
 
   if (validation.wasConverted) {
-    console.log(
-      `[Coordenadas] Detalle reporte ${id}: Coordenadas invertidas corregidas ` +
-      `(${row.coords_x}, ${row.coords_y}) -> ` +
-      `(${validation.coordinates.latitude}, ${validation.coordinates.longitude})`
-    );
-  }
+}
   if (!validation.isValid) {
-    console.warn(
-      `[Coordenadas] Detalle reporte ${id}: Coordenadas inválidas ` +
-      `(${row.coords_x}, ${row.coords_y}), usando coordenadas por defecto de San Bernardo`
-    );
-  }
+}
 
   return {
     id: String(row.id),
@@ -299,13 +275,11 @@ export async function createReport(payload: {
 
     const { data, error } = await supabase.from('denuncias').insert(insertObj).select('*');
     if (error) {
-      console.warn('createReport supabase error', error);
-      return { data: null, error };
+return { data: null, error };
     }
     return { data, error: null };
   } catch (e) {
-    console.warn('createReport exception', e);
-    return { data: null, error: e };
+return { data: null, error: e };
   }
 }
 
@@ -327,8 +301,7 @@ export async function fetchReportStats(reportId: string): Promise<{
       .maybeSingle();
 
     if (statsErr) {
-      console.warn('fetchReportStats statsErr', statsErr);
-    }
+}
 
     // contar comentarios (vista pública)
     const { data: comments, error: commentsErr } = await supabase
@@ -337,8 +310,7 @@ export async function fetchReportStats(reportId: string): Promise<{
       .eq('denuncia_id', reportId);
 
     if (commentsErr) {
-      console.warn('fetchReportStats commentsErr', commentsErr);
-    }
+}
 
     // reacción del usuario actual
     const { data: userData } = await supabase.auth.getUser();
@@ -359,8 +331,7 @@ export async function fetchReportStats(reportId: string): Promise<{
 
     return { likes, dislikes, userReaction, commentsCount };
   } catch (e) {
-    console.warn('fetchReportStats exception', e);
-    return { likes: 0, dislikes: 0, userReaction: null, commentsCount: 0 };
+return { likes: 0, dislikes: 0, userReaction: null, commentsCount: 0 };
   }
 }
 
@@ -371,13 +342,11 @@ export async function reactToReport(reportId: string, tipo: 'LIKE' | 'DISLIKE') 
   try {
     const { data, error } = await supabase.rpc('fn_denuncia_reaccionar', { p_denuncia_id: reportId, p_tipo: tipo });
     if (error) {
-      console.warn('reactToReport error', error);
-      return { data: null, error };
+return { data: null, error };
     }
     return { data, error: null };
   } catch (err) {
-    console.warn('reactToComment exception', err);
-    return { data: null, error: err };
+return { data: null, error: err };
   }
 }
 
@@ -404,13 +373,11 @@ export async function fetchReportComments(reportId: string) {
             .eq('denuncia_id', reportId)
             .order('created_at', { ascending: false });
           if (error2) {
-            console.warn('fetchReportComments error after fallback', error2);
-            return [];
+return [];
           }
           return (data2 ?? []) as any[];
         }
-        console.warn('fetchReportComments error', error);
-        return [];
+return [];
       }
 
       // Merge comment reaction stats (if view exists) to supply likes/liked per comment
@@ -493,12 +460,10 @@ export async function fetchReportComments(reportId: string) {
         return (data ?? []) as any[];
       }
     } catch (inner) {
-      console.warn('fetchReportComments inner exception', inner);
-      return [];
+return [];
     }
   } catch (e) {
-    console.warn('fetchReportComments exception', e);
-    return [];
+return [];
   }
 }
 
@@ -529,19 +494,16 @@ export async function createReportComment(reportId: string, contenido: string, a
         const insertFallback: any = { denuncia_id: reportId, contenido, anonimo };
         const { data: data2, error: error2 } = await supabase.from('comentarios_denuncias').insert(insertFallback).select().maybeSingle();
         if (error2) {
-          console.warn('createReportComment error after fallback', error2);
-          return { data: null, error: error2 };
+return { data: null, error: error2 };
         }
         return { data: data2, error: null };
       }
-      console.warn('createReportComment error', error);
-      return { data: null, error };
+return { data: null, error };
     }
 
     return { data, error: null };
   } catch (e) {
-    console.warn('createReportComment exception', e);
-    return { data: null, error: e };
+return { data: null, error: e };
   }
 }
 
@@ -550,13 +512,11 @@ export async function reactToComment(commentId: number, tipo: 'LIKE' | 'DISLIKE'
   try {
     const { data, error } = await supabase.rpc('fn_comentario_reaccionar', { p_comentario_id: commentId, p_tipo: tipo });
     if (error) {
-      console.warn('reactToComment error', error);
-      return { data: null, error };
+return { data: null, error };
     }
     return { data, error: null };
   } catch (err) {
-    console.warn('reactToComment exception', err);
-    return { data: null, error: err };
+return { data: null, error: err };
   }
 }
 
@@ -579,8 +539,7 @@ export async function updateReportComment(commentId: number | string, newConteni
       const fallbackable = code === '42883' || code === '42702' || msg.includes('does not exist') || msg.includes('undefined function') || msg.includes('ambiguous') || msg.includes('column reference');
       if (!fallbackable) {
         // RPC devolvió un error que no queremos ocultar
-        console.warn('updateReportComment rpcErr', rpcErr);
-        return { data: null, error: rpcErr };
+return { data: null, error: rpcErr };
       }
       // Si es fallbackable, continuamos al flujo directo
     } catch {
@@ -595,8 +554,7 @@ export async function updateReportComment(commentId: number | string, newConteni
       .maybeSingle();
 
     if (fetchErr) {
-      console.warn('updateReportComment fetchErr', fetchErr);
-      return { data: null, error: fetchErr };
+return { data: null, error: fetchErr };
     }
     if (!existing) return { data: null, error: new Error('Comentario no encontrado') };
 
@@ -632,8 +590,7 @@ export async function updateReportComment(commentId: number | string, newConteni
       .maybeSingle();
 
     if (updateErr) {
-      console.warn('updateReportComment updateErr', updateErr);
-      // Detectar política de recursión y dar mensaje más claro
+// Detectar política de recursión y dar mensaje más claro
       if ((updateErr as any)?.code === '42P17' || String(updateErr?.message ?? '').toLowerCase().includes('infinite recursion')) {
         return { data: null, error: new Error('Error de políticas en el servidor: recursion infinita detectada en policy para comentarios_denuncias. Crea una RPC segura (SECURITY DEFINER) para actualizar comentarios o ajusta las políticas RLS.') };
       }
@@ -641,8 +598,7 @@ export async function updateReportComment(commentId: number | string, newConteni
     }
     return { data: updated, error: null };
   } catch (err) {
-    console.warn('updateReportComment exception', err);
-    return { data: null, error: err };
+return { data: null, error: err };
   }
 }
 
@@ -659,8 +615,7 @@ export async function deleteReportComment(commentId: number | string) {
       if (!rpcErr) return { data: rpcData, error: null };
       const msg = String(rpcErr?.message ?? '').toLowerCase();
       if (!(msg.includes('does not exist') || msg.includes('undefined function') || (rpcErr as any)?.code === '42883')) {
-        console.warn('deleteReportComment rpcErr', rpcErr);
-        return { data: null, error: rpcErr };
+return { data: null, error: rpcErr };
       }
       // Si no existe la RPC, continuar con flujo directo
     } catch {
@@ -676,8 +631,7 @@ export async function deleteReportComment(commentId: number | string) {
       .maybeSingle();
 
     if (fetchErr) {
-      console.warn('deleteReportComment fetchErr', fetchErr);
-      return { data: null, error: fetchErr };
+return { data: null, error: fetchErr };
     }
     if (!existing) return { data: null, error: new Error('Comentario no encontrado') };
 
@@ -698,15 +652,13 @@ export async function deleteReportComment(commentId: number | string) {
       .maybeSingle();
 
     if (delErr) {
-      console.warn('deleteReportComment delErr', delErr);
-      if ((delErr as any)?.code === '42P17' || String(delErr?.message ?? '').toLowerCase().includes('infinite recursion')) {
+if ((delErr as any)?.code === '42P17' || String(delErr?.message ?? '').toLowerCase().includes('infinite recursion')) {
         return { data: null, error: new Error('Error de políticas en el servidor: recursion infinita detectada en policy para comentarios_denuncias. Crea una RPC segura (SECURITY DEFINER) para eliminar comentarios o ajusta las políticas RLS.') };
       }
       return { data: null, error: delErr };
     }
     return { data: deleted, error: null };
   } catch (err) {
-    console.warn('deleteReportComment exception', err);
-    return { data: null, error: err };
+return { data: null, error: err };
   }
 }

@@ -24,8 +24,7 @@ export function useThemePreference() {
         setThemeMode(savedTheme as ThemeMode);
       }
     } catch (error) {
-      console.error('Error loading theme preference:', error);
-    } finally {
+} finally {
       setIsLoading(false);
     }
   };
@@ -35,8 +34,7 @@ export function useThemePreference() {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
       setThemeMode(mode);
     } catch (error) {
-      console.error('Error saving theme preference:', error);
-    }
+}
   };
 
   // Determinar el esquema de color efectivo

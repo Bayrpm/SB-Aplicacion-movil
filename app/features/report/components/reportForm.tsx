@@ -194,8 +194,7 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
             return;
           }
         } catch (err) {
-          console.warn('Error al verificar denuncias recientes:', err);
-          // En caso de error en la verificación, permitir continuar para no bloquear al usuario
+// En caso de error en la verificación, permitir continuar para no bloquear al usuario
         }
       }
 
@@ -762,9 +761,9 @@ export default function ReportForm({ onClose, categoryId, onBack, initialData }:
                   });
                   try { onClose?.(); } catch {}
                   setTimeout(() => {
-                    try { router.push((`/features/report/components/editLocation?lat=${lat}&lng=${lng}&addr=${addr}`) as any); } catch (e) { console.warn(e); }
+                    try { router.push((`/features/report/components/editLocation?lat=${lat}&lng=${lng}&addr=${addr}`) as any); } catch (e) {  }
                   }, 120);
-                } catch (e) { console.warn(e); }
+                } catch (e) {  }
               }}
             >
               <IconSymbol name="map-marker" size={20} color="#0A4A90" style={{ marginRight: 8 }} />
