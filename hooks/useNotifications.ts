@@ -88,8 +88,7 @@ export function useNotifications() {
     // Validar destinatario explícito: fallar cerrado si no existe
     const maybeDestinatario = (data as any)?.destinatario_user_id ?? (data as any)?.usuario_id ?? (data as any)?.to_user_id ?? null;
     if (!maybeDestinatario) {
-      if (__DEV__) console.warn('Notificación sin destinatario explícito, se ignora por seguridad');
-      return;
+return;
     }
     if (String(maybeDestinatario) !== String(auth.user.id)) return;
 
@@ -99,8 +98,7 @@ export function useNotifications() {
     const roleFromPayload = (data as any)?.role ?? null;
     const currentRole = auth.isInspector ? 'inspector' : 'ciudadano';
     if (roleFromPayload && String(roleFromPayload) !== String(currentRole)) {
-      if (__DEV__) console.warn(`Notificación para role=${roleFromPayload} ignorada por rol actual=${currentRole}`);
-      return;
+return;
     }
 
     // Si es asignación y soy inspector, abrir la vista de inspector

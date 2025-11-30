@@ -103,16 +103,14 @@ export default function HomeScreen() {
         .single();
 
       if (error) {
-        console.error('Error cargando reporte:', error);
-        AppAlert.alert('Error', 'No se pudo cargar el detalle del reporte');
+AppAlert.alert('Error', 'No se pudo cargar el detalle del reporte');
         return;
       }
 
       setSelectedReport(reportData as CitizenReport);
       setShowDetailModal(true);
     } catch (error) {
-      console.error('Error inesperado cargando reporte:', error);
-    }
+}
   };
 
   // Cargar el perfil del ciudadano
@@ -122,15 +120,13 @@ export default function HomeScreen() {
       const { data, error } = await getCitizenProfile();
       
       if (error) {
-        console.error('Error al cargar perfil:', error);
-        AppAlert.alert('Error', 'No se pudo cargar el perfil');
+AppAlert.alert('Error', 'No se pudo cargar el perfil');
         return;
       }
       
       setProfile(data);
     } catch (error) {
-      console.error('Error inesperado:', error);
-    } finally {
+} finally {
       setLoading(false);
     }
   };

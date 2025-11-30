@@ -122,8 +122,7 @@ function RootLayoutNav() {
           }
         }
       } catch (error) {
-        console.error('Error cargando tema:', error);
-      }
+}
     };
     loadTheme();
   }, []);

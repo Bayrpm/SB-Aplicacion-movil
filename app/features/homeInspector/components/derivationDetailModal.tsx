@@ -233,8 +233,7 @@ export default function DerivationDetailModal({
       });
 
       if (!result.ok) {
-        console.log('[derivacion][cerrar][error]', result);
-        Alert.alert(
+Alert.alert(
           'Error al cerrar',
           result.message || 'Ocurrió un error al cerrar la derivación.'
         );
@@ -293,8 +292,7 @@ export default function DerivationDetailModal({
         const { data } = await supabase.auth.getUser();
         if (mounted) setCurrentUserId(data?.user?.id ?? null);
       } catch (err) {
-        console.error('[observaciones][currentUser][error]', err);
-      }
+}
     };
     getCurrentUser();
     return () => {
@@ -318,12 +316,10 @@ export default function DerivationDetailModal({
         if (res.ok) {
           setObservations(res.items || []);
         } else {
-          console.error('[observaciones][fetch][apiError]', res.error);
-          setObservations([]);
+setObservations([]);
         }
       } catch (err) {
-        console.error('[observaciones][fetch][exception]', err);
-        if (mounted) setObservations([]);
+if (mounted) setObservations([]);
       } finally {
         if (mounted) setLoadingObs(false);
       }
@@ -538,15 +534,13 @@ export default function DerivationDetailModal({
                                       try {
                                         // En desarrollo, escribir detalle en la terminal/console (Metro / logcat)
                                         if (typeof __DEV__ !== 'undefined' && __DEV__ && res.detalle) {
-                                          console.error('[observaciones][update][detalle]', res.detalle);
-                                        }
+}
                                       } catch (e) {
                                         // ignorar errores de logging
                                       }
                                     }
                                   } catch (err) {
-                                    console.error('[observaciones][update][exception]', err);
-                                    Alert.alert('Error', 'Ocurrió un error al actualizar la observación.');
+Alert.alert('Error', 'Ocurrió un error al actualizar la observación.');
                                   } finally {
                                     setEditingLoading(false);
                                   }

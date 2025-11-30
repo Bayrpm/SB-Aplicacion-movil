@@ -67,13 +67,13 @@ function mapEstadoNombre(
  * (activas + históricas), ordenadas por fecha_derivacion DESC.
  */
 export async function fetchInspectorDerivaciones(): Promise<DerivacionesResult> {
-  console.log('[API] fetchInspectorDerivaciones - Iniciando...');
+
 
   // 1. Usuario autenticado
   const { data: authData, error: authError } = await supabase.auth.getUser();
 
   if (authError || !authData?.user) {
-    console.log('[API] Error de autenticación:', authError);
+
     return {
       ok: false,
       type: 'NO_AUTH',
@@ -83,7 +83,7 @@ export async function fetchInspectorDerivaciones(): Promise<DerivacionesResult> 
   }
 
   const user = authData.user;
-  console.log('[API] Usuario autenticado:', user.id);
+
 
   // 2. Buscar inspector asociado al usuario
   const { data: inspector, error: inspectorError } = await supabase
@@ -93,7 +93,7 @@ export async function fetchInspectorDerivaciones(): Promise<DerivacionesResult> 
     .single();
 
   if (inspectorError || !inspector) {
-    console.log('[API] Error al buscar inspector:', inspectorError);
+
     return {
       ok: false,
       type: 'INSPECTOR_NOT_FOUND',
@@ -102,10 +102,10 @@ export async function fetchInspectorDerivaciones(): Promise<DerivacionesResult> 
     };
   }
 
-  console.log('[API] Inspector encontrado:', inspector.id);
+
 
   // 3. Buscar derivaciones (asignaciones_inspector + denuncia)
-  console.log('[API] Buscando derivaciones para inspector_id:', inspector.id);
+
   
   const { data, error } = await supabase
     .from('asignaciones_inspector')
@@ -131,10 +131,10 @@ export async function fetchInspectorDerivaciones(): Promise<DerivacionesResult> 
     .eq('inspector_id', inspector.id)
     .order('fecha_derivacion', { ascending: false });
 
-  console.log('[API] Query completada. Data:', data, 'Error:', error);
+
 
   if (error) {
-    console.log('[API] Error en query de derivaciones:', error);
+
     return {
       ok: false,
       type: 'DB_ERROR',
@@ -143,23 +143,18 @@ export async function fetchInspectorDerivaciones(): Promise<DerivacionesResult> 
     };
   }
 
-  console.log(
-    '[API] Datos obtenidos de Supabase:',
-    data?.length ?? 0,
-    'registros'
-  );
 
   // Debug adicional: verificar si hay asignaciones sin el join
   if (data?.length === 0) {
-    console.log('[API] No hay derivaciones. Verificando si existen asignaciones simples...');
+
     const { data: asignacionesSimples } = await supabase
       .from('asignaciones_inspector')
       .select('id, inspector_id, denuncia_id, fecha_derivacion')
       .eq('inspector_id', inspector.id);
     
-    console.log('[API] Asignaciones simples encontradas:', asignacionesSimples?.length ?? 0);
+
     if (asignacionesSimples && asignacionesSimples.length > 0) {
-      console.log('[API] Primera asignación:', asignacionesSimples[0]);
+
       
       // Verificar si la denuncia existe
       const denunciaId = asignacionesSimples[0].denuncia_id;
@@ -169,7 +164,7 @@ export async function fetchInspectorDerivaciones(): Promise<DerivacionesResult> 
         .eq('id', denunciaId)
         .single();
       
-      console.log('[API] ¿Existe la denuncia?', denunciaExiste ? 'SÍ' : 'NO', denunciaExiste);
+
     }
   }
 
@@ -203,18 +198,7 @@ export async function fetchInspectorDerivaciones(): Promise<DerivacionesResult> 
       };
     }) ?? [];
 
-  console.log('[API] Derivaciones mapeadas:', items.length);
-  console.log(
-    '[API] Primera derivación (si existe):',
-    items[0]
-      ? {
-          folio: items[0].folio,
-          titulo: items[0].titulo,
-          estadoId: items[0].estadoId,
-          estadoNombre: items[0].estadoNombre,
-        }
-      : 'Sin derivaciones'
-  );
+
 
   return {
     ok: true,
@@ -236,13 +220,13 @@ export async function fetchDenunciaObservaciones(
       .order('created_at', { ascending: true });
 
     if (error) {
-      console.error('[API] fetchDenunciaObservaciones error:', error);
+
       return { ok: false, error };
     }
 
     return { ok: true, items: data || [] };
   } catch (err) {
-    console.error('[API] fetchDenunciaObservaciones exception:', err);
+
     return { ok: false, error: err };
   }
 }
@@ -276,7 +260,7 @@ export async function updateDenunciaObservacion(
       .maybeSingle();
 
     if (selError) {
-      console.error('[API] updateDenunciaObservacion select error:', selError);
+
       return { ok: false, type: 'DB_ERROR', message: 'Error al buscar la observación.', detalle: selError };
     }
 
@@ -302,7 +286,7 @@ export async function updateDenunciaObservacion(
         inspectorRow = inspectorData;
 
         if (inspectorError) {
-          console.error('[API] updateDenunciaObservacion inspector lookup error:', inspectorError);
+
         } else if (inspectorRow && inspectorRow.id) {
           const selAsig = await supabase
             .from('asignaciones_inspector')
@@ -315,14 +299,14 @@ export async function updateDenunciaObservacion(
           asignRow = asignData;
 
           if (asignError) {
-            console.error('[API] updateDenunciaObservacion asignacion lookup error:', asignError);
+
           } else if (asignRow) {
             // Hay una asignación activa: permitir editar
             canEdit = true;
           }
         }
       } catch (errCheck) {
-        console.error('[API] updateDenunciaObservacion ownership check exception:', errCheck);
+
       }
     }
 
@@ -344,7 +328,7 @@ export async function updateDenunciaObservacion(
       .maybeSingle();
 
     if (updError) {
-      console.error('[API] updateDenunciaObservacion update error:', updError);
+
       return { ok: false, type: 'DB_ERROR', message: 'Error al actualizar la observación.', detalle: updError };
     }
 
@@ -360,7 +344,7 @@ export async function updateDenunciaObservacion(
 
     return { ok: true, item: updated };
   } catch (err) {
-    console.error('[API] updateDenunciaObservacion exception:', err);
+
     return { ok: false, type: 'DB_ERROR', message: 'Excepción al actualizar la observación.', detalle: err };
   }
 }
@@ -458,7 +442,7 @@ export async function cerrarDerivacionConReporte(
   const nowIso = new Date().toISOString();
   const yaCerrada = !!asignacion.fecha_termino;
 
-  console.log('[cerrarDerivacion] Asignación', asignacionId, 'ya cerrada:', yaCerrada);
+
 
   // 4. Insertar observación de cierre (solo si no estaba cerrada)
   if (!yaCerrada) {
@@ -480,9 +464,9 @@ export async function cerrarDerivacionConReporte(
         detalle: obsError,
       };
     }
-    console.log('[cerrarDerivacion] Observación TERRENO insertada');
+
   } else {
-    console.log('[cerrarDerivacion] Asignación ya cerrada, no se inserta observación');
+
   }
 
   // 5. Marcar fecha_termino en asignaciones_inspector (solo si no estaba cerrada)
@@ -503,9 +487,9 @@ export async function cerrarDerivacionConReporte(
         detalle: asignUpdateError,
       };
     }
-    console.log('[cerrarDerivacion] fecha_termino actualizada en asignación');
+
   } else {
-    console.log('[cerrarDerivacion] Asignación ya tenía fecha_termino');
+
   }
 
   // 6. Verificar si TODAS las asignaciones de esta denuncia están cerradas
@@ -515,20 +499,10 @@ export async function cerrarDerivacionConReporte(
     .eq('denuncia_id', denunciaId);
 
   if (asignacionesError) {
-    console.error(
-      '[cerrarDerivacion] Error al verificar asignaciones:',
-      asignacionesError
-    );
     // No falla la operación, solo loguea
   }
 
   const todasCerradas = todasAsignaciones?.every((a) => a.fecha_termino !== null) ?? false;
-  console.log(
-    '[cerrarDerivacion] Asignaciones totales:',
-    todasAsignaciones?.length,
-    'Todas cerradas:',
-    todasCerradas
-  );
 
   // 7. Si todas las asignaciones están cerradas, actualizar la denuncia
   if (todasCerradas) {
@@ -542,7 +516,7 @@ export async function cerrarDerivacionConReporte(
     const denunciaYaCerrada =
       denunciaActual?.estado_id === 3 || denunciaActual?.fecha_cierre !== null;
 
-    console.log('[cerrarDerivacion] Denuncia ya cerrada:', denunciaYaCerrada);
+
 
     if (!denunciaYaCerrada) {
       const { error: denUpdateError } = await supabase
@@ -554,21 +528,14 @@ export async function cerrarDerivacionConReporte(
         .eq('id', denunciaId);
 
       if (denUpdateError) {
-        console.error(
-          '[cerrarDerivacion] Error al actualizar denuncia a cerrada:',
-          denUpdateError
-        );
         // No retorna error, la asignación ya se cerró correctamente
       } else {
-        console.log('[cerrarDerivacion] Denuncia actualizada a CERRADA');
+
       }
     } else {
-      console.log('[cerrarDerivacion] Denuncia ya estaba cerrada, no se actualiza');
+
     }
   } else {
-    console.log(
-      '[cerrarDerivacion] No todas las asignaciones cerradas, denuncia sigue EN_PROCESO'
-    );
   }
 
   return {

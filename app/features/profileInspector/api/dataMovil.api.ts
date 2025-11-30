@@ -213,7 +213,6 @@ export async function iniciarUsoMovil(patente: string, kilometraje_inicio: numbe
 
   // 5. Llamar RPC fn_movil_iniciar_uso (o hacer proceso manual si no existe)
   // Intentar con RPC primero
-  console.log('[iniciarUsoMovil] Llamando RPC con:', { movil_id: movil.id, inspector_id: inspector.id, km: kilometraje_inicio });
   let { data: rpcData, error: rpcError } = await supabase.rpc('fn_movil_iniciar_uso', {
     p_movil_id: movil.id,
     p_inspector_id: inspector.id,
@@ -221,14 +220,11 @@ export async function iniciarUsoMovil(patente: string, kilometraje_inicio: numbe
     p_turno_id: null,
   });
 
-  console.log('[iniciarUsoMovil] Resultado RPC:', { data: rpcData, error: rpcError });
 
   // Si el RPC no existe, intentar proceso manual
   if (rpcError && rpcError.message?.includes('function') && rpcError.message?.includes('does not exist')) {
-    console.log('[iniciarUsoMovil] RPC no existe, usando proceso manual para iniciar uso de móvil');
     
     // Crear uso manualmente
-    console.log('[iniciarUsoMovil] Insertando en movil_usos...');
     const { data: usoData, error: usoError } = await supabase
       .from('movil_usos')
       .insert({
@@ -240,7 +236,6 @@ export async function iniciarUsoMovil(patente: string, kilometraje_inicio: numbe
       .select('id')
       .single();
 
-    console.log('[iniciarUsoMovil] Resultado insert movil_usos:', { data: usoData, error: usoError });
 
     if (usoError || !usoData) {
       return {
@@ -252,7 +247,6 @@ export async function iniciarUsoMovil(patente: string, kilometraje_inicio: numbe
     }
 
     // Registrar lectura de kilometraje inicial
-    console.log('[iniciarUsoMovil] Insertando en movil_uso_kilometraje...');
     const { error: kmError } = await supabase
       .from('movil_uso_kilometraje')
       .insert({
@@ -262,7 +256,6 @@ export async function iniciarUsoMovil(patente: string, kilometraje_inicio: numbe
         lectura_ts: new Date().toISOString(),
       });
 
-    console.log('[iniciarUsoMovil] Resultado insert kilometraje:', { error: kmError });
 
     if (kmError) {
       return {
@@ -274,17 +267,14 @@ export async function iniciarUsoMovil(patente: string, kilometraje_inicio: numbe
     }
 
     // Actualizar estado del móvil a ASIGNADO
-    console.log('[iniciarUsoMovil] Actualizando estado del móvil a ASIGNADO...');
     const { error: updateMovilError } = await supabase
       .from('moviles')
       .update({ estado: 'ASIGNADO' })
       .eq('id', movil.id);
 
     if (updateMovilError) {
-      console.log('[iniciarUsoMovil] ⚠️ Error al actualizar estado del móvil:', updateMovilError);
     }
 
-    console.log('[iniciarUsoMovil] ✅ Proceso manual completado exitosamente');
     return {
       ok: true,
       uso_id: usoData.id,
@@ -297,7 +287,6 @@ export async function iniciarUsoMovil(patente: string, kilometraje_inicio: numbe
   }
 
   if (rpcError) {
-    console.log('[iniciarUsoMovil] ❌ Error RPC:', rpcError);
     return {
       ok: false,
       type: 'RPC_ERROR',
@@ -317,11 +306,8 @@ export async function iniciarUsoMovil(patente: string, kilometraje_inicio: numbe
     usoId = (rpcData as any).id || (rpcData as any).uso_id || 0;
   }
 
-  console.log('[iniciarUsoMovil] ✅ RPC completado exitosamente, uso_id:', usoId);
-  console.log('[iniciarUsoMovil] 📊 Datos RPC completos:', JSON.stringify(rpcData));
   
   if (usoId === 0) {
-    console.log('[iniciarUsoMovil] ⚠️ WARNING: No se pudo extraer uso_id del resultado RPC');
   }
   
   // El RPC debería haber actualizado el estado, pero actualizamos el objeto para la UI
@@ -399,7 +385,6 @@ export async function cerrarUsoMovil(kilometraje_fin: number): Promise<CerrarUso
   }
 
   // 4. Obtener kilometraje de inicio para validar
-  console.log('[cerrarUsoMovil] Buscando kilometraje inicial para uso_id:', usoActivo.id);
   const { data: lecturaInicio, error: lecturaError } = await supabase
     .from('movil_uso_kilometraje')
     .select('kilometraje_km')
@@ -407,16 +392,13 @@ export async function cerrarUsoMovil(kilometraje_fin: number): Promise<CerrarUso
     .eq('tipo', 'INICIO')
     .maybeSingle();
 
-  console.log('[cerrarUsoMovil] Lectura inicial:', { data: lecturaInicio, error: lecturaError });
 
   let kmInicio = 0;
 
   if (lecturaInicio) {
     kmInicio = lecturaInicio.kilometraje_km;
-    console.log('[cerrarUsoMovil] Usando km inicial de lectura:', kmInicio);
   } else {
     // Si no hay lectura, buscar el kilometraje actual del móvil
-    console.log('[cerrarUsoMovil] No se encontró lectura inicial, buscando km actual del móvil...');
     const { data: movilData, error: movilError } = await supabase
       .from('moviles')
       .select('kilometraje_actual')
@@ -433,7 +415,6 @@ export async function cerrarUsoMovil(kilometraje_fin: number): Promise<CerrarUso
     }
 
     kmInicio = movilData.kilometraje_actual;
-    console.log('[cerrarUsoMovil] Usando km actual del móvil como inicial:', kmInicio);
   }
 
   // Validar que km_fin >= km_inicio
@@ -453,7 +434,6 @@ export async function cerrarUsoMovil(kilometraje_fin: number): Promise<CerrarUso
 
   // Si el RPC no existe, hacer proceso manual
   if (rpcError && rpcError.message?.includes('function') && rpcError.message?.includes('does not exist')) {
-    console.log('RPC no existe, usando proceso manual para cerrar uso de móvil');
     
     // Registrar lectura FIN
     const { error: kmError } = await supabase
@@ -476,7 +456,6 @@ export async function cerrarUsoMovil(kilometraje_fin: number): Promise<CerrarUso
 
     // Actualizar uso con fin_ts y km_recorridos
     const kmRecorridos = kilometraje_fin - kmInicio;
-    console.log('[cerrarUsoMovil] Km recorridos calculados:', kmRecorridos);
     const { error: updateError } = await supabase
       .from('movil_usos')
       .update({
@@ -495,7 +474,6 @@ export async function cerrarUsoMovil(kilometraje_fin: number): Promise<CerrarUso
     }
 
     // Actualizar estado del móvil a DISPONIBLE y su kilometraje
-    console.log('[cerrarUsoMovil] Actualizando móvil a DISPONIBLE con km:', kilometraje_fin);
     const { error: updateMovilError } = await supabase
       .from('moviles')
       .update({ 
@@ -505,7 +483,6 @@ export async function cerrarUsoMovil(kilometraje_fin: number): Promise<CerrarUso
       .eq('id', usoActivo.movil_id);
 
     if (updateMovilError) {
-      console.log('[cerrarUsoMovil] ⚠️ Error al actualizar móvil:', updateMovilError);
     }
 
     return {
@@ -525,7 +502,6 @@ export async function cerrarUsoMovil(kilometraje_fin: number): Promise<CerrarUso
   }
 
   const kmRecorridos = kilometraje_fin - kmInicio;
-  console.log('[cerrarUsoMovil] ✅ Uso cerrado exitosamente. Km recorridos:', kmRecorridos);
 
   return {
     ok: true,
@@ -538,13 +514,11 @@ export async function cerrarUsoMovil(kilometraje_fin: number): Promise<CerrarUso
  * Obtiene el uso activo del inspector autenticado (si existe)
  */
 export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
-  console.log('[obtenerUsoActivo] Iniciando...');
   
   // 1. Usuario autenticado
   const { data: authData, error: authError } = await supabase.auth.getUser();
 
   if (authError || !authData?.user) {
-    console.log('[obtenerUsoActivo] Error de autenticación:', authError);
     return {
       ok: false,
       type: 'NO_AUTH',
@@ -554,7 +528,6 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
   }
 
   const user = authData.user;
-  console.log('[obtenerUsoActivo] Usuario autenticado:', user.id);
 
   // 2. Buscar inspector
   const { data: inspector, error: inspectorError } = await supabase
@@ -564,7 +537,6 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
     .single();
 
   if (inspectorError || !inspector) {
-    console.log('[obtenerUsoActivo] Error al buscar inspector:', inspectorError);
     return {
       ok: false,
       type: 'INSPECTOR_NOT_FOUND',
@@ -573,10 +545,8 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
     };
   }
 
-  console.log('[obtenerUsoActivo] Inspector encontrado:', inspector.id);
 
   // 3. Buscar uso activo con datos del móvil
-  console.log('[obtenerUsoActivo] Buscando uso activo para inspector_id:', inspector.id);
   const { data: usoActivo, error: usoError } = await supabase
     .from('movil_usos')
     .select(`
@@ -605,13 +575,8 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
     .limit(1)
     .maybeSingle();
 
-  console.log('[obtenerUsoActivo] Resultado de búsqueda de uso activo:', { 
-    encontrado: !!usoActivo, 
-    error: usoError 
-  });
 
   if (usoError) {
-    console.log('[obtenerUsoActivo] Error en query de uso activo:', usoError);
     return {
       ok: false,
       type: 'NO_USO_ACTIVO',
@@ -621,7 +586,6 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
   }
 
   if (!usoActivo) {
-    console.log('[obtenerUsoActivo] No hay uso activo para este inspector');
     return {
       ok: false,
       type: 'NO_USO_ACTIVO',
@@ -629,10 +593,8 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
     };
   }
 
-  console.log('[obtenerUsoActivo] ✅ Uso activo encontrado, uso_id:', usoActivo.id);
 
   // 4. Obtener kilometraje de inicio
-  console.log('[obtenerUsoActivo] 🔍 Buscando kilometraje inicial para uso_id:', usoActivo.id);
   const { data: lecturaInicio, error: lecturaError } = await supabase
     .from('movil_uso_kilometraje')
     .select('kilometraje_km')
@@ -640,14 +602,8 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
     .eq('tipo', 'INICIO')
     .single();
 
-  console.log('[obtenerUsoActivo] 📊 Resultado lectura kilometraje:', {
-    encontrado: !!lecturaInicio,
-    kilometraje: lecturaInicio?.kilometraje_km,
-    error: lecturaError?.message,
-  });
 
   if (lecturaError || !lecturaInicio) {
-    console.log('[obtenerUsoActivo] ❌ ERROR: No se encontró kilometraje de inicio');
     return {
       ok: false,
       type: 'NO_USO_ACTIVO',
@@ -657,18 +613,11 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
   }
 
   // Normalizar movil
-  console.log('[obtenerUsoActivo] 🚗 Extrayendo datos del móvil...');
   const movilRaw = (usoActivo as any).moviles;
   const movil = Array.isArray(movilRaw) ? movilRaw[0] : movilRaw;
 
-  console.log('[obtenerUsoActivo] 📊 Móvil raw:', {
-    esArray: Array.isArray(movilRaw),
-    tieneMovil: !!movil,
-    patente: movil?.patente,
-  });
 
   if (!movil) {
-    console.log('[obtenerUsoActivo] ❌ ERROR: No se encontró móvil asociado al uso');
     return {
       ok: false,
       type: 'NO_USO_ACTIVO',
@@ -681,11 +630,6 @@ export async function obtenerUsoActivo(): Promise<ObtenerUsoActivoResult> {
     ? movil.movil_tipo[0] ?? null
     : movil.movil_tipo ?? null;
 
-  console.log('[obtenerUsoActivo] ✅ Datos completos obtenidos:', {
-    patente: movil.patente,
-    km_inicio: lecturaInicio.kilometraje_km,
-    tipo_movil: movilTipo?.nombre || 'N/A',
-  });
 
   return {
     ok: true,

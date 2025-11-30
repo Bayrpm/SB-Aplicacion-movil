@@ -183,7 +183,6 @@ export async function signOut() {
       }
     } catch (e) {
       // No fatal: seguimos con el signOut aunque falle el borrado de token
-      if (typeof __DEV__ !== 'undefined' && __DEV__) console.debug('unregisterPushNotifications falló:', e);
     }
 
     // Intenta sign out "completo" usando helper que además limpia AsyncStorage

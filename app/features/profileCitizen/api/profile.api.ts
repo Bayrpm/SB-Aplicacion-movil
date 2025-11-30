@@ -109,8 +109,7 @@ export async function getCitizenProfile(): Promise<{
       .single();
 
     if (error) {
-      console.error('Error al obtener perfil del ciudadano:', error);
-      return {
+return {
         data: null,
         error: error.message || 'Error al obtener el perfil',
       };
@@ -121,8 +120,7 @@ export async function getCitizenProfile(): Promise<{
       error: null,
     };
   } catch (error: any) {
-    console.error('Error inesperado al obtener perfil:', error);
-    return {
+return {
       data: null,
       error: error?.message || 'Error inesperado',
     };
@@ -161,8 +159,7 @@ export async function updateCitizenProfile(updates: {
       });
 
       if (emailError) {
-        console.error('Error al actualizar email en Auth:', emailError);
-        return {
+return {
           data: null,
           error: 'No se pudo actualizar el correo. Verifica que sea válido y no esté en uso.',
         };
@@ -178,8 +175,7 @@ export async function updateCitizenProfile(updates: {
       .single();
 
     if (error) {
-      console.error('Error al actualizar perfil:', error);
-      return {
+return {
         data: null,
         error: error.message || 'Error al actualizar el perfil',
       };
@@ -190,8 +186,7 @@ export async function updateCitizenProfile(updates: {
       error: null,
     };
   } catch (error: any) {
-    console.error('Error inesperado al actualizar perfil:', error);
-    return {
+return {
       data: null,
       error: error?.message || 'Error inesperado',
     };
@@ -272,8 +267,7 @@ export async function getCitizenReports(
     const { data, error } = await query;
 
     if (error) {
-      console.error('Error al obtener denuncias del ciudadano:', error);
-      return {
+return {
         data: null,
         error: error.message || 'Error al obtener las denuncias',
         hasMore: false,
@@ -315,8 +309,7 @@ export async function getCitizenReports(
       hasMore,
     };
   } catch (error: any) {
-    console.error('Error inesperado al obtener denuncias:', error);
-    return {
+return {
       data: null,
       error: error?.message || 'Error inesperado',
       hasMore: false,
@@ -340,14 +333,12 @@ export async function getAllCategories(): Promise<{
       .order('orden', { ascending: true });
 
     if (error) {
-      console.error('Error al obtener categorías:', error);
-      return { data: null, error: error.message };
+return { data: null, error: error.message };
     }
 
     return { data, error: null };
   } catch (error: any) {
-    console.error('Error inesperado al obtener categorías:', error);
-    return { data: null, error: error?.message || 'Error inesperado' };
+return { data: null, error: error?.message || 'Error inesperado' };
   }
 }
 
@@ -365,14 +356,12 @@ export async function getAllEstados(): Promise<{
       .order('id', { ascending: true });
 
     if (error) {
-      console.error('Error al obtener estados:', error);
-      return { data: null, error: error.message };
+return { data: null, error: error.message };
     }
 
     return { data, error: null };
   } catch (error: any) {
-    console.error('Error inesperado al obtener estados:', error);
-    return { data: null, error: error?.message || 'Error inesperado' };
+return { data: null, error: error?.message || 'Error inesperado' };
   }
 }
 
@@ -470,8 +459,7 @@ export async function uploadCitizenAvatar(fileUri: string): Promise<{
       });
 
     if (uploadError) {
-      console.error('Error al subir avatar:', uploadError);
-      return { data: null, error: uploadError.message || 'Error al subir la imagen' };
+return { data: null, error: uploadError.message || 'Error al subir la imagen' };
     }
 
     // Obtener URL pública
@@ -487,14 +475,12 @@ export async function uploadCitizenAvatar(fileUri: string): Promise<{
       .single();
 
     if (error) {
-      console.error('Error al actualizar avatar en perfil:', error);
-      return { data: null, error: error.message };
+return { data: null, error: error.message };
     }
 
     return { data, error: null };
   } catch (e: any) {
-    console.error('Error inesperado al subir avatar:', e);
-    return { data: null, error: e?.message || 'Error inesperado' };
+return { data: null, error: e?.message || 'Error inesperado' };
   }
 }
 
@@ -520,8 +506,7 @@ export async function fetchReportStats(reportId: string): Promise<{
     const commentsCount = Array.isArray(comments) ? comments.length : 0;
     return { likes, dislikes, userReaction, commentsCount };
   } catch (e: any) {
-    console.error('fetchReportStats profile.api exception', e);
-    return { likes: 0, dislikes: 0, userReaction: null, commentsCount: 0 };
+return { likes: 0, dislikes: 0, userReaction: null, commentsCount: 0 };
   }
 }
 
@@ -532,8 +517,7 @@ export async function reactToReport(reportId: string, tipo: 'LIKE'|'DISLIKE') {
     if (error) return { data: null, error };
     return { data, error: null };
   } catch (e: any) {
-    console.error('reactToReport profile.api exception', e);
-    return { data: null, error: e };
+return { data: null, error: e };
   }
 }
 
@@ -558,14 +542,12 @@ export async function fetchReportComments(reportId: string) {
             .eq('denuncia_id', reportId)
             .order('created_at', { ascending: false });
           if (error2) {
-            console.error('fetchReportComments profile.api error after fallback', error2);
-            return [];
+return [];
           }
           // Normalize: ensure parent_id absent => null on consumer
           return (data2 ?? []) as any[];
         }
-        console.error('fetchReportComments profile.api error', error);
-        return [];
+return [];
       }
 
       // Merge comment reaction stats (if view exists) to supply likes/liked per comment
@@ -647,12 +629,10 @@ export async function fetchReportComments(reportId: string) {
         return (data ?? []) as any[];
       }
     } catch (inner) {
-      console.error('fetchReportComments profile.api inner exception', inner);
-      return [];
+return [];
     }
   } catch (e: any) {
-    console.error('fetchReportComments profile.api exception', e);
-    return [];
+return [];
   }
 }
 
@@ -682,19 +662,16 @@ export async function createReportComment(reportId: string, contenido: string, a
         const insertFallback: any = { denuncia_id: reportId, contenido, anonimo };
         const { data: data2, error: error2 } = await supabase.from('comentarios_denuncias').insert(insertFallback).select().maybeSingle();
         if (error2) {
-          console.error('createReportComment profile.api error after fallback', error2);
-          return { data: null, error: error2 };
+return { data: null, error: error2 };
         }
         return { data: data2, error: null };
       }
-      console.error('createReportComment profile.api error', error);
-      return { data: null, error };
+return { data: null, error };
     }
 
     return { data, error: null };
   } catch (e: any) {
-    console.error('createReportComment profile.api exception', e);
-    return { data: null, error: e };
+return { data: null, error: e };
   }
 }
 
@@ -703,13 +680,11 @@ export async function reactToComment(commentId: number, tipo: 'LIKE'|'DISLIKE') 
   try {
     const { data, error } = await supabase.rpc('fn_comentario_reaccionar', { p_comentario_id: commentId, p_tipo: tipo });
     if (error) {
-      console.error('reactToComment profile.api error', error);
-      return { data: null, error };
+return { data: null, error };
     }
     return { data, error: null };
   } catch (e: any) {
-    console.error('reactToComment profile.api exception', e);
-    return { data: null, error: e };
+return { data: null, error: e };
   }
 }
 
@@ -758,12 +733,10 @@ export async function deleteCitizenAvatar(currentAvatarUrl?: string): Promise<{
           const { error: delErr } = await supabase.storage.from('avatars').remove([path]);
           if (delErr) {
             // No fatal: registrar y continuar para limpiar la URL en el perfil
-            console.warn('deleteCitizenAvatar: error removing storage object', delErr.message ?? delErr);
-          }
+}
         }
       } catch (e) {
-        console.warn('deleteCitizenAvatar: error while removing from storage', e);
-      }
+}
     }
 
     // Finalmente actualizar el perfil poniendo avatar_url a NULL
@@ -777,7 +750,6 @@ export async function deleteCitizenAvatar(currentAvatarUrl?: string): Promise<{
     if (error) return { data: null, error: error.message ?? String(error) };
     return { data, error: null };
   } catch (e: any) {
-    console.error('deleteCitizenAvatar exception', e);
-    return { data: null, error: e?.message ?? 'Error inesperado' };
+return { data: null, error: e?.message ?? 'Error inesperado' };
   }
 }

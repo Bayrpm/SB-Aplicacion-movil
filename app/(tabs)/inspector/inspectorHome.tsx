@@ -57,7 +57,6 @@ function mapEstadoToCaseStatus(estado: DerivacionEstadoNombre): CaseStatus {
   if (estado === 'CERRADA') return 'CERRADA';
 
   // Fallback para DESCONOCIDO u otros valores
-  console.warn('[mapEstadoToCaseStatus] Estado no mapeado:', estado, '→ usando PENDIENTE');
   return 'PENDIENTE';
 }
 
@@ -92,7 +91,6 @@ export default function HomeScreen() {
 
   // Debug: Log cuando cambian los estados del modal de nueva derivación
   React.useEffect(() => {
-    console.log('[HomeScreen] 🔔 showNewDerivationModal:', showNewDerivationModal, '| newDerivation:', newDerivation?.folio);
   }, [showNewDerivationModal, newDerivation]);
 
   // === Modal de cierre exitoso ===
@@ -107,9 +105,6 @@ export default function HomeScreen() {
    */
   const loadDerivaciones = useCallback(
     async (forzarModalNueva = false): Promise<DerivacionItem[]> => {
-      console.log('[HomeScreen] ========== INICIO loadDerivaciones ==========');
-      console.log('[HomeScreen] forzarModalNueva:', forzarModalNueva);
-      console.log('[HomeScreen] maxFechaDerivacionVisto (ref):', maxFechaDerivacionVistoRef.current);
       setLoadingCases(true);
 
       const result = await fetchInspectorDerivaciones();
@@ -117,10 +112,6 @@ export default function HomeScreen() {
       let ordenadas: DerivacionItem[] = [];
 
       if (result.ok) {
-        console.log(
-          '[HomeScreen] Derivaciones obtenidas:',
-          result.items.length
-        );
 
         // Orden:
         // 1) EN_PROCESO
@@ -145,12 +136,10 @@ export default function HomeScreen() {
           );
         });
 
-        console.log('[HomeScreen] Derivaciones ordenadas:', ordenadas.length);
 
         // Debug: Log del mapeo de estados
         ordenadas.forEach((c, idx) => {
           const mappedStatus = mapEstadoToCaseStatus(c.estadoNombre);
-          console.log(`[UI] Caso ${idx + 1}: estadoNombre='${c.estadoNombre}' → status='${mappedStatus}'`);
         });
 
         setCases(ordenadas);
@@ -160,7 +149,6 @@ export default function HomeScreen() {
           (d) => mapEstadoToCaseStatus(d.estadoNombre) === 'EN_PROCESO'
         );
 
-        console.log('[HomeScreen] Derivaciones EN_PROCESO:', derivacionesEnProceso.length);
 
         if (derivacionesEnProceso.length > 0) {
           // Obtener la más reciente (ordenar por fecha descendente)
@@ -170,13 +158,6 @@ export default function HomeScreen() {
               new Date(a.fechaDerivacion).getTime()
           )[0];
 
-          console.log(
-            '[HomeScreen] Derivación EN_PROCESO más reciente:',
-            masReciente.folio,
-            'fecha:',
-            masReciente.fechaDerivacion
-          );
-          console.log('[HomeScreen] maxFechaDerivacionVisto (ref):', maxFechaDerivacionVistoRef.current);
 
           // Mostrar modal si:
           // 1. forzarModalNueva es true (viene de Realtime)
@@ -186,28 +167,17 @@ export default function HomeScreen() {
             masReciente.fechaDerivacion > maxFechaDerivacionVistoRef.current;
 
           if (forzarModalNueva || esNueva) {
-            console.log(
-              '[HomeScreen] ✅ Nueva derivación EN_PROCESO detectada - Mostrando modal (forzar:',
-              forzarModalNueva,
-              'esNueva:',
-              esNueva,
-              ')'
-            );
             setNewDerivation(masReciente);
             setShowNewDerivationModal(true);
             maxFechaDerivacionVistoRef.current = masReciente.fechaDerivacion;
           } else {
-            console.log('[HomeScreen] ❌ Derivación EN_PROCESO no es nueva (ya vista)');
           }
         } else {
-          console.log('[HomeScreen] No hay derivaciones EN_PROCESO para mostrar modal');
         }
       } else {
-        console.log('[derivaciones][error]', result.type, result.message);
       }
 
       setLoadingCases(false);
-      console.log('[HomeScreen] ========== FIN loadDerivaciones ==========');
       return ordenadas;
     }, []);
 
@@ -228,10 +198,6 @@ export default function HomeScreen() {
         });
 
         if (!r.ok) {
-          console.log(
-            '[derivacion][marcar_en_proceso][error]',
-            r
-          );
           // aquí podrías usar un toast o Alert si quieres
         } else {
           // Actualizamos el estado en memoria para el modal
@@ -257,17 +223,10 @@ export default function HomeScreen() {
 
   // Debug: Log cuando cambia el estado del modal de móvil
   React.useEffect(() => {
-    console.log('[HomeScreen] showMovilModal:', showMovilModal);
   }, [showMovilModal]);
 
   // Debug: Log cuando cambian los estados del móvil
   React.useEffect(() => {
-    console.log('[HomeScreen] Estados móvil:', {
-      loadingMovil,
-      movilActivo,
-      datosMovilActivo: datosMovilActivo ? 'SI' : 'NO',
-      mostrarCard: !loadingMovil && movilActivo && datosMovilActivo,
-    });
   }, [loadingMovil, movilActivo, datosMovilActivo]);
 
   const scheme = useColorScheme() ?? 'light';
@@ -285,15 +244,10 @@ export default function HomeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       let isActive = true;
-      console.log('[HomeScreen] useFocusEffect - Pantalla enfocada');
 
       const checkTurnoStatus = async () => {
-        console.log(
-          '[HomeScreen] Verificando estado del turno...'
-        );
         setLoadingTurno(true);
         const activo = await verificarTurnoActivo();
-        console.log('[HomeScreen] Turno activo:', activo);
         if (isActive) {
           setTurnoActivo(activo);
           setLoadingTurno(false);
@@ -304,7 +258,6 @@ export default function HomeScreen() {
       loadDerivaciones();
 
       return () => {
-        console.log('[HomeScreen] useFocusEffect - Cleanup');
         isActive = false;
       };
     }, [loadDerivaciones])
@@ -319,13 +272,11 @@ export default function HomeScreen() {
 
   // Suscripción Realtime para detectar nuevas derivaciones
   useEffect(() => {
-    console.log('[HomeScreen] Configurando suscripción Realtime...');
 
     // Obtener el ID del inspector actual
     const setupRealtimeSubscription = async () => {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData?.user) {
-        console.log('[HomeScreen] No hay usuario autenticado para Realtime');
         return null;
       }
 
@@ -336,11 +287,9 @@ export default function HomeScreen() {
         .single();
 
       if (!inspector) {
-        console.log('[HomeScreen] No se encontró inspector para Realtime');
         return null;
       }
 
-      console.log('[HomeScreen] Suscribiéndose a cambios para inspector:', inspector.id);
 
       // Crear canal de suscripción
       const channel = supabase
@@ -355,24 +304,18 @@ export default function HomeScreen() {
           },
           async (payload) => {
             try {
-              console.log('[HomeScreen] 🔔 Nueva asignación detectada por Realtime:', payload);
-              console.log('[HomeScreen] Payload new:', JSON.stringify(payload.new, null, 2));
 
               // Esperar un momento para que la BD procese completamente
               await new Promise((resolve) => setTimeout(resolve, 1500));
 
               // Recargar derivaciones y FORZAR mostrar modal de nueva derivación
-              console.log('[HomeScreen] ⚡ Llamando loadDerivaciones(true) para forzar modal...');
               await loadDerivacionesRef.current(true); // true = forzar modal
-              console.log('[HomeScreen] ✅ loadDerivaciones completado');
             } catch (error) {
-              console.error('[HomeScreen] ❌ Error al procesar nueva derivación:', error);
               // No propagar el error para evitar que afecte la sesión
             }
           }
         )
         .subscribe((status) => {
-          console.log('[HomeScreen] Estado suscripción Realtime:', status);
         });
 
       return channel;
@@ -382,11 +325,9 @@ export default function HomeScreen() {
 
     // Cleanup: desuscribirse al desmontar
     return () => {
-      console.log('[HomeScreen] Limpiando suscripción Realtime...');
       channelPromise.then((channel) => {
         if (channel) {
           supabase.removeChannel(channel);
-          console.log('[HomeScreen] Canal Realtime removido');
         }
       });
     };
@@ -518,9 +459,6 @@ export default function HomeScreen() {
               ]}
               activeOpacity={0.7}
               onPress={() => {
-                console.log(
-                  '[HomeScreen] Abriendo modal de móvil en modo iniciar'
-                );
                 setShowMovilModal(true);
               }}
             >
@@ -594,7 +532,6 @@ export default function HomeScreen() {
         visible={showTurnModal}
         onClose={() => setShowTurnModal(false)}
         onIngresoExitoso={(data) => {
-          console.log('Turno iniciado:', data);
           setShowTurnModal(false);
           setTurnoActivo(true);
         }}
@@ -606,18 +543,13 @@ export default function HomeScreen() {
         modo={movilActivo ? 'cerrar' : 'iniciar'}
         movilActivo={datosMovilActivo || undefined}
         onClose={() => {
-          console.log(
-            '[HomeScreen] Cerrando modal de móvil'
-          );
           setShowMovilModal(false);
         }}
         onInicioExitoso={async (data) => {
-          console.log('[HomeScreen] Móvil registrado exitosamente:', data.movil.patente);
 
           setShowMovilModal(false);
 
           // Recargar el estado del móvil desde la BD para sincronizar y guardar en cache
-          console.log('[HomeScreen] Recargando contexto del móvil...');
           await recargarMovilActivo();
 
           AppAlert.alert(
@@ -626,10 +558,6 @@ export default function HomeScreen() {
           );
         }}
         onCierreExitoso={async (data) => {
-          console.log(
-            'Móvil cerrado. Km recorridos:',
-            data.km_recorridos
-          );
           setShowMovilModal(false);
 
           // Recargar el estado del móvil desde la BD para sincronizar
@@ -664,14 +592,12 @@ export default function HomeScreen() {
         visible={showNewDerivationModal && !!newDerivation}
         derivacion={newDerivation}
         onView={() => {
-          console.log('[HomeScreen] Modal - Usuario presionó "Ver ahora"');
           setShowNewDerivationModal(false);
           if (newDerivation) {
             handlePressCase(newDerivation);
           }
         }}
         onDismiss={() => {
-          console.log('[HomeScreen] Modal - Usuario presionó "Cerrar"');
           setShowNewDerivationModal(false);
         }}
       />

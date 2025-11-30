@@ -59,8 +59,7 @@ export async function uploadEvidenceForReport(params: {
       upsert: false,
     });
     if (upErr) {
-      console.error('Error upload storage:', upErr);
-      return { ok: false, error: upErr.message || 'Error al subir evidencia' };
+return { ok: false, error: upErr.message || 'Error al subir evidencia' };
     }
 
     // Insertar fila en denuncia_evidencias
@@ -71,14 +70,12 @@ export async function uploadEvidenceForReport(params: {
       orden: params.orden ?? 1,
     });
     if (dbErr) {
-      console.error('Error insert DB:', dbErr);
-      return { ok: false, error: dbErr.message || 'Error al registrar evidencia' };
+return { ok: false, error: dbErr.message || 'Error al registrar evidencia' };
     }
 
     return { ok: true, storagePath };
   } catch (e: any) {
-    console.error('Error al subir evidencia:', e);
-    return { ok: false, error: e?.message || 'Error al subir evidencia' };
+return { ok: false, error: e?.message || 'Error al subir evidencia' };
   }
 }
 
@@ -93,11 +90,9 @@ export async function listEvidencesSigned(denunciaId: string): Promise<Array<{
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData?.session) {
-        console.warn('listEvidencesSigned: no existe sesión Supabase activa. Las políticas RLS/storage pueden impedir generar signed URLs para objetos privados.');
-      }
+}
     } catch (e) {
-      console.warn('listEvidencesSigned: error al verificar sesión Supabase', e);
-    }
+}
     const { data, error } = await supabase
       .from('denuncia_evidencias')
       .select('tipo, storage_path, orden')
@@ -114,8 +109,7 @@ export async function listEvidencesSigned(denunciaId: string): Promise<Array<{
       // durante la reproducción en dispositivos o cuando el usuario abre el video más tarde.
       const { data: signed, error: sErr } = await supabase.storage.from('evidencias').createSignedUrl(sp, 24 * 60 * 60);
       if (sErr || !signed?.signedUrl) {
-        console.warn('listEvidencesSigned: createSignedUrl falló para', sp, 'error:', sErr?.message ?? sErr, 'signed:', signed);
-        continue;
+continue;
       }
 
       // Intentar también devolver una miniatura si existe. Se asume convención: thumbnail = storage_path + '.jpg'
@@ -208,8 +202,7 @@ export async function uploadEvidenceForReportWithProgress(
     });
 
     if (upErr) {
-      console.error('Error upload storage:', upErr);
-      return { ok: false, error: upErr.message || 'Error al subir evidencia', tries: 1 };
+return { ok: false, error: upErr.message || 'Error al subir evidencia', tries: 1 };
     }
 
     onProgress?.(0.8);
@@ -221,15 +214,13 @@ export async function uploadEvidenceForReportWithProgress(
       orden: params.orden ?? 1,
     });
     if (dbErr) {
-      console.error('Error insert DB:', dbErr);
-      return { ok: false, error: dbErr.message || 'Error al registrar evidencia', tries: 1 };
+return { ok: false, error: dbErr.message || 'Error al registrar evidencia', tries: 1 };
     }
 
     onProgress?.(1);
     return { ok: true, storagePath, tries: 1 };
   } catch (e: any) {
-    console.error('uploadEvidenceForReportWithProgress fallo:', e);
-    return { ok: false, error: e?.message || 'Fallo al subir evidencia', tries: 1 };
+return { ok: false, error: e?.message || 'Fallo al subir evidencia', tries: 1 };
   }
 }
 

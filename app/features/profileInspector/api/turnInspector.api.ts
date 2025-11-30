@@ -87,9 +87,7 @@ function marcarSiPosibleRls(error: any) {
 export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult> {
   // 1. Usuario autenticado
   const { data: authData, error: authError } = await supabase.auth.getUser();
-  console.log('[turno][ingreso] authData:', authData, 'authError:', authError);
-
-  if (authError || !authData?.user) {
+if (authError || !authData?.user) {
     return {
       ok: false,
       type: 'NO_AUTH',
@@ -108,10 +106,7 @@ export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult>
     )
     .eq('usuario_id', user.id)
     .single();
-
-  console.log('[turno][ingreso] inspector:', inspector, 'inspectorError:', inspectorError);
-
-  if (inspectorError || !inspector) {
+if (inspectorError || !inspector) {
     return {
       ok: false,
       type: 'INSPECTOR_NOT_FOUND',
@@ -125,10 +120,7 @@ export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult>
   const turnoTipo: TurnoTipo | null = Array.isArray(turnoTipoRaw)
     ? ((turnoTipoRaw[0] as TurnoTipo | undefined) ?? null)
     : (turnoTipoRaw as TurnoTipo | null);
-
-  console.log('[turno][ingreso] turnoTipoRaw:', turnoTipoRaw, 'turnoTipo:', turnoTipo);
-
-  if (!turnoTipo) {
+if (!turnoTipo) {
     return {
       ok: false,
       type: 'TURNOTIPO_NOT_FOUND',
@@ -157,9 +149,7 @@ export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult>
 
   // 4. Buscar o crear el turno ACTIVO del día actual
   const hoy = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-  console.log('[turno][ingreso] hoy:', hoy);
-
-  // Solo consideramos turnos activos: PENDIENTE / EN_CURSO / EN_PAUSA
+// Solo consideramos turnos activos: PENDIENTE / EN_CURSO / EN_PAUSA
   const { data: turnoActivo, error: turnoError } = await supabase
     .from('turnos')
     .select('id, estado, hora_inicio_real')
@@ -168,10 +158,7 @@ export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult>
     .in('estado', ['PENDIENTE', 'EN_CURSO', 'EN_PAUSA'])
     .order('id', { ascending: false })
     .maybeSingle();
-
-  console.log('[turno][ingreso] turnoActivo:', turnoActivo, 'turnoError:', turnoError);
-
-  if (turnoError) {
+if (turnoError) {
     return {
       ok: false,
       type: 'RPC_ERROR',
@@ -187,8 +174,7 @@ export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult>
 
   // Si no hay turno ACTIVO para hoy, lo creamos
   if (!turnoActivo) {
-    console.log('[turno][ingreso] No hay turno activo, intentando crear nuevo turno...');
-    const { data: nuevoTurno, error: nuevoTurnoError } = await supabase
+const { data: nuevoTurno, error: nuevoTurnoError } = await supabase
       .from('turnos')
       .insert({
         inspector_id: inspector.id,
@@ -198,10 +184,7 @@ export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult>
       })
       .select('id, estado, hora_inicio_real')
       .single();
-
-    console.log('[turno][ingreso] nuevoTurno:', nuevoTurno, 'nuevoTurnoError:', nuevoTurnoError);
-
-    if (nuevoTurnoError || !nuevoTurno) {
+if (nuevoTurnoError || !nuevoTurno) {
       return {
         ok: false,
         type: 'TURNO_NOT_FOUND',
@@ -218,10 +201,7 @@ export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult>
   } else {
     turnoId = turnoActivo.id;
   }
-
-  console.log('[turno][ingreso] turnoId que se usará en RPC:', turnoId);
-
-  // 5. Llamar RPC que registra evento de ENTRADA
+// 5. Llamar RPC que registra evento de ENTRADA
   const { error: rpcError } = await supabase.rpc(
     'fn_turno_registrar_evento',
     {
@@ -232,10 +212,7 @@ export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult>
       p_ts: new Date().toISOString(),
     }
   );
-
-  console.log('[turno][ingreso] rpcError:', rpcError);
-
-  if (rpcError) {
+if (rpcError) {
     return {
       ok: false,
       type: 'RPC_ERROR',
@@ -254,10 +231,7 @@ export async function registrarIngresoTurnoActual(): Promise<TurnoIngresoResult>
       .select('id, hora_inicio_real')
       .eq('id', turnoId)
       .single();
-
-  console.log('[turno][ingreso] turnoActualizado:', turnoActualizado, 'turnoActualizadoError:', turnoActualizadoError);
-
-  if (turnoActualizadoError) {
+if (turnoActualizadoError) {
     return {
       ok: true,
       turnoId,
@@ -296,9 +270,7 @@ export type TurnoSalidaResult = TurnoSalidaResultOk | TurnoSalidaResultError;
 export async function registrarSalidaTurnoActual(): Promise<TurnoSalidaResult> {
   // 1. Usuario autenticado
   const { data: authData, error: authError } = await supabase.auth.getUser();
-  console.log('[turno][salida] authData:', authData, 'authError:', authError);
-
-  if (authError || !authData?.user) {
+if (authError || !authData?.user) {
     return {
       ok: false,
       type: 'NO_AUTH',
@@ -315,10 +287,7 @@ export async function registrarSalidaTurnoActual(): Promise<TurnoSalidaResult> {
     .select('id')
     .eq('usuario_id', user.id)
     .single();
-
-  console.log('[turno][salida] inspector:', inspector, 'inspectorError:', inspectorError);
-
-  if (inspectorError || !inspector) {
+if (inspectorError || !inspector) {
     return {
       ok: false,
       type: 'INSPECTOR_NOT_FOUND',
@@ -329,9 +298,7 @@ export async function registrarSalidaTurnoActual(): Promise<TurnoSalidaResult> {
 
   // 3. Buscar turno EN_CURSO del día
   const hoy = new Date().toISOString().split('T')[0];
-  console.log('[turno][salida] hoy:', hoy);
-
-  const { data: turnoData, error: turnoError } = await supabase
+const { data: turnoData, error: turnoError } = await supabase
     .from('turnos')
     .select('id, estado, hora_fin_real')
     .eq('inspector_id', inspector.id)
@@ -339,10 +306,7 @@ export async function registrarSalidaTurnoActual(): Promise<TurnoSalidaResult> {
     .eq('estado', 'EN_CURSO')
     .order('id', { ascending: false })
     .maybeSingle();
-
-  console.log('[turno][salida] turnoData:', turnoData, 'turnoError:', turnoError);
-
-  if (turnoError) {
+if (turnoError) {
     return {
       ok: false,
       type: 'RPC_ERROR',
@@ -363,9 +327,7 @@ export async function registrarSalidaTurnoActual(): Promise<TurnoSalidaResult> {
   }
 
   const turnoId = turnoData.id;
-  console.log('[turno][salida] turnoId que se usará en RPC:', turnoId);
-
-  // 4. Llamar RPC que registra evento de SALIDA
+// 4. Llamar RPC que registra evento de SALIDA
   const { error: rpcError } = await supabase.rpc(
     'fn_turno_registrar_evento',
     {
@@ -376,10 +338,7 @@ export async function registrarSalidaTurnoActual(): Promise<TurnoSalidaResult> {
       p_ts: new Date().toISOString(),
     }
   );
-
-  console.log('[turno][salida] rpcError:', rpcError);
-
-  if (rpcError) {
+if (rpcError) {
     return {
       ok: false,
       type: 'RPC_ERROR',
@@ -398,10 +357,7 @@ export async function registrarSalidaTurnoActual(): Promise<TurnoSalidaResult> {
       .select('id, hora_fin_real')
       .eq('id', turnoId)
       .single();
-
-  console.log('[turno][salida] turnoActualizado:', turnoActualizado, 'turnoActualizadoError:', turnoActualizadoError);
-
-  if (turnoActualizadoError) {
+if (turnoActualizadoError) {
     return {
       ok: true,
       turnoId,
@@ -424,9 +380,7 @@ export async function registrarSalidaTurnoActual(): Promise<TurnoSalidaResult> {
 export async function verificarTurnoActivo(): Promise<boolean> {
   try {
     const { data: authData, error: authError } = await supabase.auth.getUser();
-    console.log('[turno][activo] authData:', authData, 'authError:', authError);
-
-    if (authError || !authData?.user) {
+if (authError || !authData?.user) {
       return false;
     }
 
@@ -436,28 +390,20 @@ export async function verificarTurnoActivo(): Promise<boolean> {
       .select('id')
       .eq('usuario_id', authData.user.id)
       .single();
-
-    console.log('[turno][activo] inspector:', inspector, 'inspectorError:', inspectorError);
-
-    if (inspectorError || !inspector) {
+if (inspectorError || !inspector) {
       return false;
     }
 
     // Buscar turno activo del día
     const hoy = new Date().toISOString().split('T')[0];
-    console.log('[turno][activo] hoy:', hoy);
-
-    const { data, error } = await supabase
+const { data, error } = await supabase
       .from('turnos')
       .select('id, estado, hora_inicio_real, hora_fin_real')
       .eq('inspector_id', inspector.id)
       .eq('fecha', hoy)
       .eq('estado', 'EN_CURSO')
       .maybeSingle();
-
-    console.log('[turno][activo] data:', data, 'error:', error);
-
-    if (error || !data) {
+if (error || !data) {
       return false;
     }
 
@@ -467,8 +413,7 @@ export async function verificarTurnoActivo(): Promise<boolean> {
       !data.hora_fin_real
     );
   } catch (e) {
-    console.log('[turno][activo] unexpected error:', e);
-    return false;
+return false;
   }
 }
 

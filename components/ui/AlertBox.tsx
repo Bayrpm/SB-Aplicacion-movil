@@ -71,12 +71,11 @@ export default function AlertBox() {
                     try {
                       onClose();
                     } catch (e) {
-                      console.error('AlertBox onClose error', e);
-                    }
+}
                     // Ejecutar el handler en el siguiente tick para permitir que
                     // el modal se cierre y que un nuevo Alert pueda abrirse.
                     setTimeout(() => {
-                      try { b.onPress && b.onPress(); } catch (e) { console.error(e); }
+                      try { b.onPress && b.onPress(); } catch (e) {  }
                     }, 0);
                   }}
                   activeOpacity={0.8}

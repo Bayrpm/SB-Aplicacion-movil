@@ -691,8 +691,7 @@ export default function EditLocationScreen() {
                     try { invokeLocationEdit(payload); } catch {}
                     try { router.replace('/citizen/citizenReport'); } catch {}
                   } catch (err) {
-                    console.warn('Guardar ubicación falló', err);
-                  }
+}
                 },
               },
             ]);

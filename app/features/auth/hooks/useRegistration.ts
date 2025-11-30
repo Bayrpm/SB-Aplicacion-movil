@@ -123,8 +123,7 @@ export function useRegistration() {
 
       
     } catch (error) {
-      console.error('❌ Error en el registro:', error);
-  AppAlert.alert('Error en el registro', 'Ocurrió un error inesperado durante el registro');
+AppAlert.alert('Error en el registro', 'Ocurrió un error inesperado durante el registro');
       setLoading(false);
       return;
     }
@@ -161,8 +160,7 @@ export function useRegistration() {
         );
       }
     } catch (error) {
-      console.error('Error en proceso post-registro:', error);
-      // Aún mostrar éxito porque el usuario se creó
+// Aún mostrar éxito porque el usuario se creó
       AppAlert.alert(
         '¡Registro exitoso!',
         'Se ha enviado un correo para verificar tu cuenta. Por favor, revisa tu bandeja de entrada para activar tu cuenta.',
