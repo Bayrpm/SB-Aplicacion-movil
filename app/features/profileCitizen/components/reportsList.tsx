@@ -1,23 +1,30 @@
 // app/features/homeCitizen/components/ReportsList.tsx
+import { fetchPublicReportDetail } from '@/app/features/report/api/report.api';
 import { useFontSize } from '@/app/features/settings/fontSizeContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import * as Network from 'expo-network';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CitizenReport, getAllCategories, getAllEstados, getCitizenReports } from '../api/profile.api';
 import FilterModal, { FilterOptions } from './filterModal';
 import ReportCard from './reportCard';
 import ReportDetailModal from './reportDetailModal';
 
-export default function ReportsList() {
+type Props = { allowInspectorDetails?: boolean };
+
+export default function ReportsList({ allowInspectorDetails = false }: Props) {
   const { fontSize } = useFontSize();
+  const insets = useSafeAreaInsets();
   const [reports, setReports] = useState<CitizenReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -185,6 +192,43 @@ export default function ReportsList() {
     loadInitialReports();
   }, [loadInitialReports]);
 
+  // Abrir modal si la ruta trae `openReportId` (p. ej. desde notificación)
+  const params = useLocalSearchParams();
+  useEffect(() => {
+    let mounted = true;
+    const openId = (params as any)?.openReportId as string | undefined;
+    if (!openId) return;
+    (async () => {
+      try {
+        const detail = await fetchPublicReportDetail(openId);
+        if (!mounted) return;
+        // mapear mínimamente al shape usado por ReportDetailModal (CitizenReport)
+        const asReport: any = {
+          id: detail.id,
+          folio: detail.folio ?? undefined,
+          titulo: detail.titulo,
+          descripcion: detail.descripcion ?? null,
+          ubicacion_texto: detail.ubicacion_texto ?? null,
+          fecha_creacion: detail.fecha_creacion,
+          categoria_publica_id: detail.categoria_publica_id ?? null,
+          estado_id: (detail as any).estado_id ?? (detail as any).estado_id ?? 0,
+          anonimo: !!detail.anonimo,
+          coords_x: detail.coords_x ?? null,
+          coords_y: detail.coords_y ?? null,
+          categoria: detail.ciudadano ? undefined : undefined,
+          estado: (detail as any).estado ? (detail as any).estado : undefined,
+          ciudadano: detail.ciudadano ?? null,
+        } as CitizenReport;
+        setSelectedReport(asReport);
+        setShowDetailModal(true);
+      } catch (e) {
+        // ignore loading errors
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [params?.openReportId]);
+
   // (Removed diagnostic logging)
 
   if (loading) {
@@ -227,7 +271,7 @@ export default function ReportsList() {
   return (
     <>
       
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: Math.max(24, (insets.bottom || 0) + 80) }]} showsVerticalScrollIndicator={true}>
       {/* Título de sección con botón de filtro */}
       <View style={styles.headerRow}>
         <Text style={[styles.sectionTitle, { color: textColor, fontSize: getFontSizeValue(fontSize, 22) }]}>
@@ -312,7 +356,7 @@ export default function ReportsList() {
           </Text>
         </TouchableOpacity>
       )}
-      </View>
+      </ScrollView>
 
       {/* Modales */}
       <FilterModal
@@ -332,6 +376,7 @@ export default function ReportsList() {
         report={selectedReport}
         onToggleLike={handleToggleLike}
         isLiked={false}
+        allowInspector={allowInspectorDetails}
       />
     </>
   );

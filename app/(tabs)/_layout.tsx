@@ -9,7 +9,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Tabs, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, BackHandler, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Some navigator props (sceneContainerStyle) aren't exposed via the typed Tabs from expo-router.
@@ -117,6 +117,22 @@ export default function TabLayout() {
     );
   }
 
+  // Evitar que el botón físico "Atrás" navegue entre tabs cuando el usuario
+  // es inspector. En Android consumimos el evento para que no vuelva a la pestaña
+  // de ciudadano accidentalmente.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    if (!isInspector) return;
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Consumir el evento: no permitir que la navegación por defecto retroceda
+      // hacia otras pestañas. Esto evita que desde inspector se vea la UI de ciudadano.
+      return true;
+    });
+
+    return () => sub.remove();
+  }, [isInspector]);
+
   // Renderizar <Tabs> solo cuando el rol está definido y no hay loading
   if (loading || inspectorLoading || typeof isInspector !== 'boolean') {
     return (
@@ -154,6 +170,7 @@ export default function TabLayout() {
         {/* barra navegacion inspector */}
     <TabsAny
       initialRouteName={isInspector ? 'inspector/inspectorHome' : 'citizen/citizenHome'}
+      backBehavior="none"
       sceneContainerStyle={{ paddingBottom: tabBarHeight }}
       screenOptions={{
         // Forzar que el contenido de cada pantalla reserve espacio inferior igual a tabBarHeight

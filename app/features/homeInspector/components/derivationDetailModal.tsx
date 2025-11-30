@@ -71,10 +71,34 @@ export default function DerivationDetailModal({
       setKeyboardHeight(e.endCoordinates ? e.endCoordinates.height : 0);
       // remember offset before keyboard opened so we can restore later
       prevScrollOffsetRef.current = scrollOffset;
-      // if there is a focused input, try to scroll to it
+      // if editing an observation, scroll to it
       if (editingObsId) {
         // delay slightly to let layout settle
         setTimeout(() => scrollToFocusedInput(editingObsId), 50);
+        return;
+      }
+
+      // If we just entered closing mode (Finalizar caso) and the reporte input exists,
+      // measure it and scroll to make it visible. This avoids calling scrollToEnd
+      // which can cause a large jump.
+      if (isClosingMode && reporteInputRef.current && scrollRef.current) {
+        setTimeout(() => {
+          try {
+            reporteInputRef.current?.measureInWindow((x, y, w, h) => {
+              const inputBottom = y + h;
+              const windowH = Dimensions.get('window').height;
+              const visibleBottom = windowH - (e.endCoordinates ? e.endCoordinates.height : 0);
+              const overlap = inputBottom - visibleBottom;
+              if (overlap > -KEYBOARD_MARGIN) {
+                const toScroll = Math.max(0, scrollOffset + overlap + KEYBOARD_MARGIN + 8);
+                // animate a small scroll to avoid a huge jump
+                scrollRef.current?.scrollTo({ y: toScroll, animated: true });
+              }
+            });
+          } catch (err) {
+            // ignore
+          }
+        }, 60);
       }
     });
     const hideSub = Keyboard.addListener('keyboardDidHide', () => {
@@ -194,16 +218,14 @@ export default function DerivationDetailModal({
                 const toScroll = Math.max(0, scrollOffset + overlap + KEYBOARD_MARGIN + 8);
                 scrollRef.current?.scrollTo({ y: toScroll, animated: true });
               } else {
-                // si no hay solapamiento significativo, asegurar que el final sea visible
-                scrollRef.current?.scrollToEnd({ animated: true });
+                // si no hay solapamiento significativo, NO forzamos un scroll a fin
+                // porque eso puede producir un salto grande. Dejar que el listener
+                // del teclado haga el ajuste cuando el teclado esté realmente presente.
               }
             });
-          } else {
-            scrollRef.current?.scrollToEnd({ animated: true });
           }
         } catch (e) {
           // ignore
-          scrollRef.current?.scrollToEnd({ animated: true });
         }
       }, 220);
     }, 120);

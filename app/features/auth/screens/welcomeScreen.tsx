@@ -1,6 +1,7 @@
+import { useAppColorScheme } from '@/hooks/useAppColorScheme';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { Animated, Platform, StyleSheet, Text, TouchableOpacity, useColorScheme, useWindowDimensions } from 'react-native';
+import { Animated, Platform, StyleSheet, Text, TouchableOpacity, useWindowDimensions } from 'react-native';
 import BaseAuthLayout from '../components/baseAuthLayout';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -40,7 +41,8 @@ export default function WelcomeScreen() {
     router.push(route as any);
   };
 
-  const scheme = useColorScheme();
+  const [appScheme] = useAppColorScheme();
+  const scheme = appScheme ?? 'light';
   const logoShift = scheme === 'dark' ? 12 : 0;
 
   return (

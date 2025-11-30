@@ -267,6 +267,11 @@ export async function createReport(payload: {
       categoria_publica_id: payload.categoria_publica_id ?? null,
     };
 
+    // Validación defensiva: requerir texto de ubicación y coordenadas
+    if (!ubicacion_texto || coords_x == null || coords_y == null) {
+      return { data: null, error: new Error('Ubicación incompleta: se requiere `ubicacion_texto` y coordenadas (coords_x, coords_y) para crear la denuncia') };
+    }
+
     if (Object.prototype.hasOwnProperty.call(payload, 'estado_id')) insertObj.estado_id = payload.estado_id;
     if (Object.prototype.hasOwnProperty.call(payload, 'inspector_id')) insertObj.inspector_id = payload.inspector_id;
     if (Object.prototype.hasOwnProperty.call(payload, 'consentir_publicacion')) insertObj.consentir_publicacion = payload.consentir_publicacion;

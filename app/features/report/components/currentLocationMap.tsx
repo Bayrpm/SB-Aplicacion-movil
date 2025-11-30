@@ -1,5 +1,5 @@
-import { useColorScheme } from "@/hooks/use-color-scheme";
-import { getMapStyle } from "../lib/mapStyles";
+import { useAppColorScheme } from '@/hooks/useAppColorScheme';
+import { DARK_MAP_STYLE, LIGHT_MAP_STYLE } from "../lib/mapStyles";
 // usamos IconSymbol centralizado en lugar de importar familias directamente
 import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
@@ -24,6 +24,7 @@ import MapView, {
   Region,
 } from "react-native-maps";
 // view-shot para capturar la vista del CategoryPin como imagen nativa
+// AsyncStorage/Appearance debug removed
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { captureRef } from "react-native-view-shot";
 import { Button } from "../../../../components/Button";
@@ -382,10 +383,13 @@ const styles = StyleSheet.create({
 
 export default function CurrentLocationMap() {
   const insets = useSafeAreaInsets();
-  const scheme = useColorScheme();
+  const [appScheme] = useAppColorScheme();
+  const scheme = appScheme ?? 'light';
+  // debug removed
   const { reportDetailId, setReportDetailId } = useReportModal();
 
-  const mapStyle = React.useMemo(() => getMapStyle(scheme), [scheme]);
+  // Use explicit light/dark map styles and force remount when scheme changes
+  const mapStyle = React.useMemo(() => (scheme === 'dark' ? DARK_MAP_STYLE : LIGHT_MAP_STYLE), [scheme]);
 
   const TAB_BAR_BASE = 72;
   const tabBarHeightLocal = TAB_BAR_BASE + (insets.bottom || 0);
@@ -1142,8 +1146,9 @@ export default function CurrentLocationMap() {
   if (!location) {
     return (
       <View style={styles.centered}>
-        <IconSymbol name="gps-fixed" size={48} color="#0A4A90" />
-        {errorMsg ? <Text>{errorMsg}</Text> : null}
+        <IconSymbol name="location-off" size={48} color="#EF4444" />
+        <Text style={[styles.networkErrorTitle, { color: scheme === 'dark' ? '#E6EEF8' : '#0F1724' }]}>Ubicación no disponible</Text>
+        <Text style={[styles.networkErrorText, { color: scheme === 'dark' ? '#9CA3AF' : '#6B7280' }]}>Activa los permisos de ubicación.</Text>
       </View>
     );
   }
@@ -1182,6 +1187,7 @@ export default function CurrentLocationMap() {
         })}
       </View>
       <MapView
+        key={`map-${scheme}`}
         ref={mapRef}
         style={styles.map}
         provider={PROVIDER_GOOGLE}

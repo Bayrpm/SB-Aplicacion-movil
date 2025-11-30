@@ -2,9 +2,10 @@ import { ThemedView } from '@/components/themed-view';
 import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useAppColorScheme } from '@/hooks/useAppColorScheme';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { signInUser } from '../api/auth.api';
 import BaseAuthLayout from '../components/baseAuthLayout';
@@ -14,7 +15,8 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 const { width, height } = Dimensions.get('window');
 
 export default function SignInScreen() {
-  const scheme = useColorScheme();
+  const [appScheme] = useAppColorScheme();
+  const scheme = appScheme ?? 'light';
   const placeholderColor = useThemeColor({ light: '#9CA3AF', dark: '#FFFFFF' }, 'icon');
   const tintColor = useThemeColor({ light: '#0A4A90', dark: '#BFC7CC' }, 'tint');
   const logoSource = scheme === 'dark' ? require('@/assets/images/img_logo_blanco.png') : require('@/assets/images/img_logo.png');

@@ -1,8 +1,9 @@
 import { useThemeColor } from '@/hooks/use-theme-color';
+import { useAppColorScheme } from '@/hooks/useAppColorScheme';
 import { StoryScript_400Regular, useFonts as useStoryScript } from '@expo-google-fonts/story-script';
 import { Image } from 'expo-image';
 import React from 'react';
-import { Dimensions, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 const { width, height } = Dimensions.get('window');
@@ -43,7 +44,8 @@ export default function BaseAuthLayout({
   clipOverflow = false,
 }: BaseAuthLayoutProps) {
     const [storyLoaded] = useStoryScript({ StoryScript_400Regular });
-  const scheme = useColorScheme();
+  const [appScheme] = useAppColorScheme();
+  const scheme = appScheme ?? 'light';
   // Llamar a los hooks en orden constante: obtener valores por defecto desde useThemeColor
   // y luego aplicar overrides para modo oscuro. Esto evita cambiar el número/orden de hooks
   // al alternar el esquema de color en caliente.
