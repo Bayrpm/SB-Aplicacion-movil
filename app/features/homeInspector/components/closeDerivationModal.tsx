@@ -1,5 +1,5 @@
 // app/features/homeInspector/components/closeDerivationModal.tsx
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
 import React from 'react';
 import {
     Modal,
@@ -129,3 +129,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

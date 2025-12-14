@@ -1,29 +1,28 @@
-import { useAuth } from '@/app/features/auth/context';
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAuth } from '@/app/features/auth';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
 import * as Network from 'expo-network';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  Image,
-  Keyboard,
-  Linking,
-  Modal,
-  PixelRatio,
-  Platform,
-  Alert as RNAlert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    Keyboard,
+    Linking,
+    Modal,
+    PixelRatio,
+    Platform,
+    Alert as RNAlert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { uploadEvidenceForReportWithProgress, type EvidenceKind } from '../api/evidences.api';
-import { checkRecentReportByCategory, createReport } from '../api/report.api';
+import { checkRecentReportByCategory, createReport, uploadEvidenceForReportWithProgress, type EvidenceKind } from '../api/report.api';
 import { useReportModal } from '../context';
 import { useReportCategories } from '../hooks/useReportCategories';
 import { geocodeAddress } from '../lib/googleGeocoding';
@@ -859,3 +858,4 @@ const styles = StyleSheet.create({
   footerLocationBtnFull: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8 },
   reportFooterBtnFull: { position: 'absolute', right: 12, top: '50%', width: 140, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderRadius: 8, height: 52, paddingHorizontal: 12, zIndex: 20, transform: [{ translateY: -26 }] },
 });
+

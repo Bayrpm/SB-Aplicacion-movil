@@ -1,7 +1,7 @@
 import CameraRequestModal from '@/app/features/profileCitizen/components/cameraRequestModal';
 import { useReportCategories } from '@/app/features/report/hooks/useReportCategories';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useColorScheme } from '@/app/shared/hooks/use-color-scheme';
 import { Image } from 'expo-image';
 import React, { useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -418,3 +418,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

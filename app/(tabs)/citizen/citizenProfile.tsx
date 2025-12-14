@@ -8,10 +8,10 @@ import ProfileHeader from '@/app/features/profileCitizen/components/profileHeade
 import ReportDetailModal from '@/app/features/profileCitizen/components/reportDetailModal';
 import ReportsList from '@/app/features/profileCitizen/components/reportsList';
 import SettingsModal from '@/app/features/profileCitizen/components/settingsModal';
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useColorScheme } from '@/app/shared/hooks/use-color-scheme';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Dimensions, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -366,3 +366,4 @@ const styles = StyleSheet.create({
   },
 
 });
+

@@ -1,7 +1,7 @@
 // app/features/profileCitizen/components/filterModal.tsx
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useFontSize } from '@/app/features/settings';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import React, { useState } from 'react';
 import {
     Modal,
@@ -426,3 +426,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+

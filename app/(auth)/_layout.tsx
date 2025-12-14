@@ -1,4 +1,4 @@
-import { useAppColorScheme } from '@/hooks/useAppColorScheme';
+import { useAppColorScheme } from '@/app/shared/hooks/useAppColorScheme';
 import { Stack } from 'expo-router';
 
 export default function AuthLayout() {
@@ -41,3 +41,4 @@ export default function AuthLayout() {
     </Stack>
   );
 }
+

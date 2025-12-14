@@ -14,3 +14,4 @@ export function getReportFormSnapshot(): Snapshot | undefined { return bridge.sn
 export function clearReportFormSnapshot() { delete bridge.snap; }
 
 export default bridge;
+

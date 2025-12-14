@@ -1,21 +1,21 @@
 import ReportCard from '@/app/features/profileCitizen/components/reportCard';
 // Use report detail modal from the `report` feature (public report detail UI)
 import ReportDetailModal from '@/app/features/report/components/reportDetailModal';
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useFontSize } from '@/app/features/settings';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import * as Location from 'expo-location';
 import * as Network from 'expo-network';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Modal,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { fetchPublicReportsFeed, subscribeToPublicReports, unsubscribeFromPublicReports } from '../api/feed.api';
 
@@ -704,3 +704,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

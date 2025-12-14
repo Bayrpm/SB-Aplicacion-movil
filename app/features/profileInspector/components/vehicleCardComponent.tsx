@@ -1,7 +1,7 @@
 // app/features/profileInspector/components/vehicleCardComponent.tsx
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useFontSize } from '@/app/features/settings';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Movil } from '../api/dataMovil.api';

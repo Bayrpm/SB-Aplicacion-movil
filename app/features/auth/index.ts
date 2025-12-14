@@ -1,8 +1,7 @@
 // Context & Auth
 // Default export to satisfy expo-router scanning (this is a barrel, not a page)
-import React from 'react';
 
-export { AuthProvider, useAuth } from './context';
+export { AuthProvider, useAuth } from './contexts';
 
 // Screens
 export { default as SignInScreen } from './screens/signInScreen';
@@ -27,5 +26,5 @@ export * from './types';
 
 // Schemas
 export * from './schemas/registration.schema';
-const _AuthBarrelPlaceholder: React.FC = () => null;
-export default _AuthBarrelPlaceholder;
+
+

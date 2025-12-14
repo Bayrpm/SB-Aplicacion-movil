@@ -1,6 +1,6 @@
-import { useAppColorScheme } from '@/hooks/useAppColorScheme';
-import { DARK_MAP_STYLE, LIGHT_MAP_STYLE } from "../lib/mapStyles";
-// usamos IconSymbol centralizado en lugar de importar familias directamente
+import { Button } from '@/app/shared/components';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useAppColorScheme } from '@/app/shared/hooks/useAppColorScheme';
 import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
 import * as Network from "expo-network";
@@ -23,14 +23,11 @@ import MapView, {
   PROVIDER_GOOGLE,
   Region,
 } from "react-native-maps";
-// view-shot para capturar la vista del CategoryPin como imagen nativa
-// AsyncStorage/Appearance debug removed
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { captureRef } from "react-native-view-shot";
-import { Button } from "../../../../components/Button";
-import { IconSymbol } from "../../../../components/ui/icon-symbol";
 import { fetchPublicReports } from "../api/report.api";
 import { useReportModal } from "../context";
+import { DARK_MAP_STYLE, LIGHT_MAP_STYLE } from "../lib/mapStyles";
 import CategoryPin from "./categoryPin";
 import ReportDetailModal from "./reportDetailModal";
 // ======== UI scale ========
@@ -1675,3 +1672,4 @@ export default function CurrentLocationMap() {
     </View>
   );
 }
+

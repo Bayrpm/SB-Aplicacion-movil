@@ -1,10 +1,28 @@
 import { supabase } from '@/app/shared/lib/supabase';
+import { toByteArray } from 'base64-js';
+import * as FileSystem from 'expo-file-system/legacy';
 import { validateAndNormalizeCoordinates } from '../lib/coordinatesUtils';
 import type { ReportCategory } from '../types';
 
 /**
- * Mapa por defecto de iconos para categorías conocidas.
+ * ============================================================================
+ * REPORT API - Consolidado
+ * 
+ * Este archivo centraliza TODAS las operaciones relacionadas con reportes:
+ * - Categorías y datos públicos
+ * - Creación y lectura de denuncias
+ * - Reacciones a reportes
+ * - Comentarios en reportes
+ * - Evidencias (fotos y videos)
+ * ============================================================================
  */
+
+// ============================================================================
+// TIPOS Y CONSTANTES
+// ============================================================================
+
+export type EvidenceKind = 'FOTO' | 'VIDEO';
+
 const DEFAULT_ICON_MAP: Record<number, string> = {
   1: 'ambulance',
   2: 'alert-circle-outline',
@@ -16,107 +34,32 @@ const DEFAULT_ICON_MAP: Record<number, string> = {
   8: 'dots-horizontal',
 };
 
-/**
- * Obtiene las categorías públicas.
- */
-export async function fetchReportCategories(): Promise<ReportCategory[]> {
-  try {
-    const { data, error } = await supabase
-      .from('categorias_publicas')
-      .select('id, nombre, descripcion, orden, activo, created_at')
-      .eq('activo', true)
-      .order('orden', { ascending: true });
+// ============================================================================
+// FUNCIONES AUXILIARES PRIVADAS
+// ============================================================================
 
-    if (error) {
-return [];
-    }
-    if (!Array.isArray(data)) return [];
+function guessExtFromUri(uri: string, kind: EvidenceKind): string {
+  const m = uri.match(/\.([a-zA-Z0-9]+)(?:\?.*)?$/);
+  if (m) return m[1].toLowerCase();
+  return kind === 'VIDEO' ? 'mp4' : 'jpg';
+}
 
-    return data.map((row: any, idx: number) => {
-      const iconFromRow =
-        typeof row.icon === 'string' && row.icon.trim() ? row.icon.trim() : undefined;
-      const icon = iconFromRow ?? DEFAULT_ICON_MAP[row.id as number];
-
-      const cat: ReportCategory = {
-        idx,
-        id: Number(row.id),
-        nombre: String(row.nombre ?? ''),
-        descripcion: String(row.descripcion ?? ''),
-        orden: Number(row.orden ?? idx),
-        activo: Boolean(row.activo),
-        icon,
-      };
-      return cat;
-    });
-  } catch {
-    return [];
+function guessMime(ext: string, kind: EvidenceKind): string {
+  const e = ext.toLowerCase();
+  if (kind === 'VIDEO') {
+    if (e === 'mp4') return 'video/mp4';
+    if (e === 'mov') return 'video/quicktime';
+    if (e === 'mkv') return 'video/x-matroska';
+    if (e === '3gp') return 'video/3gpp';
+    return 'video/mp4';
   }
+  if (e === 'jpg' || e === 'jpeg') return 'image/jpeg';
+  if (e === 'png') return 'image/png';
+  if (e === 'webp') return 'image/webp';
+  if (e === 'heic' || e === 'heif') return 'image/heif';
+  return 'image/jpeg';
 }
 
-// Para compatibilidad con Expo Router (no es una ruta)
-export default function _ReportApiRoute(): null {
-  return null;
-}
-
-/**
- * Obtiene denuncias públicas recientes (últimas 24h).
- * Usa RPC 'get_denuncias_publicas_recientes' (server-side time).
- * Las coordenadas se normalizan automáticamente para Google Maps API.
- */
-export async function fetchPublicReports(): Promise<{
-  id: string;
-  titulo: string;
-  descripcion: string;
-  coords_x: number;
-  coords_y: number;
-  categoria_publica_id: number | null;
-  fecha_creacion: string;
-  ubicacion_texto: string | null;
-  anonimo: boolean;
-  ciudadano?: { nombre?: string; apellido?: string } | null;
-}[]> {
-  try {
-    const { data, error } = await supabase.rpc('get_denuncias_publicas_recientes');
-    if (error) {
-return [];
-    }
-    if (!Array.isArray(data)) return [];
-
-    return data.map((row: any) => {
-      // Normalizar coordenadas para Google Maps API
-      const validation = validateAndNormalizeCoordinates(
-        Number(row.coords_x),
-        Number(row.coords_y)
-      );
-
-      // Si las coordenadas fueron convertidas o son inválidas, loguear para debugging
-      if (validation.wasConverted) {
-}
-      if (!validation.isValid) {
-}
-
-      return {
-        id: String(row.id),
-        titulo: String(row.titulo ?? ''),
-        descripcion: String(row.descripcion ?? ''),
-        // Usar coordenadas normalizadas
-        coords_x: validation.coordinates.latitude,
-        coords_y: validation.coordinates.longitude,
-        categoria_publica_id: row.categoria_publica_id != null ? Number(row.categoria_publica_id) : null,
-        fecha_creacion: String(row.fecha_creacion ?? ''),
-        ubicacion_texto: row.ubicacion_texto ? String(row.ubicacion_texto) : null,
-        anonimo: Boolean(row.anonimo),
-        ciudadano: row.ciudadano ?? null,
-      };
-    });
-  } catch (e) {
-return [];
-  }
-}
-
-/**
- * Haversine: distancia en metros entre dos coordenadas.
- */
 function calculateDistance(
   lat1: number,
   lon1: number,
@@ -134,9 +77,90 @@ function calculateDistance(
   return R * c;
 }
 
+// ============================================================================
+// CATEGORÍAS PÚBLICAS
+// ============================================================================
+
+/**
+ * Obtiene las categorías públicas de reportes.
+ */
+export async function fetchReportCategories(): Promise<ReportCategory[]> {
+  try {
+    const { data, error } = await supabase
+      .from('categorias_publicas')
+      .select('id, nombre, descripcion, orden, activo, created_at')
+      .eq('activo', true)
+      .order('orden', { ascending: true });
+
+    if (error) return [];
+    if (!Array.isArray(data)) return [];
+
+    return data.map((row: any, idx: number) => {
+      const iconFromRow = typeof row.icon === 'string' && row.icon.trim() ? row.icon.trim() : undefined;
+      const icon = iconFromRow ?? DEFAULT_ICON_MAP[row.id as number];
+
+      return {
+        idx,
+        id: Number(row.id),
+        nombre: String(row.nombre ?? ''),
+        descripcion: String(row.descripcion ?? ''),
+        orden: Number(row.orden ?? idx),
+        activo: Boolean(row.activo),
+        icon,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+// ============================================================================
+// REPORTES PÚBLICOS
+// ============================================================================
+
+/**
+ * Obtiene denuncias públicas recientes (últimas 24h).
+ */
+export async function fetchPublicReports(): Promise<{
+  id: string;
+  titulo: string;
+  descripcion: string;
+  coords_x: number;
+  coords_y: number;
+  categoria_publica_id: number | null;
+  fecha_creacion: string;
+  ubicacion_texto: string | null;
+  anonimo: boolean;
+  ciudadano?: { nombre?: string; apellido?: string } | null;
+}[]> {
+  try {
+    const { data, error } = await supabase.rpc('get_denuncias_publicas_recientes');
+    if (error) return [];
+    if (!Array.isArray(data)) return [];
+
+    return data.map((row: any) => {
+      const validation = validateAndNormalizeCoordinates(Number(row.coords_x), Number(row.coords_y));
+      return {
+        id: String(row.id),
+        titulo: String(row.titulo ?? ''),
+        descripcion: String(row.descripcion ?? ''),
+        coords_x: validation.coordinates.latitude,
+        coords_y: validation.coordinates.longitude,
+        categoria_publica_id: row.categoria_publica_id != null ? Number(row.categoria_publica_id) : null,
+        fecha_creacion: String(row.fecha_creacion ?? ''),
+        ubicacion_texto: row.ubicacion_texto ? String(row.ubicacion_texto) : null,
+        anonimo: Boolean(row.anonimo),
+        ciudadano: row.ciudadano ?? null,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Verifica si ya existe una denuncia reciente (24h) del mismo ciudadano y categoría
- * a <= radio_metros de distancia. Usa RPC 'get_recent_reports_by_category'.
+ * dentro de un radio especificado.
  */
 export async function checkRecentReportByCategory(
   ciudadano_id: string,
@@ -150,9 +174,7 @@ export async function checkRecentReportByCategory(
       p_ciudadano_id: ciudadano_id,
       p_categoria_publica_id: categoria_publica_id,
     });
-    if (error) {
-return false;
-    }
+    if (error) return false;
     if (!Array.isArray(data) || data.length === 0) return false;
 
     for (const d of data) {
@@ -162,15 +184,13 @@ return false;
       }
     }
     return false;
-  } catch (e) {
-return false;
+  } catch {
+    return false;
   }
 }
 
 /**
- * Detalle de denuncia pública por id (respeta anonimato).
- * Usa RPC 'get_denuncia_publica_detalle'.
- * Las coordenadas se normalizan automáticamente para Google Maps API.
+ * Detalle completo de una denuncia pública por ID.
  */
 export async function fetchPublicReportDetail(id: string): Promise<{
   id: string;
@@ -189,32 +209,18 @@ export async function fetchPublicReportDetail(id: string): Promise<{
     .rpc('get_denuncia_publica_detalle', { p_id: id })
     .maybeSingle();
 
-  if (error) {
-throw error;
-  }
+  if (error) throw error;
   if (!data) throw new Error('No se encontró la denuncia o no es pública');
 
-  // Cast explícito para TypeScript (RPC retorna un objeto dinámico)
   const row = data as any;
   const ciudadano = row.ciudadano ?? undefined;
-
-  // Normalizar coordenadas para Google Maps API
-  const validation = validateAndNormalizeCoordinates(
-    Number(row.coords_x),
-    Number(row.coords_y)
-  );
-
-  if (validation.wasConverted) {
-}
-  if (!validation.isValid) {
-}
+  const validation = validateAndNormalizeCoordinates(Number(row.coords_x), Number(row.coords_y));
 
   return {
     id: String(row.id),
     folio: row.folio ? String(row.folio) : null,
     titulo: String(row.titulo ?? ''),
     descripcion: String(row.descripcion ?? ''),
-    // Usar coordenadas normalizadas
     coords_x: validation.coordinates.latitude,
     coords_y: validation.coordinates.longitude,
     categoria_publica_id: row.categoria_publica_id != null ? Number(row.categoria_publica_id) : null,
@@ -226,7 +232,7 @@ throw error;
 }
 
 /**
- * Crea una nueva denuncia en `denuncias`.
+ * Crea una nueva denuncia.
  */
 export async function createReport(payload: {
   ciudadano_id: string;
@@ -244,11 +250,10 @@ export async function createReport(payload: {
   cuadrante_id?: number | null;
 }) {
   try {
-    const anon = Boolean(payload.anonimo);
     const ubicacion_texto = payload.ubicacion_texto ?? null;
-
     let coords_x: number | null = null;
     let coords_y: number | null = null;
+    
     if (typeof payload.coords_x === 'number' && Number.isFinite(payload.coords_x)) {
       coords_x = Number(payload.coords_x.toFixed(6));
     }
@@ -256,21 +261,20 @@ export async function createReport(payload: {
       coords_y = Number(payload.coords_y.toFixed(6));
     }
 
+    if (!ubicacion_texto || coords_x == null || coords_y == null) {
+      return { data: null, error: new Error('Ubicación incompleta: se requiere `ubicacion_texto` y coordenadas') };
+    }
+
     const insertObj: any = {
       ciudadano_id: payload.ciudadano_id,
       titulo: payload.titulo,
       descripcion: payload.descripcion,
-      anonimo: anon,
+      anonimo: Boolean(payload.anonimo),
       ubicacion_texto,
-      coords_x: coords_x ?? null,
-      coords_y: coords_y ?? null,
+      coords_x,
+      coords_y,
       categoria_publica_id: payload.categoria_publica_id ?? null,
     };
-
-    // Validación defensiva: requerir texto de ubicación y coordenadas
-    if (!ubicacion_texto || coords_x == null || coords_y == null) {
-      return { data: null, error: new Error('Ubicación incompleta: se requiere `ubicacion_texto` y coordenadas (coords_x, coords_y) para crear la denuncia') };
-    }
 
     if (Object.prototype.hasOwnProperty.call(payload, 'estado_id')) insertObj.estado_id = payload.estado_id;
     if (Object.prototype.hasOwnProperty.call(payload, 'inspector_id')) insertObj.inspector_id = payload.inspector_id;
@@ -279,17 +283,19 @@ export async function createReport(payload: {
     if (Object.prototype.hasOwnProperty.call(payload, 'cuadrante_id')) insertObj.cuadrante_id = payload.cuadrante_id;
 
     const { data, error } = await supabase.from('denuncias').insert(insertObj).select('*');
-    if (error) {
-return { data: null, error };
-    }
+    if (error) return { data: null, error };
     return { data, error: null };
   } catch (e) {
-return { data: null, error: e };
+    return { data: null, error: e };
   }
 }
 
+// ============================================================================
+// REACCIONES A REPORTES
+// ============================================================================
+
 /**
- * Obtiene estadísticas y la reacción del usuario actual para una denuncia.
+ * Obtiene estadísticas de un reporte (likes, dislikes, comentarios).
  */
 export async function fetchReportStats(reportId: string): Promise<{
   likes: number;
@@ -298,36 +304,27 @@ export async function fetchReportStats(reportId: string): Promise<{
   commentsCount: number;
 }> {
   try {
-    // stats agregados (vista)
-    const { data: statsData, error: statsErr } = await supabase
+    const { data: statsData } = await supabase
       .from('v_denuncia_reacciones_stats')
       .select('*')
       .eq('denuncia_id', reportId)
       .maybeSingle();
 
-    if (statsErr) {
-}
-
-    // contar comentarios (vista pública)
-    const { data: comments, error: commentsErr } = await supabase
+    const { data: comments } = await supabase
       .from('v_denuncia_comentarios_publicos')
       .select('id', { count: 'estimated' })
       .eq('denuncia_id', reportId);
 
-    if (commentsErr) {
-}
-
-    // reacción del usuario actual
     const { data: userData } = await supabase.auth.getUser();
     let userReaction: 'LIKE' | 'DISLIKE' | null = null;
     if (userData?.user) {
-      const { data: r, error: rErr } = await supabase
+      const { data: r } = await supabase
         .from('denuncia_reacciones')
         .select('tipo')
         .eq('denuncia_id', reportId)
         .eq('usuario_id', userData.user.id)
         .maybeSingle();
-      if (!rErr && r && r.tipo) userReaction = String(r.tipo).toUpperCase() === 'LIKE' ? 'LIKE' : 'DISLIKE';
+      if (r && r.tipo) userReaction = String(r.tipo).toUpperCase() === 'LIKE' ? 'LIKE' : 'DISLIKE';
     }
 
     const likes = statsData?.likes ?? 0;
@@ -335,153 +332,138 @@ export async function fetchReportStats(reportId: string): Promise<{
     const commentsCount = Array.isArray(comments) ? comments.length : 0;
 
     return { likes, dislikes, userReaction, commentsCount };
-  } catch (e) {
-return { likes: 0, dislikes: 0, userReaction: null, commentsCount: 0 };
+  } catch {
+    return { likes: 0, dislikes: 0, userReaction: null, commentsCount: 0 };
   }
 }
 
 /**
- * Ejecuta la RPC que crea/actualiza una reacción (fn_denuncia_reaccionar)
+ * Crea o actualiza una reacción (like/dislike) a un reporte.
  */
 export async function reactToReport(reportId: string, tipo: 'LIKE' | 'DISLIKE') {
   try {
-    const { data, error } = await supabase.rpc('fn_denuncia_reaccionar', { p_denuncia_id: reportId, p_tipo: tipo });
-    if (error) {
-return { data: null, error };
-    }
+    const { data, error } = await supabase.rpc('fn_denuncia_reaccionar', {
+      p_denuncia_id: reportId,
+      p_tipo: tipo,
+    });
+    if (error) return { data: null, error };
     return { data, error: null };
   } catch (err) {
-return { data: null, error: err };
+    return { data: null, error: err };
   }
 }
 
+// ============================================================================
+// COMENTARIOS EN REPORTES
+// ============================================================================
+
 /**
- * Obtiene la lista de comentarios (vista pública) para una denuncia
+ * Obtiene la lista de comentarios públicos para un reporte.
  */
 export async function fetchReportComments(reportId: string) {
   try {
-    // Intentar primero solicitando parent_id
-    try {
-      const { data, error } = await supabase
-        .from('v_denuncia_comentarios_publicos')
-        // pedimos parent_id si existe en la vista/tabla para soportar respuestas
-        .select('id, denuncia_id, usuario_id, autor, anonimo, autor_visible, contenido, created_at, parent_id')
-        .eq('denuncia_id', reportId)
-        .order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('v_denuncia_comentarios_publicos')
+      .select('id, denuncia_id, usuario_id, autor, anonimo, autor_visible, contenido, created_at, parent_id')
+      .eq('denuncia_id', reportId)
+      .order('created_at', { ascending: false });
 
-      if (error) {
-        if ((error as any)?.code === '42703') {
-          // Reintentar sin parent_id
-          const { data: data2, error: error2 } = await supabase
-            .from('v_denuncia_comentarios_publicos')
-            .select('id, denuncia_id, usuario_id, autor, anonimo, autor_visible, contenido, created_at')
-            .eq('denuncia_id', reportId)
-            .order('created_at', { ascending: false });
-          if (error2) {
-return [];
-          }
-          return (data2 ?? []) as any[];
-        }
-return [];
+    if (error) {
+      if ((error as any)?.code === '42703') {
+        const { data: data2, error: error2 } = await supabase
+          .from('v_denuncia_comentarios_publicos')
+          .select('id, denuncia_id, usuario_id, autor, anonimo, autor_visible, contenido, created_at')
+          .eq('denuncia_id', reportId)
+          .order('created_at', { ascending: false });
+        if (error2) return [];
+        return (data2 ?? []) as any[];
       }
-
-      // Merge comment reaction stats (if view exists) to supply likes/liked per comment
-      try {
-        const rows = (data ?? []) as any[];
-
-        // Fetch avatar_url for any known usuario_id from perfiles_ciudadanos so UI can show avatars
-        try {
-          const userIds = Array.from(new Set(rows.map((r: any) => r.usuario_id).filter(Boolean)));
-          if (userIds.length > 0) {
-            const { data: profiles } = await supabase.from('perfiles_ciudadanos').select('usuario_id, avatar_url').in('usuario_id', userIds as any[]);
-            const avatarMap: Record<string, string> = {};
-            (profiles || []).forEach((p: any) => { if (p && p.usuario_id) avatarMap[String(p.usuario_id)] = p.avatar_url ?? null; });
-            // attach avatar_url to rows if not present
-            rows.forEach((r: any) => {
-              if (!r.avatar_url && r.usuario_id && avatarMap[String(r.usuario_id)]) r.avatar_url = avatarMap[String(r.usuario_id)];
-            });
-          }
-        } catch {
-          // ignore avatar enrichment errors
-        }
-
-        // Try view first
-        try {
-          const { data: statsData, error: statsErr } = await supabase
-            .from('v_comentario_reacciones_stats')
-            .select('comentario_id, likes, user_reaction')
-            .eq('denuncia_id', reportId);
-          if (!statsErr && Array.isArray(statsData) && statsData.length > 0) {
-            const statsMap: Record<string, any> = {};
-            statsData.forEach((s: any) => { statsMap[String(s.comentario_id)] = s; });
-            return rows.map((r: any) => ({ ...r, likes: statsMap[String(r.id)]?.likes ?? r.likes, liked: (statsMap[String(r.id)]?.user_reaction ?? '').toUpperCase() === 'LIKE' || !!r.liked }));
-          }
-        } catch {
-          // fall through to table aggregation
-        }
-
-        // Fallback: aggregate directly from comentario_reacciones table
-        try {
-          const commentIds = rows.map((r: any) => Number(r.id)).filter((v) => Number.isFinite(v));
-          if (commentIds.length === 0) return rows;
-
-          // Get all reactions for these comments
-          const { data: reactions, error: reactionsErr } = await supabase
-            .from('comentario_reacciones')
-            .select('comentario_id, tipo, usuario_id')
-            .in('comentario_id', commentIds as any[]);
-
-          if (reactionsErr || !Array.isArray(reactions)) return rows;
-
-          const likesMap: Record<string, number> = {};
-          reactions.forEach((r: any) => {
-            if ((r.tipo ?? '').toUpperCase() === 'LIKE') likesMap[String(r.comentario_id)] = (likesMap[String(r.comentario_id)] || 0) + 1;
-          });
-
-          // Determine current user reactions (if authenticated)
-          const { data: userData } = await supabase.auth.getUser();
-          const userId = userData?.user?.id ?? null;
-          const userReactionMap: Record<string, string | null> = {};
-          if (userId) {
-            const { data: userReacts, error: urErr } = await supabase
-              .from('comentario_reacciones')
-              .select('comentario_id, tipo')
-              .eq('usuario_id', userId)
-              .in('comentario_id', commentIds as any[]);
-            if (!urErr && Array.isArray(userReacts)) {
-              userReacts.forEach((ur: any) => { userReactionMap[String(ur.comentario_id)] = (ur.tipo ?? '').toUpperCase(); });
-            }
-          }
-
-          return rows.map((r: any) => ({
-            ...r,
-            likes: likesMap[String(r.id)] ?? r.likes ?? 0,
-            liked: (userReactionMap[String(r.id)] ?? '').toUpperCase() === 'LIKE' || !!r.liked,
-          }));
-        } catch {
-          return rows;
-        }
-      } catch {
-        return (data ?? []) as any[];
-      }
-    } catch (inner) {
-return [];
+      return [];
     }
-  } catch (e) {
-return [];
+
+    const rows = (data ?? []) as any[];
+
+    // Enriquecer con avatares
+    try {
+      const userIds = Array.from(new Set(rows.map((r: any) => r.usuario_id).filter(Boolean)));
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('perfiles_ciudadanos')
+          .select('usuario_id, avatar_url')
+          .in('usuario_id', userIds as any[]);
+        const avatarMap: Record<string, string> = {};
+        (profiles || []).forEach((p: any) => {
+          if (p?.usuario_id) avatarMap[String(p.usuario_id)] = p.avatar_url ?? null;
+        });
+        rows.forEach((r: any) => {
+          if (!r.avatar_url && r.usuario_id && avatarMap[String(r.usuario_id)]) {
+            r.avatar_url = avatarMap[String(r.usuario_id)];
+          }
+        });
+      }
+    } catch {
+      // ignorar errores de enriquecimiento
+    }
+
+    // Enriquecer con reacciones
+    try {
+      const commentIds = rows.map((r: any) => Number(r.id)).filter((v) => Number.isFinite(v));
+      if (commentIds.length > 0) {
+        const { data: reactions } = await supabase
+          .from('comentario_reacciones')
+          .select('comentario_id, tipo, usuario_id')
+          .in('comentario_id', commentIds as any[]);
+
+        const likesMap: Record<string, number> = {};
+        (reactions || []).forEach((r: any) => {
+          if ((r.tipo ?? '').toUpperCase() === 'LIKE') {
+            likesMap[String(r.comentario_id)] = (likesMap[String(r.comentario_id)] || 0) + 1;
+          }
+        });
+
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id ?? null;
+        const userReactionMap: Record<string, string | null> = {};
+        if (userId) {
+          const { data: userReacts } = await supabase
+            .from('comentario_reacciones')
+            .select('comentario_id, tipo')
+            .eq('usuario_id', userId)
+            .in('comentario_id', commentIds as any[]);
+          (userReacts || []).forEach((ur: any) => {
+            userReactionMap[String(ur.comentario_id)] = (ur.tipo ?? '').toUpperCase();
+          });
+        }
+
+        return rows.map((r: any) => ({
+          ...r,
+          likes: likesMap[String(r.id)] ?? r.likes ?? 0,
+          liked: (userReactionMap[String(r.id)] ?? '').toUpperCase() === 'LIKE' || !!r.liked,
+        }));
+      }
+    } catch {
+      // ignorar
+    }
+
+    return rows;
+  } catch {
+    return [];
   }
 }
 
 /**
- * Crea un comentario en la tabla `comentarios_denuncias`.
+ * Crea un comentario en un reporte.
  */
-export async function createReportComment(reportId: string, contenido: string, anonimo: boolean = true, parentId?: number | null) {
+export async function createReportComment(
+  reportId: string,
+  contenido: string,
+  anonimo: boolean = true,
+  parentId?: number | null
+) {
   try {
     const insertObj: any = { denuncia_id: reportId, contenido, anonimo };
-    // if parent_id provided by caller, include it
     if (parentId != null) insertObj.parent_id = parentId;
 
-    // Intentar insertar; si falla por ausencia de columna parent_id (PGRST204), reintentar sin esa propiedad
     let res: any;
     try {
       res = await supabase.from('comentarios_denuncias').insert(insertObj).select().maybeSingle();
@@ -494,76 +476,71 @@ export async function createReportComment(reportId: string, contenido: string, a
     if (error) {
       const code = (error as any)?.code ?? (error as any)?.status ?? null;
       const msg = String((error as any)?.message ?? '').toLowerCase();
-      if (parentId != null && (String(code) === 'PGRST204' || msg.includes('parent_id') || (msg.includes('column') && msg.includes('parent_id')))) {
-        // Reintentar sin parent_id
+      if (parentId != null && (String(code) === 'PGRST204' || msg.includes('parent_id'))) {
         const insertFallback: any = { denuncia_id: reportId, contenido, anonimo };
-        const { data: data2, error: error2 } = await supabase.from('comentarios_denuncias').insert(insertFallback).select().maybeSingle();
-        if (error2) {
-return { data: null, error: error2 };
-        }
+        const { data: data2, error: error2 } = await supabase
+          .from('comentarios_denuncias')
+          .insert(insertFallback)
+          .select()
+          .maybeSingle();
+        if (error2) return { data: null, error: error2 };
         return { data: data2, error: null };
       }
-return { data: null, error };
+      return { data: null, error };
     }
 
     return { data, error: null };
   } catch (e) {
-return { data: null, error: e };
-  }
-}
-
-/** Llama a la RPC fn_comentario_reaccionar(p_comentario_id, p_tipo) para crear/actualizar reacción sobre un comentario */
-export async function reactToComment(commentId: number, tipo: 'LIKE' | 'DISLIKE') {
-  try {
-    const { data, error } = await supabase.rpc('fn_comentario_reaccionar', { p_comentario_id: commentId, p_tipo: tipo });
-    if (error) {
-return { data: null, error };
-    }
-    return { data, error: null };
-  } catch (err) {
-return { data: null, error: err };
+    return { data: null, error: e };
   }
 }
 
 /**
- * Actualiza el contenido de un comentario (solo autor) y solo si fue creado hace <= 1 hora.
- * Retorna { data, error } donde data es el comentario actualizado.
+ * Crea o actualiza una reacción (like/dislike) a un comentario.
+ */
+export async function reactToComment(commentId: number, tipo: 'LIKE' | 'DISLIKE') {
+  try {
+    const { data, error } = await supabase.rpc('fn_comentario_reaccionar', {
+      p_comentario_id: commentId,
+      p_tipo: tipo,
+    });
+    if (error) return { data: null, error };
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: err };
+  }
+}
+
+/**
+ * Actualiza el contenido de un comentario (solo autor, máximo 1 hora después de creación).
  */
 export async function updateReportComment(commentId: number | string, newContenido: string) {
   try {
     const idNum = Number(commentId);
     if (!Number.isFinite(idNum)) return { data: null, error: new Error('commentId inválido') };
-    // Intentar primero una RPC personalizada (recomendado si hay RLS/policies que impiden updates directos)
+
     try {
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_update_comentario_denuncia', { p_comentario_id: idNum, p_contenido: newContenido });
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_update_comentario_denuncia', {
+        p_comentario_id: idNum,
+        p_contenido: newContenido,
+      });
       if (!rpcErr) return { data: rpcData, error: null };
-      // Si la RPC devuelve error, decidimos cuándo propagar y cuándo intentar fallback.
-      // Permitir fallback cuando la RPC no existe (42883) o cuando la función falla por ambigüedad de columnas (42702)
       const code = (rpcErr as any)?.code ?? '';
-      const msg = String(rpcErr?.message ?? '').toLowerCase();
-      const fallbackable = code === '42883' || code === '42702' || msg.includes('does not exist') || msg.includes('undefined function') || msg.includes('ambiguous') || msg.includes('column reference');
-      if (!fallbackable) {
-        // RPC devolvió un error que no queremos ocultar
-return { data: null, error: rpcErr };
-      }
-      // Si es fallbackable, continuamos al flujo directo
+      const fallbackable = code === '42883' || code === '42702';
+      if (!fallbackable) return { data: null, error: rpcErr };
     } catch {
-      // ignore and fallback to direct update
+      // fallback
     }
 
-    // Obtener comentario existente (fallback directo)
     const { data: existing, error: fetchErr } = await supabase
       .from('comentarios_denuncias')
       .select('id, usuario_id, created_at, contenido')
       .eq('id', idNum)
       .maybeSingle();
 
-    if (fetchErr) {
-return { data: null, error: fetchErr };
-    }
+    if (fetchErr) return { data: null, error: fetchErr };
     if (!existing) return { data: null, error: new Error('Comentario no encontrado') };
 
-    // Verificar usuario autenticado
     const { data: userData } = await supabase.auth.getUser();
     const currentUserId = userData?.user?.id ?? null;
     if (!currentUserId) return { data: null, error: new Error('No autenticado') };
@@ -572,7 +549,6 @@ return { data: null, error: fetchErr };
       return { data: null, error: new Error('No autorizado: no eres el autor del comentario') };
     }
 
-    // Verificar ventana de edición (1 hora desde created_at)
     try {
       const created = new Date(String(existing.created_at));
       const now = new Date();
@@ -582,11 +558,9 @@ return { data: null, error: fetchErr };
         return { data: null, error: new Error('La ventana de edición de 1 hora expiró') };
       }
     } catch {
-      // Si no podemos parsear la fecha, bloquear la edición por seguridad
       return { data: null, error: new Error('No se pudo verificar la fecha de creación del comentario') };
     }
 
-    // Realizar la actualización directa (puede fallar si hay policies mal diseñadas)
     const { data: updated, error: updateErr } = await supabase
       .from('comentarios_denuncias')
       .update({ contenido: newContenido })
@@ -595,49 +569,45 @@ return { data: null, error: fetchErr };
       .maybeSingle();
 
     if (updateErr) {
-// Detectar política de recursión y dar mensaje más claro
       if ((updateErr as any)?.code === '42P17' || String(updateErr?.message ?? '').toLowerCase().includes('infinite recursion')) {
-        return { data: null, error: new Error('Error de políticas en el servidor: recursion infinita detectada en policy para comentarios_denuncias. Crea una RPC segura (SECURITY DEFINER) para actualizar comentarios o ajusta las políticas RLS.') };
+        return { data: null, error: new Error('Error de políticas en el servidor: crear una RPC segura (SECURITY DEFINER)') };
       }
       return { data: null, error: updateErr };
     }
     return { data: updated, error: null };
   } catch (err) {
-return { data: null, error: err };
+    return { data: null, error: err };
   }
 }
 
 /**
- * Elimina un comentario. Solo puede eliminarlo su autor (sin límite de tiempo) o un usuario con permisos.
+ * Elimina un comentario (solo autor, sin límite de tiempo).
  */
 export async function deleteReportComment(commentId: number | string) {
   try {
     const idNum = Number(commentId);
     if (!Number.isFinite(idNum)) return { data: null, error: new Error('commentId inválido') };
-    // Intentar RPC seguro primero
+
     try {
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_delete_comentario_denuncia', { p_comentario_id: idNum });
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('fn_delete_comentario_denuncia', {
+        p_comentario_id: idNum,
+      });
       if (!rpcErr) return { data: rpcData, error: null };
       const msg = String(rpcErr?.message ?? '').toLowerCase();
       if (!(msg.includes('does not exist') || msg.includes('undefined function') || (rpcErr as any)?.code === '42883')) {
-return { data: null, error: rpcErr };
+        return { data: null, error: rpcErr };
       }
-      // Si no existe la RPC, continuar con flujo directo
     } catch {
-      // ignore and fallback
+      // fallback
     }
 
-    // Fallback directo
-    // Obtener comentario existente
     const { data: existing, error: fetchErr } = await supabase
       .from('comentarios_denuncias')
       .select('id, usuario_id')
       .eq('id', idNum)
       .maybeSingle();
 
-    if (fetchErr) {
-return { data: null, error: fetchErr };
-    }
+    if (fetchErr) return { data: null, error: fetchErr };
     if (!existing) return { data: null, error: new Error('Comentario no encontrado') };
 
     const { data: userData } = await supabase.auth.getUser();
@@ -648,7 +618,6 @@ return { data: null, error: fetchErr };
       return { data: null, error: new Error('No autorizado: no eres el autor del comentario') };
     }
 
-    // Ejecutar borrado directo
     const { data: deleted, error: delErr } = await supabase
       .from('comentarios_denuncias')
       .delete()
@@ -657,13 +626,224 @@ return { data: null, error: fetchErr };
       .maybeSingle();
 
     if (delErr) {
-if ((delErr as any)?.code === '42P17' || String(delErr?.message ?? '').toLowerCase().includes('infinite recursion')) {
-        return { data: null, error: new Error('Error de políticas en el servidor: recursion infinita detectada en policy para comentarios_denuncias. Crea una RPC segura (SECURITY DEFINER) para eliminar comentarios o ajusta las políticas RLS.') };
+      if ((delErr as any)?.code === '42P17' || String(delErr?.message ?? '').toLowerCase().includes('infinite recursion')) {
+        return { data: null, error: new Error('Error de políticas en el servidor: crear una RPC segura (SECURITY DEFINER)') };
       }
       return { data: null, error: delErr };
     }
     return { data: deleted, error: null };
   } catch (err) {
-return { data: null, error: err };
+    return { data: null, error: err };
   }
 }
+
+// ============================================================================
+// EVIDENCIAS (FOTOS Y VIDEOS)
+// ============================================================================
+
+/**
+ * Sube una evidencia (foto o video) para un reporte.
+ */
+export async function uploadEvidenceForReport(params: {
+  denunciaId: string;
+  usuarioId: string;
+  fileUri: string;
+  kind: EvidenceKind;
+  orden?: number;
+}): Promise<{
+  ok: boolean;
+  storagePath?: string;
+  error?: string;
+}> {
+  const { denunciaId, usuarioId, fileUri, kind } = params;
+  try {
+    const now = Date.now();
+    const ext = guessExtFromUri(fileUri, kind);
+    const contentType = guessMime(ext, kind);
+    const uniqueSuffix = Math.random().toString(36).slice(2, 12);
+    const fileName = `${now}-${uniqueSuffix}.${ext}`;
+    const storagePath = `${usuarioId}/${denunciaId}/${fileName}`;
+
+    const base64 = await FileSystem.readAsStringAsync(fileUri, { encoding: 'base64' });
+    const bytes = toByteArray(base64);
+
+    const { error: upErr } = await supabase.storage.from('evidencias').upload(storagePath, bytes, {
+      contentType,
+      upsert: false,
+    });
+    if (upErr) {
+      return { ok: false, error: upErr.message || 'Error al subir evidencia' };
+    }
+
+    const { error: dbErr } = await supabase.from('denuncia_evidencias').insert({
+      denuncia_id: denunciaId,
+      tipo: kind,
+      storage_path: storagePath,
+      orden: params.orden ?? 1,
+    });
+    if (dbErr) {
+      return { ok: false, error: dbErr.message || 'Error al registrar evidencia' };
+    }
+
+    return { ok: true, storagePath };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Error al subir evidencia' };
+  }
+}
+
+/**
+ * Lista las evidencias de un reporte con URLs firmadas.
+ */
+export async function listEvidencesSigned(denunciaId: string): Promise<Array<{
+  tipo: EvidenceKind;
+  url: string;
+  storage_path: string;
+  thumb_url?: string | null;
+}>> {
+  try {
+    const { data, error } = await supabase
+      .from('denuncia_evidencias')
+      .select('tipo, storage_path, orden')
+      .eq('denuncia_id', denunciaId)
+      .order('orden', { ascending: true })
+      .order('id', { ascending: true });
+
+    if (error || !data) return [];
+
+    const out: Array<{ tipo: EvidenceKind; url: string; storage_path: string; thumb_url?: string | null }> = [];
+    for (const row of data) {
+      const sp = String(row.storage_path);
+      const { data: signed, error: sErr } = await supabase.storage
+        .from('evidencias')
+        .createSignedUrl(sp, 24 * 60 * 60);
+      if (sErr || !signed?.signedUrl) continue;
+
+      let thumbUrl: string | null = null;
+      try {
+        const thumbPath = `${sp}.jpg`;
+        const { data: tdata } = await supabase.storage.from('evidencias').createSignedUrl(thumbPath, 24 * 60 * 60);
+        if (tdata?.signedUrl) thumbUrl = tdata.signedUrl;
+      } catch {
+        // ignorar
+      }
+
+      out.push({
+        tipo: (row.tipo as EvidenceKind) || 'FOTO',
+        url: signed.signedUrl,
+        storage_path: sp,
+        thumb_url: thumbUrl,
+      });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Sube una evidencia con soporte de progreso y reintentos automáticos.
+ */
+export async function uploadEvidenceForReportWithProgress(
+  params: {
+    denunciaId: string;
+    usuarioId: string;
+    fileUri: string;
+    kind: EvidenceKind;
+    orden?: number;
+    maxRetries?: number;
+  },
+  onProgress?: (progress: number) => void
+): Promise<{ ok: boolean; storagePath?: string; error?: string; tries: number }> {
+  const { denunciaId, usuarioId, fileUri, kind } = params;
+  let ext = guessExtFromUri(fileUri, kind);
+  const now = Date.now();
+  let effectiveUri = fileUri;
+
+  // Compresión previa para imágenes (si expo-image-manipulator está disponible)
+  if (kind === 'FOTO') {
+    try {
+      // Intentar importar dinámicamente expo-image-manipulator
+      const ImageManipulator = require('expo-image-manipulator');
+      if (ImageManipulator?.manipulateAsync) {
+        const manipulated = await ImageManipulator.manipulateAsync(fileUri, [], {
+          compress: 0.7,
+          format: ImageManipulator.SaveFormat?.JPEG || 'jpeg',
+        });
+        if (manipulated?.uri) {
+          effectiveUri = manipulated.uri;
+          ext = 'jpg';
+        }
+      }
+    } catch (compressError) {
+      // Si no está disponible, continuar sin compresión
+      console.warn('expo-image-manipulator no disponible, usando imagen original');
+    }
+  }
+
+  const uniqueSuffix = Math.random().toString(36).slice(2, 12);
+  const fileName = `${now}-${uniqueSuffix}.${ext}`;
+  const storagePath = `${usuarioId}/${denunciaId}/${fileName}`;
+
+  try {
+    onProgress?.(0.1);
+
+    if (kind === 'FOTO') {
+      try {
+        // Intentar comprimir imagen antes de subir
+        const ImageManipulator = require('expo-image-manipulator');
+        if (ImageManipulator?.manipulateAsync) {
+          const manipulated = await ImageManipulator.manipulateAsync(
+            effectiveUri,
+            [{ resize: { width: 1280 } }],
+            { compress: 0.65, format: ImageManipulator.SaveFormat?.JPEG || 'jpeg' }
+          );
+          if (manipulated?.uri) {
+            effectiveUri = manipulated.uri;
+            ext = 'jpg';
+          }
+        }
+      } catch (compressError) {
+        // Si falla la compresión, usar imagen sin comprimir
+        console.warn('No se pudo comprimir imagen, usando original');
+      }
+    }
+
+    const base64 = await FileSystem.readAsStringAsync(effectiveUri, { encoding: 'base64' });
+    onProgress?.(0.25);
+
+    const bytes = toByteArray(base64);
+    onProgress?.(0.5);
+
+    const { error: upErr } = await supabase.storage.from('evidencias').upload(storagePath, bytes, {
+      contentType: guessMime(ext, kind),
+      upsert: false,
+    });
+
+    if (upErr) {
+      return { ok: false, error: upErr.message || 'Error al subir evidencia', tries: 1 };
+    }
+
+    onProgress?.(0.8);
+
+    const { error: dbErr } = await supabase.from('denuncia_evidencias').insert({
+      denuncia_id: denunciaId,
+      tipo: kind,
+      storage_path: storagePath,
+      orden: params.orden ?? 1,
+    });
+    if (dbErr) {
+      return { ok: false, error: dbErr.message || 'Error al registrar evidencia', tries: 1 };
+    }
+
+    onProgress?.(1);
+    return { ok: true, storagePath, tries: 1 };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'Fallo al subir evidencia', tries: 1 };
+  }
+}
+
+// Placeholder para Expo Router
+export default function __expo_router_placeholder__(): any {
+  return null;
+}
+

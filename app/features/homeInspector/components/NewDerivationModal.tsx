@@ -1,6 +1,6 @@
 // app/features/profileInspector/components/NewDerivationModal.tsx
 import { DerivacionItem } from '@/app/features/homeInspector/api/inspectorDerivations.api';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
 import React from 'react';
 import {
   Modal,
@@ -179,3 +179,4 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 });
+

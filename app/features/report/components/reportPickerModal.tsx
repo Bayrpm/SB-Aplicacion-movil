@@ -1,5 +1,5 @@
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
 import * as Network from 'expo-network';
 import { useRouter } from 'expo-router';
 import React from 'react';
@@ -305,3 +305,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+

@@ -1,13 +1,13 @@
 // app/features/profileCitizen/components/settingsModal.tsx
 import CameraRequestModal from '@/app/features/profileCitizen/components/cameraRequestModal';
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
+import { useFontSize } from '@/app/features/settings';
 import { registerForPushNotifications, unregisterPushNotifications } from '@/app/services/notificationService';
-import PrivacyModal from '@/components/privacyModal';
-import TermsModal from '@/components/termsModal';
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { ThemeMode, useAppColorScheme } from '@/hooks/useAppColorScheme';
+import PrivacyModal from '@/app/shared/components/privacyModal';
+import TermsModal from '@/app/shared/components/termsModal';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
+import { ThemeMode, useAppColorScheme } from '@/app/shared/hooks/useAppColorScheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React from 'react';
 import {
@@ -774,3 +774,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

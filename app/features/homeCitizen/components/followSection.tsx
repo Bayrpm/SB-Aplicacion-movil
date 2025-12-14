@@ -1,6 +1,6 @@
-import { Alert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Alert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useColorScheme } from '@/app/shared/hooks/use-color-scheme';
 import * as WebBrowser from 'expo-web-browser';
 import React from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
@@ -77,3 +77,4 @@ const styles = StyleSheet.create({
   buttonsRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginVertical: 12 },
   iconBtn: { width: 48, height: 48, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
 });
+

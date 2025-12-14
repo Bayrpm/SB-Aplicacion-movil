@@ -51,3 +51,4 @@ const _registrationSchemas = {
 };
 
 export default _registrationSchemas;
+

@@ -8,9 +8,8 @@ import FollowSection from "@/app/features/homeCitizen/components/followSection";
 import HomeCard from "@/app/features/homeCitizen/components/homeCard";
 import MoreInfo from "@/app/features/homeCitizen/components/moreInfo";
 import PublicReportsFeed from "@/app/features/homeCitizen/components/publicReportsFeed";
-import ParallaxScrollView from "@/components/parallax-scroll-view";
-import { ThemedText } from "@/components/themed-text";
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import { ParallaxScrollView, ThemedText } from "@/app/shared/components";
+import { useColorScheme } from "@/app/shared/hooks/use-color-scheme";
 
 export default function CitizenHome() {
   const insets = useSafeAreaInsets();
@@ -135,3 +134,4 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 });
+

@@ -1,7 +1,7 @@
 // app/features/homeCitizen/components/ReportCard.tsx
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useFontSize } from '@/app/features/settings';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import React from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { CitizenReport } from '../api/profile.api';
@@ -195,3 +195,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+

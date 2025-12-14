@@ -1,7 +1,7 @@
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useAppColorScheme } from '@/hooks/useAppColorScheme';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
+import { useAppColorScheme } from '@/app/shared/hooks/useAppColorScheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';

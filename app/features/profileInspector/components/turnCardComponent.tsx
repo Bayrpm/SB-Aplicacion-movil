@@ -2,8 +2,8 @@
 
 
 // app/features/profileInspector/components/TurnCardContainer.tsx
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useFontSize } from '@/app/features/settings';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { getTurnoInspectorCompat as getTurnoInspector, InspectorTurnoResponse } from '../api/inspectorProfile.api';

@@ -1,4 +1,4 @@
-import { ThemedText } from '@/components/themed-text';
+import { ThemedText } from '@/app/shared/components/themed-text';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -57,3 +57,4 @@ const styles = StyleSheet.create({
 
 // Default export for expo-router route detection (these components are used as named exports elsewhere)
 export default ProgressIndicator;
+

@@ -43,3 +43,4 @@ export function useReportCategories(): ReportCategory[] {
 export default function _ReportCategoriesRoute(): null {
   return null;
 }
+

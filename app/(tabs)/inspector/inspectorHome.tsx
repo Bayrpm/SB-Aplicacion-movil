@@ -23,11 +23,11 @@ import { ModalTurnInspector } from '@/app/features/profileInspector/components/m
 import { VehicleCard } from '@/app/features/profileInspector/components/vehicleCardComponent';
 import { useMovil } from '@/app/features/profileInspector/context/movilContext';
 import { supabase } from '@/app/shared/lib/supabase';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useAppColorScheme } from '@/hooks/useAppColorScheme';
+import ParallaxScrollView from '@/app/shared/components/parallax-scroll-view';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
+import { useAppColorScheme } from '@/app/shared/hooks/useAppColorScheme';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -890,3 +890,4 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 });
+

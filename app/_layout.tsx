@@ -1,4 +1,4 @@
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Slot, useRouter, useSegments } from 'expo-router';
@@ -8,11 +8,11 @@ import { Animated, Appearance, Easing, Linking, StyleSheet } from 'react-native'
 import 'react-native-reanimated';
 
 import { AuthProvider, SplashScreen, useAuth } from '@/app/features/auth';
-import { ReportModalProvider, useReportModal } from '@/app/features/report/context';
+import { ReportModalProvider, useReportModal } from '@/app/features/report';
 import { unregisterPushNotifications } from '@/app/services/notificationService';
-import AlertBox from '@/components/ui/AlertBox';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useNotifications } from '@/hooks/useNotifications';
+import { useNotifications } from '@/app/shared/hooks/useNotifications';
+import AlertBox from '@/app/shared/components/ui/AlertBox';
+import { useColorScheme } from '@/app/shared/hooks/use-color-scheme';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -276,3 +276,4 @@ export default function RootLayout() {
 }
 
 // NOTE: removed global monkey-patch of RN Alert.alert to prefer explicit migration to AppAlert
+

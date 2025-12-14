@@ -1,23 +1,23 @@
 // app/features/profileCitizen/components/editProfileModal.tsx
 import { updateCitizenProfile, type CitizenProfile } from '@/app/features/profileCitizen/api/profile.api';
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useFontSize } from '@/app/features/settings';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
+    ActivityIndicator,
+    Keyboard,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
 
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -474,3 +474,4 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 });
+

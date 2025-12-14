@@ -127,3 +127,4 @@ handleAppState('active');
 AppState.addEventListener('change', handleAppState);
 
 export default supabase;
+

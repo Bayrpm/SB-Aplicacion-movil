@@ -1,30 +1,30 @@
 // app/features/profileInspector/components/DerivationDetailModal.tsx
 import {
-  DerivacionItem,
-  cerrarDerivacionConReporte,
-  fetchDenunciaObservaciones,
-  updateDenunciaObservacion,
+    DerivacionItem,
+    cerrarDerivacionConReporte,
+    fetchDenunciaObservaciones,
+    updateDenunciaObservacion,
 } from '@/app/features/homeInspector/api/inspectorDerivations.api';
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
+import { useFontSize } from '@/app/features/settings';
 import { supabase } from '@/app/shared/lib/supabase';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Keyboard,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 interface DerivationDetailModalProps {
@@ -958,3 +958,4 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 });
+

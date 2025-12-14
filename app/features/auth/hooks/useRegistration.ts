@@ -1,4 +1,4 @@
-﻿import { Alert as AppAlert } from '@/components/ui/AlertBox';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { signUpUser } from '../api/auth.api';
@@ -223,3 +223,4 @@ AppAlert.alert('Error en el registro', 'Ocurrió un error inesperado durante el 
 }
 
 export default useRegistration;
+

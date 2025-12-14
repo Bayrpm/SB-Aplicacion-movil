@@ -1,14 +1,14 @@
-import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useColorScheme } from "@/app/shared/hooks/use-color-scheme";
 import { Image } from "expo-image";
 import React, { useMemo, useRef } from "react";
 import {
-  Dimensions,
-  FlatList,
-  Linking,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
+    Dimensions,
+    FlatList,
+    Linking,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 
 type Item = {
@@ -198,3 +198,4 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 });
+

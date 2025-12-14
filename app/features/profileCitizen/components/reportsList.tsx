@@ -1,18 +1,18 @@
 // app/features/homeCitizen/components/ReportsList.tsx
 import { fetchPublicReportDetail } from '@/app/features/report/api/report.api';
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useFontSize } from '@/app/features/settings';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import * as Network from 'expo-network';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CitizenReport, getAllCategories, getAllEstados, getCitizenReports } from '../api/profile.api';
@@ -493,3 +493,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

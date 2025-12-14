@@ -10,10 +10,10 @@ import { useAuth } from '@/app/features/auth';
 import { mapSupabaseErrorMessage } from '@/app/features/auth/api/auth.api';
 import { getInspectorProfile, type InspectorProfile } from '@/app/features/profileInspector/api/inspectorProfile.api';
 import { supabase } from '@/app/shared/lib/supabase';
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useColorScheme } from '@/app/shared/hooks/use-color-scheme';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 
 import { registrarSalidaTurnoActual, verificarTurnoActivo } from '@/app/features/profileInspector/api/turnInspector.api';
 import { ModalTurnInspector } from '@/app/features/profileInspector/components/modalTurnInspector';
@@ -469,3 +469,4 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 });
+

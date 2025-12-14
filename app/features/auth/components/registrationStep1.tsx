@@ -1,5 +1,5 @@
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useAppColorScheme } from '@/hooks/useAppColorScheme';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
+import { useAppColorScheme } from '@/app/shared/hooks/useAppColorScheme';
 import React, { useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -164,3 +164,4 @@ export const styles = StyleSheet.create({
 
 // Default export for expo-router route detection
 export default RegistrationStep1;
+

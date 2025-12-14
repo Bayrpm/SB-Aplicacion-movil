@@ -1,10 +1,10 @@
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
 import React from 'react';
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { ThemedText } from '@/app/shared/components/themed-text';
+import { ThemedView } from '@/app/shared/components/themed-view';
+import { useColorScheme } from '@/app/shared/hooks/use-color-scheme';
 
 type Props = {
   // minHeight opcional para permitir que la card se ajuste automáticamente
@@ -191,3 +191,4 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
 });
+

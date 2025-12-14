@@ -1,29 +1,29 @@
-import { listEvidencesSigned } from '@/app/features/report/api/evidences.api';
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { listEvidencesSigned } from '@/app/features/report/api/report.api';
+import { useFontSize } from '@/app/features/settings';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 // expo-av will be imported dynamically at runtime to avoid native-module require on startup
 import { useAuth } from '@/app/features/auth';
 import { deleteReportComment, updateReportComment } from '@/app/features/report/api/report.api';
+import CommentsPanel, { CommentItem } from '@/app/features/report/components/commentsPanel';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
 import { supabase } from '@/app/shared/lib/supabase';
-import CommentsPanel, { CommentItem } from '@/components/commentsPanel';
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Image,
-  Linking,
-  Modal,
-  PanResponder,
-  Platform,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    Image,
+    Linking,
+    Modal,
+    PanResponder,
+    Platform,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CitizenReport, createReportComment, fetchReportComments, fetchReportStats, getCategoryById, getCitizenProfile, getEstadoById, reactToComment, reactToReport } from '../api/profile.api';
@@ -1736,3 +1736,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+

@@ -1,8 +1,8 @@
 // app/features/profileCitizen/components/cameraRequestModal.tsx
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { useFontSize } from '@/app/features/settings';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -699,3 +699,4 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
+

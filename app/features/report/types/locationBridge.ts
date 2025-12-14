@@ -16,3 +16,4 @@ export function invokeLocationEdit(data: { ubicacionTexto: string; coords: { x?:
 }
 
 export default bridge;
+

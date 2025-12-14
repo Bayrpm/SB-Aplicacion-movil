@@ -1,4 +1,4 @@
-import { useAppColorScheme } from '@/hooks/useAppColorScheme';
+import { useAppColorScheme } from '@/app/shared/hooks/useAppColorScheme';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
 import { Animated, Platform, StyleSheet, Text, TouchableOpacity, useWindowDimensions } from 'react-native';

@@ -29,3 +29,4 @@ export interface CompleteRegistrationData
 // Default export to satisfy expo-router scanning
 const _typesPlaceholder = {} as const;
 export default _typesPlaceholder;
+

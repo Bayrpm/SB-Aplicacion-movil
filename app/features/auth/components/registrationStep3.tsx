@@ -1,7 +1,7 @@
-import PrivacyModal from '@/components/privacyModal';
-import TermsModal from '@/components/termsModal';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import PrivacyModal from '@/app/shared/components/privacyModal';
+import TermsModal from '@/app/shared/components/termsModal';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import React, { useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { registrationStep3Schema } from '../schemas/registration.schema';
@@ -385,3 +385,4 @@ const styles = StyleSheet.create({
 
 // Default export for expo-router route detection
 export default RegistrationStep3;
+

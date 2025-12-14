@@ -1,9 +1,9 @@
-import { useAuth } from '@/app/features/auth/context';
+import { useAuth } from '@/app/features/auth';
 import ReportsList from '@/app/features/profileCitizen/components/reportsList';
 import ReportForm from '@/app/features/report/components/reportForm';
 import ReportPickerModal from '@/app/features/report/components/reportPickerModal';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ThemedView } from '@/app/shared/components/themed-view';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -109,4 +109,5 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
 

@@ -40,3 +40,4 @@ export function getRelativeTime(dateString: string): string {
 export default function __expo_router_placeholder__(): any {
   return null;
 }
+

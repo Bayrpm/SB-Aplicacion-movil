@@ -112,3 +112,4 @@ export function getMapStyle(scheme: ColorSchemeName) {
 
 // Export default vacío para evitar el warning de rutas en Expo Router
 export default {};
+

@@ -1,11 +1,11 @@
 import { useAuth } from '@/app/features/auth';
 // ReportPickerModal se muestra desde la pantalla `citizenReport` via tabPress
 import { MovilProvider } from '@/app/features/profileInspector/context/movilContext';
-import { useReportModal } from '@/app/features/report/context';
-import { FontSizeProvider } from '@/app/features/settings/fontSizeContext';
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useReportModal } from '@/app/features/report';
+import { FontSizeProvider } from '@/app/features/settings';
+import { HapticTab } from '@/app/shared/components/haptic-tab';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useColorScheme } from '@/app/shared/hooks/use-color-scheme';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Tabs, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useState } from 'react';

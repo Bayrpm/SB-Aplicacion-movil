@@ -10,3 +10,4 @@ export type ReportCategory = {
 
 // de un componente vacío para silenciar el warning del router.
 export default function _ReportTypesRoute(): null { return null; }
+

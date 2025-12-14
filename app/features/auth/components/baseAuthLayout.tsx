@@ -1,5 +1,5 @@
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useAppColorScheme } from '@/hooks/useAppColorScheme';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
+import { useAppColorScheme } from '@/app/shared/hooks/useAppColorScheme';
 import { StoryScript_400Regular, useFonts as useStoryScript } from '@expo-google-fonts/story-script';
 import { Image } from 'expo-image';
 import React from 'react';
@@ -290,3 +290,4 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
 });
+

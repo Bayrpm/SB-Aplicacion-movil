@@ -1,6 +1,6 @@
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
 import React from 'react';
 import { Dimensions, PixelRatio, Platform, Text as RNText, StyleSheet, View } from 'react-native';
-import { IconSymbol } from '../../../../components/ui/icon-symbol';
 
 const DPR = PixelRatio.get();
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -142,3 +142,4 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
 });
+

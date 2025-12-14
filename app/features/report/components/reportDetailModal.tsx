@@ -1,26 +1,26 @@
 // app/features/report/components/reportDetailModal.tsx
 import { useAuth } from '@/app/features/auth';
-import { listEvidencesSigned } from '@/app/features/report/api/evidences.api';
-import { useFontSize } from '@/app/features/settings/fontSizeContext';
-import CommentsPanel from '@/components/commentsPanel';
-import { Alert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { listEvidencesSigned } from '@/app/features/report/api/report.api';
+import CommentsPanel from '@/app/features/report/components/commentsPanel';
+import { useFontSize } from '@/app/features/settings';
+import { Alert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Image,
-  Linking,
-  Modal,
-  PanResponder,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    Image,
+    Linking,
+    Modal,
+    PanResponder,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getCitizenProfile } from '../../profileCitizen/api/profile.api';
@@ -1662,3 +1662,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+

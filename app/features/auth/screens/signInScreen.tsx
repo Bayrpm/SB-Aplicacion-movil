@@ -1,8 +1,8 @@
-import { ThemedView } from '@/components/themed-view';
-import { Alert as AppAlert } from '@/components/ui/AlertBox';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useThemeColor } from '@/hooks/use-theme-color';
-import { useAppColorScheme } from '@/hooks/useAppColorScheme';
+import { ThemedView } from '@/app/shared/components/themed-view';
+import { Alert as AppAlert } from '@/app/shared/components/ui/AlertBox';
+import { IconSymbol } from '@/app/shared/components/ui/icon-symbol';
+import { useThemeColor } from '@/app/shared/hooks/use-theme-color';
+import { useAppColorScheme } from '@/app/shared/hooks/useAppColorScheme';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, Animated, Dimensions, Image, Keyboard, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
